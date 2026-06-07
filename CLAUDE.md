@@ -117,6 +117,73 @@ expect(body.id).toBe(channel.id)
 - 認証ミドルウェアを含まない `createTestApp()` では、`Authorization` ヘッダーを直接 Bot レコードに照合する仕組みになっている（`src/routes/channels.ts` の fallback 参照）
 - 新しいエンドポイントを追加したら、成功ケース・404・401・バリデーションエラーを最低限テストする
 
+## Library Compatibility Testing
+
+実際の Discord ライブラリをモックサーバーに向ける方法。
+ベースURLを差し替えるだけで各ライブラリが動作することを確認済み。
+
+### TypeScript / JavaScript — @discordjs/rest
+
+```typescript
+import { REST } from "@discordjs/rest"
+
+const rest = new REST({ version: "10", api: "http://localhost:3000/api" }).setToken("your-token")
+// → リクエストは http://localhost:3000/api/v10/... に向かう
+```
+
+### Python — discord.py 2.7+
+
+```python
+import discord.http as dhttp
+dhttp.Route.BASE = "http://localhost:3000/api/v10"
+
+client = discord.Client(intents=discord.Intents.default())
+await client.login("your-token")
+```
+
+**注意**: discord.py 2.7+ はピン API に `/channels/{id}/messages/pins/{mid}` を使う（旧 `/channels/{id}/pins/{mid}` ではない）。`?wait=True` は `?wait=1` として送信される。
+
+### C# — Discord.Net.Rest
+
+```csharp
+var config = new DiscordRestConfig {
+    RestClientProvider = _ =>
+        DefaultRestClientProvider.Instance("http://localhost:3000/api/v10/")
+};
+var client = new DiscordRestClient(config);
+await client.LoginAsync(TokenType.Bot, "your-token");
+```
+
+**注意**: Discord.Net はログイン時に `GET /oauth2/applications/@me` を呼ぶ（実装済み）。
+
+### Go — discordgo
+
+```go
+discordgo.EndpointAPI = "http://localhost:3000/api/v10/"
+// 他のエンドポイント変数も必要に応じて書き換える
+
+session, _ := discordgo.New("Bot your-token")
+```
+
+### テスト環境のセットアップ
+
+ライブラリテスト前に `/_test/setup` で Bot・Guild・Channel を登録する:
+
+```bash
+curl -X POST http://localhost:3000/_test/setup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "Bot your-token",
+    "user": {"id": "111111111111111111", "username": "TestBot"},
+    "guilds": [{"id": "222222222222222222", "name": "Test Guild",
+      "channels": [{"id": "333333333333333333", "name": "general", "type": 0}]}]
+  }'
+```
+
+### 非対応ライブラリ
+
+- **DSharpPlus 4.x**: ベース URL が `const` で変更不可（5.x nightly は未確認）
+
 ## Environment Variables
 
 | 変数 | デフォルト | 説明 |
