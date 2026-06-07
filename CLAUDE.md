@@ -221,6 +221,7 @@ curl -X POST http://localhost:3000/_test/setup \
 
 ## References
 
-- @docs/spec.md — API 仕様書（エンドポイント一覧・エラーコード）
-- @docs/design.md — 設計書（アーキテクチャ・DB スキーマ・Docker 設定）
+- @docs/getting-started.md — クイックスタート・環境変数・基本的な使い方
+- @docs/test-api.md — `/_test/*` / `/_mock/*` テスト制御 API の詳細
+- @docs/libraries.md — discord.js / discord.py / Discord.Net / discordgo の接続方法
 - @seed.example.json — SEED_FILE フォーマットのサンプル
