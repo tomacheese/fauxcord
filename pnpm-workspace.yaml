@@ -1,6 +1,6 @@
 # pnpm install 時にビルドスクリプトの実行を許可する依存パッケージ
 # better-sqlite3: ネイティブモジュールのコンパイルに必要
 # esbuild: バイナリ配置スクリプトの実行に必要（vitest / tsx が使用）
-onlyBuiltDependencies:
-  - better-sqlite3
-  - esbuild
+allowBuilds:
+  better-sqlite3: true
+  esbuild: true
