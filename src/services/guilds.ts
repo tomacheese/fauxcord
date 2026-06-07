@@ -1,12 +1,12 @@
 /**
- * Guild操作サービス
+ * Guild operations service
  *
- * GuildのCRUD操作・メンバー・ロール管理を提供します。
+ * Provides guild CRUD operations and member/role management.
  */
 
 import type { Database } from '../db.js'
 
-/** DBから取得したGuildレコードの型 */
+/** Guild record type retrieved from the DB */
 interface GuildRow {
   id: string
   name: string
@@ -20,7 +20,7 @@ interface GuildRow {
   preferred_locale: string
 }
 
-/** DBから取得したRoleレコードの型 */
+/** Role record type retrieved from the DB */
 interface RoleRow {
   id: string
   guild_id: string
@@ -33,7 +33,7 @@ interface RoleRow {
   mentionable: number
 }
 
-/** APIレスポンス用Guildオブジェクト */
+/** Guild object for API responses */
 export interface GuildObject {
   id: string
   name: string
@@ -55,7 +55,7 @@ export interface GuildObject {
   approximate_member_count?: number
 }
 
-/** APIレスポンス用Roleオブジェクト */
+/** Role object for API responses */
 export interface RoleObject {
   id: string
   name: string
@@ -68,9 +68,9 @@ export interface RoleObject {
 }
 
 /**
- * DBのRoleレコードをAPIレスポンス形式に変換します。
- * @param row - DBレコード
- * @returns APIレスポンス用オブジェクト
+ * Converts a DB role record into the API response format.
+ * @param row - DB record
+ * @returns Object for API responses
  */
 function toRoleObject(row: RoleRow): RoleObject {
   return {
@@ -86,10 +86,10 @@ function toRoleObject(row: RoleRow): RoleObject {
 }
 
 /**
- * DBのGuildレコードをAPIレスポンス形式に変換します。
- * @param row - DBレコード
- * @param roles - Roleオブジェクトの配列
- * @returns APIレスポンス用オブジェクト
+ * Converts a DB guild record into the API response format.
+ * @param row - DB record
+ * @param roles - Array of role objects
+ * @returns Object for API responses
  */
 function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
   return {
@@ -113,11 +113,11 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
 }
 
 /**
- * GuildをIDで取得します。
- * @param db - データベース
+ * Retrieves a guild by ID.
+ * @param db - Database
  * @param guildId - Guild ID
- * @param withCounts - approximate_member_countを含めるか
- * @returns GuildオブジェクトまたはNull
+ * @param withCounts - Whether to include approximate_member_count
+ * @returns Guild object, or null
  */
 export function getGuild(
   db: Database,
@@ -150,17 +150,17 @@ export function getGuild(
   return guild
 }
 
-/** Guild更新パラメータ */
+/** Guild update parameters */
 export interface GuildUpdateParams {
   name?: string
 }
 
 /**
- * Guildを更新します。
- * @param db - データベース
+ * Updates a guild.
+ * @param db - Database
  * @param guildId - Guild ID
- * @param payload - 更新内容
- * @returns 更新後のGuildオブジェクトまたはNull（Guild不存在時）
+ * @param payload - Update payload
+ * @returns Updated guild object, or null if the guild does not exist
  */
 export function updateGuild(
   db: Database,
@@ -181,10 +181,10 @@ export function updateGuild(
 }
 
 /**
- * Guildを削除します。
- * @param db - データベース
+ * Deletes a guild.
+ * @param db - Database
  * @param guildId - Guild ID
- * @returns 削除成功ならtrue（Guild不存在時はfalse）
+ * @returns true on successful deletion (false if the guild does not exist)
  */
 export function deleteGuild(db: Database, guildId: string): boolean {
   const result = db.prepare('DELETE FROM guilds WHERE id = ?').run(guildId)
@@ -192,10 +192,10 @@ export function deleteGuild(db: Database, guildId: string): boolean {
 }
 
 /**
- * Botが参加しているGuild一覧を取得します（/users/@me/guilds用）。
- * @param db - データベース
- * @param botToken - BotトークンのBot xxx形式
- * @returns Guild概要オブジェクトの配列
+ * Retrieves the list of guilds the bot has joined (for /users/@me/guilds).
+ * @param db - Database
+ * @param botToken - Bot token in "Bot xxx" format
+ * @returns Array of guild summary objects
  */
 export function getBotGuilds(
   db: Database,
@@ -222,10 +222,10 @@ export function getBotGuilds(
 }
 
 /**
- * Guildのロール一覧を取得します。
- * @param db - データベース
+ * Retrieves the list of roles in a guild.
+ * @param db - Database
  * @param guildId - Guild ID
- * @returns Roleオブジェクトの配列
+ * @returns Array of role objects
  */
 export function getGuildRoles(db: Database, guildId: string): RoleObject[] {
   const rows = db
@@ -234,7 +234,7 @@ export function getGuildRoles(db: Database, guildId: string): RoleObject[] {
   return rows.map((r) => toRoleObject(r))
 }
 
-/** ロール作成パラメータ */
+/** Role creation parameters */
 export interface RoleCreateParams {
   roleId: string
   guildId: string
@@ -246,10 +246,10 @@ export interface RoleCreateParams {
 }
 
 /**
- * Guildにロールを作成します。
- * @param db - データベース
- * @param params - ロール作成パラメータ
- * @returns 作成したRoleオブジェクト
+ * Creates a role in a guild.
+ * @param db - Database
+ * @param params - Role creation parameters
+ * @returns Created role object
  */
 export function createRole(db: Database, params: RoleCreateParams): RoleObject {
   const maxPosition = (
@@ -281,11 +281,11 @@ export function createRole(db: Database, params: RoleCreateParams): RoleObject {
 }
 
 /**
- * Guildのロールを1件取得します。
- * @param db - データベース
+ * Retrieves a single role from a guild.
+ * @param db - Database
  * @param guildId - Guild ID
  * @param roleId - Role ID
- * @returns RoleオブジェクトまたはNull
+ * @returns Role object, or null
  */
 export function getRole(
   db: Database,
@@ -298,7 +298,7 @@ export function getRole(
   return row ? toRoleObject(row) : null
 }
 
-/** ロール更新パラメータ */
+/** Role update parameters */
 export interface RoleUpdateParams {
   name?: string
   color?: number
@@ -308,12 +308,12 @@ export interface RoleUpdateParams {
 }
 
 /**
- * Guildのロールを更新します。
- * @param db - データベース
+ * Updates a role in a guild.
+ * @param db - Database
  * @param guildId - Guild ID
  * @param roleId - Role ID
- * @param payload - 更新内容
- * @returns 更新後のRoleオブジェクトまたはNull（Role不存在時）
+ * @param payload - Update payload
+ * @returns Updated role object, or null if the role does not exist
  */
 export function updateRole(
   db: Database,
@@ -352,11 +352,11 @@ export function updateRole(
 }
 
 /**
- * Guildのロールを削除します。
- * @param db - データベース
+ * Deletes a role from a guild.
+ * @param db - Database
  * @param guildId - Guild ID
  * @param roleId - Role ID
- * @returns 削除成功ならtrue（Role不存在時はfalse）
+ * @returns true on successful deletion (false if the role does not exist)
  */
 export function deleteRole(
   db: Database,
@@ -369,7 +369,7 @@ export function deleteRole(
   return result.changes > 0
 }
 
-/** メンバーレコードの型 */
+/** Member record type */
 interface MemberRow {
   guild_id: string
   user_id: string
@@ -380,7 +380,7 @@ interface MemberRow {
   flags: number
 }
 
-/** APIレスポンス用GuildMemberオブジェクト */
+/** GuildMember object for API responses */
 export interface GuildMemberObject {
   user: {
     id: string
@@ -398,11 +398,11 @@ export interface GuildMemberObject {
 }
 
 /**
- * メンバーに付与されているロールID一覧を取得します。
- * @param db - データベース
+ * Retrieves the list of role IDs assigned to a member.
+ * @param db - Database
  * @param guildId - Guild ID
- * @param userId - ユーザーID
- * @returns ロールIDの配列
+ * @param userId - User ID
+ * @returns Array of role IDs
  */
 function getMemberRoleIds(
   db: Database,
@@ -418,11 +418,11 @@ function getMemberRoleIds(
 }
 
 /**
- * GuildメンバーをIDで取得します。
- * @param db - データベース
+ * Retrieves a guild member by ID.
+ * @param db - Database
  * @param guildId - Guild ID
- * @param userId - ユーザーID
- * @returns GuildMemberオブジェクトまたはNull
+ * @param userId - User ID
+ * @returns GuildMember object, or null
  */
 export function getGuildMember(
   db: Database,
@@ -463,12 +463,12 @@ export function getGuildMember(
 }
 
 /**
- * Guildメンバー一覧を取得します。
- * @param db - データベース
+ * Retrieves the list of guild members.
+ * @param db - Database
  * @param guildId - Guild ID
- * @param limit - 取得件数（最大1000）
- * @param after - ページネーション
- * @returns GuildMemberオブジェクトの配列
+ * @param limit - Number of items to retrieve (max 1000)
+ * @param after - Pagination cursor
+ * @returns Array of GuildMember objects
  */
 export function getGuildMembers(
   db: Database,
@@ -509,21 +509,21 @@ export function getGuildMembers(
   }))
 }
 
-/** メンバー更新パラメータ */
+/** Member update parameters */
 export interface GuildMemberUpdateParams {
-  /** ニックネーム（nullでクリア） */
+  /** Nickname (null to clear) */
   nick?: string | null
-  /** 付与するロールIDの配列（全置換） */
+  /** Array of role IDs to assign (full replacement) */
   roles?: string[]
 }
 
 /**
- * Guildメンバーを更新します（ニックネーム・ロール）。
- * @param db - データベース
+ * Updates a guild member (nickname and roles).
+ * @param db - Database
  * @param guildId - Guild ID
- * @param userId - ユーザーID
- * @param payload - 更新内容
- * @returns 更新後のGuildMemberオブジェクトまたはNull（メンバー不存在時）
+ * @param userId - User ID
+ * @param payload - Update payload
+ * @returns Updated GuildMember object, or null if the member does not exist
  */
 export function updateGuildMember(
   db: Database,
@@ -543,7 +543,7 @@ export function updateGuildMember(
   }
 
   if (payload.roles !== undefined) {
-    // ロールを全置換する
+    // Fully replace the roles
     const replaceRoles = db.transaction((roleIds: string[]) => {
       db.prepare(
         'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?'
@@ -562,11 +562,11 @@ export function updateGuildMember(
 }
 
 /**
- * Guildメンバーを削除（キック）します。
- * @param db - データベース
+ * Removes (kicks) a guild member.
+ * @param db - Database
  * @param guildId - Guild ID
- * @param userId - ユーザーID
- * @returns 削除成功ならtrue（メンバー不存在時はfalse）
+ * @param userId - User ID
+ * @returns true on successful removal (false if the member does not exist)
  */
 export function removeGuildMember(
   db: Database,
@@ -578,7 +578,7 @@ export function removeGuildMember(
     .run(guildId, userId)
   if (result.changes === 0) return false
 
-  // メンバーに付与されていたロールの割り当ても削除する
+  // Also delete the role assignments the member had
   db.prepare('DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?').run(
     guildId,
     userId

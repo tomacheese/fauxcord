@@ -1,7 +1,7 @@
 /**
- * Discord Mock Server エントリーポイント
+ * Discord Mock Server entry point
  *
- * Hono アプリを起動して Discord REST API v10 のモックサーバーを提供します。
+ * Starts the Hono app and provides a mock server for Discord REST API v10.
  */
 
 import { Hono } from 'hono'
@@ -25,28 +25,28 @@ import { setupTestEnvironment } from './services/test-control.js'
 
 const config = loadConfig()
 
-// データベース初期化
+// Initialize the database
 const db = initializeDatabase(config.dbPath)
 
-// Hono アプリ作成
+// Create the Hono app
 const app = new Hono<AppEnv>()
 
-// ミドルウェア設定（全リクエストに適用）
+// Configure middleware (applied to all requests)
 app.use('*', corsMiddleware)
 app.use('*', versionMiddleware)
 
-// インフラAPIは認証不要（先に登録）
+// Infrastructure APIs require no authentication (registered first)
 app.route('/', createMockRoutes(db, config.uploadPath))
 
-// テスト制御APIは認証不要
+// Test control APIs require no authentication
 app.route('/', createTestRoutes(db))
 
-// OAuth2は一部認証不要
+// OAuth2 is partially exempt from authentication
 app.route('/', createOAuth2Routes(db))
 
-// 以下は認証チェックあり
-// Webhookのトークンベース操作（/webhooks/{id}/{token}...）は auth.ts で免除済み
-// Bot トークンが必要な CRUD は認証が通る
+// Routes below require authentication checks
+// Token-based webhook operations (/webhooks/{id}/{token}...) are exempted in auth.ts
+// CRUD operations requiring a Bot token go through authentication
 const authMiddleware = createAuthMiddleware(db, config.disableAuth)
 const latencyMiddleware = createLatencyMiddleware(config.latencyMs)
 
@@ -54,21 +54,21 @@ app.use('*', authMiddleware)
 app.use('*', latencyMiddleware)
 app.use('*', rateLimitMiddleware)
 
-// バージョンプレフィックスを正規化して各ルートにマウント
+// Normalize version prefixes and mount each route
 // /api/v10/ → /
 // /api/ → /
-// / → そのまま
+// / → as-is
 const routePrefix = ['/api/v10', '/api', '']
 
 for (const prefix of routePrefix) {
   app.route(prefix, createChannelRoutes(db, config.baseUrl, config.uploadPath))
   app.route(prefix, createGuildRoutes(db))
   app.route(prefix, createUserRoutes(db))
-  // Webhook ルートも全プレフィックスで有効化（/api/v10/webhooks/... に対応）
+  // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
   app.route(prefix, createWebhookRoutes(db, config.baseUrl))
 }
 
-// グローバルエラーハンドラ
+// Global error handler
 app.onError((err, c) => {
   console.error(err)
   return c.json({ message: '500: Internal Server Error', code: 0 }, 500)
@@ -78,7 +78,7 @@ app.notFound((c) => {
   return c.json({ message: '404: Not Found', code: 0 }, 404)
 })
 
-// SEED_FILE の読み込み
+// Load SEED_FILE
 if (config.seedFile) {
   try {
     const seedData = JSON.parse(await readFile(config.seedFile, 'utf8')) as {
@@ -110,7 +110,7 @@ if (config.seedFile) {
   }
 }
 
-// サーバー起動
+// Start the server
 const port = config.port
 const hostname = config.host
 

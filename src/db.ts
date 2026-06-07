@@ -1,26 +1,26 @@
 /**
- * SQLite データベースの初期化・マイグレーション
+ * SQLite database initialization and migration
  *
- * better-sqlite3 を使用し、WALモードで動作させます。
+ * Uses better-sqlite3 and runs in WAL mode.
  */
 
 import BetterSqlite3 from 'better-sqlite3'
 import type { Database } from 'better-sqlite3'
 
 /**
- * データベースを初期化してテーブルを作成します。
- * @param dbPath - SQLiteファイルパス（":memory:" でインメモリDB）
- * @returns 初期化済みのDatabaseインスタンス
+ * Initializes the database and creates tables.
+ * @param dbPath - SQLite file path (":memory:" for an in-memory DB)
+ * @returns Initialized Database instance
  */
 export function initializeDatabase(dbPath: string): Database {
   const db = new BetterSqlite3(dbPath)
 
-  // パフォーマンス・整合性設定
+  // Performance and integrity settings
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
   db.exec('PRAGMA synchronous = NORMAL')
 
-  // テーブル作成
+  // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS bots (
       token         TEXT PRIMARY KEY,
@@ -212,8 +212,8 @@ export function initializeDatabase(dbPath: string): Database {
 }
 
 /**
- * データベース接続を閉じます。
- * @param db - 閉じるDatabaseインスタンス
+ * Closes the database connection.
+ * @param db - Database instance to close
  */
 export function closeDatabase(db: Database): void {
   if (db.open) {

@@ -1,35 +1,35 @@
 /**
- * 認証ミドルウェア
+ * Authentication middleware
  *
- * Bot/Bearer トークン認証を処理します。
- * bots テーブルに登録されたトークンのみ許可します。
+ * Handles Bot/Bearer token authentication.
+ * Only tokens registered in the bots table are allowed.
  */
 
 import type { Context, Next } from 'hono'
 import type { Database } from '../db.js'
 
 /**
- * 認証不要なパスのプレフィックス
+ * Path prefixes that do not require authentication
  *
- * `/_test/` は index.ts で createTestRoutes を authMiddleware より先にマウントしているため
- * 実質認証をバイパスしているが、明示的にここにも追加することでルート登録順が変わっても
- * 意図通りの挙動が維持されるよう保証する
+ * `/_test/` effectively bypasses auth because index.ts mounts createTestRoutes
+ * before authMiddleware, but it is also listed here explicitly to guarantee the
+ * intended behavior even if the route registration order changes.
  */
 const AUTH_EXEMPT_PREFIXES = ['/_mock/health', '/_mock/attachments', '/_test/']
 /**
- * Webhookトークンベース操作パターン（認証不要）
+ * Webhook token-based operation pattern (no authentication required)
  *
- * Discord API では Webhook の `{id}/{token}` を持つエンドポイントは
- * Bot トークン不要でトークン自体が資格情報になる。
- * - POST /webhooks/{id}/{token}           - Webhook実行
- * - GET  /webhooks/{id}/{token}           - Webhook取得（トークン付き）
- * - DELETE /webhooks/{id}/{token}         - Webhook削除（トークン付き）
+ * In the Discord API, endpoints containing the webhook `{id}/{token}` do not
+ * require a Bot token; the token itself acts as the credential.
+ * - POST /webhooks/{id}/{token}           - Execute webhook
+ * - GET  /webhooks/{id}/{token}           - Get webhook (with token)
+ * - DELETE /webhooks/{id}/{token}         - Delete webhook (with token)
  * - GET/PATCH/DELETE /webhooks/{id}/{token}/messages/{msgId}
  */
 const WEBHOOK_WITH_TOKEN_PATTERN =
   /^\/(?:api\/(?:v10\/)?)?webhooks\/[^/]+\/[^/]+(?:\/messages\/[^/]+)?$/
 
-/** DBから取得したBotレコードの型 */
+/** Type of a Bot record fetched from the DB */
 export interface BotRecord {
   token: string
   user_id: string
@@ -39,35 +39,35 @@ export interface BotRecord {
   avatar: string | null
 }
 
-/** DBから取得したOAuth2アクセストークンレコードの型 */
+/** Type of an OAuth2 access token record fetched from the DB */
 export interface AccessTokenRecord {
   token: string
   user_id: string | null
   scope: string
 }
 
-/** Honoアプリ共通の環境型（コンテキスト変数の型定義） */
+/** Common environment type for the Hono app (context variable type definitions) */
 export interface AppEnv {
   Variables: {
-    /** 認証済みBot情報（Botトークン認証時にセット） */
+    /** Authenticated Bot information (set on Bot token authentication) */
     bot?: BotRecord
-    /** OAuth2アクセストークン情報（Bearerトークン認証時にセット） */
+    /** OAuth2 access token information (set on Bearer token authentication) */
     accessToken?: AccessTokenRecord
   }
 }
 
 /**
- * Bot/Bearer トークン認証ミドルウェアを作成します。
- * @param db - データベース
- * @param disableAuth - trueの場合、任意のトークンを全許可
- * @returns ミドルウェア関数
+ * Creates a Bot/Bearer token authentication middleware.
+ * @param db - Database
+ * @param disableAuth - When true, any token is allowed
+ * @returns Middleware function
  */
 export const createAuthMiddleware =
   (db: Database, disableAuth: boolean) =>
   async (c: Context<AppEnv>, next: Next): Promise<undefined | Response> => {
     const path = c.req.path
 
-    // 認証不要パスのチェック
+    // Check for auth-exempt paths
     const isExempt =
       AUTH_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
       WEBHOOK_WITH_TOKEN_PATTERN.test(path)
@@ -82,19 +82,19 @@ export const createAuthMiddleware =
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    // Bot トークン認証
+    // Bot token authentication
     if (authorization.startsWith('Bot ')) {
       const token = authorization
 
       if (disableAuth) {
-        // 認証無効モード: DBに存在しない場合はデフォルトBotとして処理
+        // Auth-disabled mode: treat tokens not in the DB as a default Bot
         const bot = db
           .prepare('SELECT * FROM bots WHERE token = ?')
           .get(token) as BotRecord | undefined
         if (bot) {
           c.set('bot', bot)
         } else {
-          // ダミーのbotオブジェクトをセット
+          // Set a dummy bot object
           c.set('bot', {
             token,
             user_id: '000000000000000000',
@@ -121,7 +121,7 @@ export const createAuthMiddleware =
       return
     }
 
-    // Bearer トークン認証
+    // Bearer token authentication
     if (authorization.startsWith('Bearer ')) {
       const token = authorization.slice(7)
       const accessToken = db

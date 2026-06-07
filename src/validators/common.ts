@@ -1,22 +1,22 @@
 /**
- * 共通バリデーションユーティリティ
+ * Common validation utilities
  *
- * フィールドのバリデーションエラー生成ヘルパーを提供します。
+ * Provides helpers for generating field validation errors.
  */
 
-/** フィールドエラーの型 */
+/** Field error type */
 export interface FieldError {
   code: string
   message: string
 }
 
-/** バリデーションエラーマップの型 */
+/** Validation error map type */
 export type ValidationErrors = Record<string, { _errors: FieldError[] }>
 
 /**
- * 文字列の最大長バリデーションエラーを生成します。
- * @param maxLength - 最大文字数
- * @returns フィールドエラーオブジェクト
+ * Generates a string max-length validation error.
+ * @param maxLength - Maximum length
+ * @returns Field error object
  */
 export function maxLengthError(maxLength: number): FieldError {
   return {
@@ -26,8 +26,8 @@ export function maxLengthError(maxLength: number): FieldError {
 }
 
 /**
- * 必須フィールドエラーを生成します。
- * @returns フィールドエラーオブジェクト
+ * Generates a required field error.
+ * @returns Field error object
  */
 export function requiredError(): FieldError {
   return {
@@ -37,9 +37,9 @@ export function requiredError(): FieldError {
 }
 
 /**
- * 型エラーを生成します。
- * @param expectedType - 期待する型
- * @returns フィールドエラーオブジェクト
+ * Generates a type error.
+ * @param expectedType - Expected type
+ * @returns Field error object
  */
 export function typeError(expectedType: string): FieldError {
   return {

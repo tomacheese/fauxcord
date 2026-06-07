@@ -1,16 +1,16 @@
-# テスト制御 API
+# Test Control API
 
-Fauxcord 固有のエンドポイント群です。
-テスト環境のセットアップ・データ確認・リセットに使います。
+These are endpoints specific to Fauxcord.
+Use them to set up your test environment, inspect data, and reset state.
 
-> **認証不要** — これらのエンドポイントは Authorization ヘッダーなしで呼べます。
+> **No authentication required** — these endpoints can be called without an Authorization header.
 
 ---
 
-## `POST /_test/setup` — 環境を作る
+## `POST /_test/setup` — Create an environment
 
-Bot・Guild・Channel を一括登録します。  
-テストスイートの `beforeAll` や `before_each` で呼ぶことを想定しています。
+Registers a Bot, Guilds, and Channels in one call.  
+Intended to be called from your test suite's `beforeAll` or `before_each`.
 
 ```bash
 curl -X POST http://localhost:3000/_test/setup \
@@ -33,46 +33,46 @@ curl -X POST http://localhost:3000/_test/setup \
   }'
 ```
 
-**フィールド**
+**Fields**
 
-| フィールド | 必須 | 説明 |
-|---|---|---|
-| `token` | ✅ | Bot トークン（`"Bot "` プレフィックス込み） |
-| `user.id` | — | ユーザー ID（省略時は Snowflake 自動採番） |
-| `user.username` | — | ユーザー名（省略時: `"MockBot"`） |
-| `guilds` | — | 作成する Guild の配列 |
-| `guilds[].id` | — | Guild ID（省略時: 自動採番） |
-| `guilds[].name` | ✅ | Guild 名 |
-| `guilds[].channels` | — | 作成するチャンネルの配列 |
-| `guilds[].channels[].id` | — | チャンネル ID（省略時: 自動採番） |
-| `guilds[].channels[].name` | ✅ | チャンネル名 |
-| `guilds[].channels[].type` | — | チャンネル種別（`0`: テキスト、省略時: `0`） |
+| Field                      | Required | Description                                        |
+| -------------------------- | -------- | -------------------------------------------------- |
+| `token`                    | ✅       | Bot token (including the `"Bot "` prefix)          |
+| `user.id`                  | —        | User ID (a Snowflake is auto-generated if omitted) |
+| `user.username`            | —        | Username (default: `"MockBot"`)                    |
+| `guilds`                   | —        | Array of Guilds to create                          |
+| `guilds[].id`              | —        | Guild ID (auto-generated if omitted)               |
+| `guilds[].name`            | ✅       | Guild name                                         |
+| `guilds[].channels`        | —        | Array of channels to create                        |
+| `guilds[].channels[].id`   | —        | Channel ID (auto-generated if omitted)             |
+| `guilds[].channels[].name` | ✅       | Channel name                                       |
+| `guilds[].channels[].type` | —        | Channel type (`0`: text, default: `0`)             |
 
-**レスポンス**: セットアップ結果（採番された ID を含む）
+**Response**: The setup result (including any auto-generated IDs)
 
-**注意**: 同じトークンで 2 回呼ぶと `409 Conflict` になります。  
-2 回目以降は `/_test/reset` か `DELETE /_test/setup/:token` で既存データを削除してから再実行してください。
+**Note**: Calling this twice with the same token returns `409 Conflict`.  
+For subsequent calls, delete the existing data first via `/_test/reset` or `DELETE /_test/setup/:token`.
 
 ---
 
-## `DELETE /_test/setup/:token` — 環境を完全削除する
+## `DELETE /_test/setup/:token` — Completely delete an environment
 
-Bot とその関連データ（Guild・Channel・Message・Webhook）をすべて削除します。
+Deletes the Bot and all of its related data (Guilds, Channels, Messages, Webhooks).
 
 ```bash
 curl -X DELETE "http://localhost:3000/_test/setup/Bot%20mytoken"
 ```
 
-> `Bot mytoken` のようにスペースを含む場合は `%20` でエンコードします。
+> If the token contains a space, like `Bot mytoken`, encode it as `%20`.
 
 ---
 
-## `POST /_test/reset` — メッセージだけ削除する
+## `POST /_test/reset` — Delete messages only
 
-Guild・Channel・Bot 登録は残したまま、投稿されたデータのみを削除します。  
-各テストケースの前後の初期化に使います。
+Deletes only posted data, while keeping Guild, Channel, and Bot registrations intact.  
+Use this for initialization before and after each test case.
 
-### すべてのデータをリセット
+### Reset all data
 
 ```bash
 curl -X POST http://localhost:3000/_test/reset \
@@ -80,9 +80,9 @@ curl -X POST http://localhost:3000/_test/reset \
   -d '{}'
 ```
 
-削除されるもの: messages, webhooks, reactions, pins, embeds, attachments
+What gets deleted: messages, webhooks, reactions, pins, embeds, attachments
 
-### 特定 Bot のデータだけリセット
+### Reset only a specific Bot's data
 
 ```bash
 curl -X POST http://localhost:3000/_test/reset \
@@ -90,13 +90,13 @@ curl -X POST http://localhost:3000/_test/reset \
   -d '{"token": "Bot mytoken"}'
 ```
 
-その Bot が送ったメッセージと、その Bot の Guild に属する Webhook だけが削除されます。
+Only messages sent by that Bot and Webhooks belonging to that Bot's Guilds are deleted.
 
 ---
 
-## `GET /_test/messages/:channelId` — チャンネルのメッセージを確認する
+## `GET /_test/messages/:channelId` — Inspect a channel's messages
 
-テスト内でメッセージが実際に届いているかを確認するためのエンドポイントです。
+An endpoint for verifying within your tests that messages have actually arrived.
 
 ```bash
 curl http://localhost:3000/_test/messages/333333333333333333
@@ -115,11 +115,11 @@ curl http://localhost:3000/_test/messages/333333333333333333
 }
 ```
 
-`author_token` が `"webhook"` の場合は Webhook 経由で投稿されたメッセージです。
+If `author_token` is `"webhook"`, the message was posted via a Webhook.
 
 ---
 
-## `GET /_test/webhooks/:channelId` — チャンネルの Webhook 一覧を確認する
+## `GET /_test/webhooks/:channelId` — List a channel's Webhooks
 
 ```bash
 curl http://localhost:3000/_test/webhooks/333333333333333333
@@ -139,7 +139,7 @@ curl http://localhost:3000/_test/webhooks/333333333333333333
 
 ---
 
-## `GET /_mock/health` — サーバーの状態を確認する
+## `GET /_mock/health` — Check server status
 
 ```bash
 curl http://localhost:3000/_mock/health
@@ -154,66 +154,71 @@ curl http://localhost:3000/_mock/health
 }
 ```
 
-`db` が `"ok"` でなければ SQLite に問題があります。
+If `db` is not `"ok"`, there is a problem with SQLite.
 
 ---
 
-## 典型的なテストフロー
+## Typical test flow
 
 ```
-1. テストスイート開始時
-   POST /_test/setup   → Bot / Guild / Channel を登録
+1. At the start of the test suite
+   POST /_test/setup   → Register Bot / Guild / Channel
 
-2. 各テストケース前
-   POST /_test/reset   → メッセージ等をクリア
+2. Before each test case
+   POST /_test/reset   → Clear messages etc.
 
-3. テスト実行
-   Discord ライブラリ経由で API を呼び出す
+3. Run the test
+   Call the API via a Discord library
 
-4. アサーション
-   GET /_test/messages/:channelId でメッセージ到達を確認
+4. Assertions
+   Verify message delivery via GET /_test/messages/:channelId
 
-5. テストスイート終了時（オプション）
-   DELETE /_test/setup/:token  → 完全削除
+5. At the end of the test suite (optional)
+   DELETE /_test/setup/:token  → Complete deletion
 ```
 
-### 例: vitest での使い方
+### Example: usage with vitest
 
 ```typescript
-import { beforeAll, beforeEach, describe, it, expect } from "vitest"
+import { beforeAll, beforeEach, describe, it, expect } from 'vitest'
 
-const BASE = "http://localhost:3000"
-const TOKEN = "Bot test-token"
-const CHANNEL_ID = "333333333333333333"
+const BASE = 'http://localhost:3000'
+const TOKEN = 'Bot test-token'
+const CHANNEL_ID = '333333333333333333'
 
 beforeAll(async () => {
   await fetch(`${BASE}/_test/setup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       token: TOKEN,
-      user: { id: "111111111111111111", username: "TestBot" },
-      guilds: [{ id: "222222222222222222", name: "Test Guild",
-        channels: [{ id: CHANNEL_ID, name: "general", type: 0 }] }]
-    })
+      user: { id: '111111111111111111', username: 'TestBot' },
+      guilds: [
+        {
+          id: '222222222222222222',
+          name: 'Test Guild',
+          channels: [{ id: CHANNEL_ID, name: 'general', type: 0 }],
+        },
+      ],
+    }),
   })
 })
 
 beforeEach(async () => {
   await fetch(`${BASE}/_test/reset`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({})
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   })
 })
 
-it("sends a message", async () => {
-  // ライブラリ経由でメッセージ送信
-  await sendMessage(CHANNEL_ID, "hello")
+it('sends a message', async () => {
+  // Send a message via the library
+  await sendMessage(CHANNEL_ID, 'hello')
 
-  // /_test/messages で到達確認
+  // Verify delivery via /_test/messages
   const res = await fetch(`${BASE}/_test/messages/${CHANNEL_ID}`)
   const { messages } = await res.json()
-  expect(messages.some(m => m.content === "hello")).toBe(true)
+  expect(messages.some((m) => m.content === 'hello')).toBe(true)
 })
 ```

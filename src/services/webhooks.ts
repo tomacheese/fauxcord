@@ -1,14 +1,14 @@
 /**
- * Webhook操作サービス
+ * Webhook operations service
  *
- * WebhookのCRUD操作・実行を提供します。
+ * Provides webhook CRUD operations and execution.
  */
 
 import type { Database } from '../db.js'
 import type { MessageObject } from './messages.js'
 import { createMessage } from './messages.js'
 
-/** DBから取得したWebhookレコードの型 */
+/** Webhook record type retrieved from the DB */
 interface WebhookRow {
   id: string
   type: number
@@ -19,7 +19,7 @@ interface WebhookRow {
   token: string
 }
 
-/** APIレスポンス用Webhookオブジェクト */
+/** Webhook object for API responses */
 export interface WebhookObject {
   id: string
   type: number
@@ -31,9 +31,9 @@ export interface WebhookObject {
 }
 
 /**
- * DBのWebhookレコードをAPIレスポンス形式に変換します。
- * @param row - DBレコード
- * @returns APIレスポンス用オブジェクト
+ * Converts a DB webhook record into the API response format.
+ * @param row - DB record
+ * @returns Object for API responses
  */
 function toWebhookObject(row: WebhookRow): WebhookObject {
   return {
@@ -48,10 +48,10 @@ function toWebhookObject(row: WebhookRow): WebhookObject {
 }
 
 /**
- * WebhookをIDで取得します。
- * @param db - データベース
+ * Retrieves a webhook by ID.
+ * @param db - Database
  * @param webhookId - Webhook ID
- * @returns WebhookオブジェクトまたはNull
+ * @returns Webhook object, or null
  */
 export function getWebhook(
   db: Database,
@@ -64,11 +64,11 @@ export function getWebhook(
 }
 
 /**
- * Webhook IDとTokenでWebhookを取得します。
- * @param db - データベース
+ * Retrieves a webhook by ID and token.
+ * @param db - Database
  * @param webhookId - Webhook ID
- * @param token - Webhookトークン
- * @returns WebhookオブジェクトまたはNull
+ * @param token - Webhook token
+ * @returns Webhook object, or null
  */
 export function getWebhookByToken(
   db: Database,
@@ -82,10 +82,10 @@ export function getWebhookByToken(
 }
 
 /**
- * チャンネルのWebhook一覧を取得します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @returns Webhookオブジェクトの配列
+ * Retrieves the list of webhooks for a channel.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Array of webhook objects
  */
 export function getChannelWebhooks(
   db: Database,
@@ -98,10 +98,10 @@ export function getChannelWebhooks(
 }
 
 /**
- * GuildのWebhook一覧を取得します。
- * @param db - データベース
+ * Retrieves the list of webhooks for a guild.
+ * @param db - Database
  * @param guildId - Guild ID
- * @returns Webhookオブジェクトの配列
+ * @returns Array of webhook objects
  */
 export function getGuildWebhooks(
   db: Database,
@@ -113,7 +113,7 @@ export function getGuildWebhooks(
   return rows.map((row) => toWebhookObject(row))
 }
 
-/** Webhook作成パラメータ */
+/** Webhook creation parameters */
 export interface WebhookCreateParams {
   webhookId: string
   channelId: string
@@ -124,10 +124,10 @@ export interface WebhookCreateParams {
 }
 
 /**
- * Webhookを作成します。
- * @param db - データベース
- * @param params - Webhook作成パラメータ
- * @returns 作成したWebhookオブジェクト
+ * Creates a webhook.
+ * @param db - Database
+ * @param params - Webhook creation parameters
+ * @returns Created webhook object
  */
 export function createWebhook(
   db: Database,
@@ -151,11 +151,11 @@ export function createWebhook(
 }
 
 /**
- * Webhookを更新します。
- * @param db - データベース
+ * Updates a webhook.
+ * @param db - Database
  * @param webhookId - Webhook ID
- * @param payload - 更新内容（avatarはnullでクリア）
- * @returns 更新後のWebhookオブジェクトまたはNull
+ * @param payload - Update payload (avatar is cleared with null)
+ * @returns Updated webhook object, or null
  */
 export function updateWebhook(
   db: Database,
@@ -172,7 +172,7 @@ export function updateWebhook(
   if (payload.avatar !== undefined) updates.avatar = payload.avatar
   if (payload.channel_id !== undefined) {
     updates.channel_id = payload.channel_id
-    // Guild IDも更新
+    // Update the guild ID as well
     const channel = db
       .prepare('SELECT guild_id FROM channels WHERE id = ?')
       .get(payload.channel_id) as { guild_id: string | null } | undefined
@@ -196,23 +196,23 @@ export function updateWebhook(
 }
 
 /**
- * Webhookを削除します。
- * @param db - データベース
+ * Deletes a webhook.
+ * @param db - Database
  * @param webhookId - Webhook ID
- * @returns 削除成功ならtrue
+ * @returns true on successful deletion
  */
 export function deleteWebhook(db: Database, webhookId: string): boolean {
   const result = db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId)
   return result.changes > 0
 }
 
-/** Webhook実行パラメータ */
+/** Webhook execution parameters */
 export interface WebhookExecuteParams {
   messageId: string
   channelId: string
-  /** Webhook ID（メッセージのauthor.id / webhook_idとして使用） */
+  /** Webhook ID (used as the message's author.id / webhook_id) */
   webhookId: string
-  /** Webhook名（usernameオーバーライドがない場合のデフォルト表示名） */
+  /** Webhook name (default display name when there is no username override) */
   webhookName?: string
   content?: string
   username?: string
@@ -221,22 +221,22 @@ export interface WebhookExecuteParams {
 }
 
 /**
- * Webhookを実行してメッセージを送信します。
- * @param db - データベース
- * @param params - Webhook実行パラメータ
- * @param baseUrl - ベースURL
- * @returns 作成したメッセージオブジェクト
+ * Executes a webhook and sends a message.
+ * @param db - Database
+ * @param params - Webhook execution parameters
+ * @param baseUrl - Base URL
+ * @returns Created message object
  */
 export function executeWebhook(
   db: Database,
   params: WebhookExecuteParams,
   baseUrl: string
 ): MessageObject {
-  // 実Discordと同様に、Webhook IDをauthor.idとして使用する
+  // Like real Discord, use the webhook ID as author.id
   const webhookUserId = params.webhookId
   const username = params.username ?? params.webhookName ?? 'Webhook'
 
-  // ユーザーが存在しない場合は作成（Webhookユーザーのdiscriminatorは'0000'）
+  // Create the user if it does not exist (webhook users have a discriminator of '0000')
   const existingUser = db
     .prepare('SELECT id FROM users WHERE id = ?')
     .get(webhookUserId)

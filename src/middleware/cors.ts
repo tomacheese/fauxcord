@@ -1,15 +1,15 @@
 /**
- * CORSミドルウェア
+ * CORS middleware
  *
- * 全リクエストに対してCORSヘッダーを付与します。
- * Discordボットのテスト環境からの任意のオリジンを許可します。
+ * Adds CORS headers to all requests.
+ * Allows any origin for Discord bot test environments.
  */
 
 import { cors } from 'hono/cors'
 
 /**
- * CORS設定ミドルウェアを返します。
- * 任意のオリジンからのアクセスを許可します。
+ * Returns the CORS configuration middleware.
+ * Allows access from any origin.
  */
 export const corsMiddleware = cors({
   origin: '*',

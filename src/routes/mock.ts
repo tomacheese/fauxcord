@@ -1,26 +1,26 @@
 /**
- * インフラ API ルーティング
+ * Infrastructure API routing
  *
- * /_mock/* インフラエンドポイントを実装します。
+ * Implements the /_mock/* infrastructure endpoints.
  */
 
 import { Hono } from 'hono'
 import type { Database } from '../db.js'
 import { getAttachment, guessContentType } from '../services/attachments.js'
 
-/** サーバー起動時刻 */
+/** Server start time */
 const START_TIME = Date.now()
 
 /**
- * インフラ APIルートを作成します。
- * @param db - データベース
- * @param uploadPath - 添付ファイル保存先
- * @returns Honoルーターインスタンス
+ * Creates the infrastructure API routes.
+ * @param db - Database
+ * @param uploadPath - Attachment storage directory
+ * @returns Hono router instance
  */
 export function createMockRoutes(db: Database, uploadPath: string): Hono {
   const app = new Hono()
 
-  // GET /_mock/health — ヘルスチェック
+  // GET /_mock/health — Health check
   app.get('/_mock/health', (c) => {
     let dbStatus = 'ok'
     try {
@@ -49,7 +49,7 @@ export function createMockRoutes(db: Database, uploadPath: string): Hono {
     })
   })
 
-  // GET /_mock/attachments/:channelId/:messageId/:filename — 添付ファイル配信
+  // GET /_mock/attachments/:channelId/:messageId/:filename — Serve attachments
   app.get('/_mock/attachments/:channelId/:messageId/:filename', async (c) => {
     const { channelId, messageId, filename } = c.req.param()
 
@@ -61,8 +61,8 @@ export function createMockRoutes(db: Database, uploadPath: string): Hono {
     const contentType = guessContentType(filename)
     c.header('Content-Type', contentType)
     c.header('Content-Length', String(data.length))
-    // Buffer は BodyInit として直接返せるが Hono の型定義が ReadableStream を要求するため
-    // やむなく型アサーションを使用している（実行時には Buffer として正常に動作する）
+    // Buffer can be returned directly as BodyInit, but Hono's type definitions require ReadableStream,
+    // so a type assertion is used reluctantly (it works correctly as a Buffer at runtime)
 
     return c.body(data as any)
   })

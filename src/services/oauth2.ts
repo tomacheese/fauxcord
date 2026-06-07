@@ -1,12 +1,12 @@
 /**
- * OAuth2フローサービス
+ * OAuth2 flow service
  *
- * Authorization Code FlowとClient Credentials Flowを実装します。
+ * Implements the Authorization Code Flow and the Client Credentials Flow.
  */
 
 import type { Database } from '../db.js'
 
-/** OAuth2トークンレスポンスの型 */
+/** OAuth2 token response type */
 export interface TokenResponse {
   access_token: string
   token_type: 'Bearer'
@@ -15,7 +15,7 @@ export interface TokenResponse {
   scope: string
 }
 
-/** OAuth2現在ユーザー情報の型 */
+/** OAuth2 current user information type */
 export interface OAuth2MeResponse {
   application: {
     id: string
@@ -35,28 +35,28 @@ export interface OAuth2MeResponse {
   }
 }
 
-/** トークン有効期限（7日間、秒） */
+/** Token expiration (7 days, in seconds) */
 const TOKEN_EXPIRES_IN = 604_800
 
 /**
- * ランダムなトークン文字列を生成します。
- * @param prefix - トークンのプレフィックス
- * @returns ランダムトークン文字列
+ * Generates a random token string.
+ * @param prefix - Token prefix
+ * @returns Random token string
  */
 function generateToken(prefix: string): string {
-  // Math.random は予測可能なため crypto.randomUUID() に変更する
+  // Math.random is predictable, so crypto.randomUUID() is used instead
   const random = crypto.randomUUID().replaceAll('-', '')
   return `${prefix}_${random}`
 }
 
 /**
- * 認可コードを生成します（Authorization Code Flow）。
- * @param db - データベース
- * @param clientId - クライアントID
- * @param userId - ユーザーID
- * @param scope - スコープ
- * @param redirectUri - リダイレクトURI
- * @returns 生成した認可コード
+ * Generates an authorization code (Authorization Code Flow).
+ * @param db - Database
+ * @param clientId - Client ID
+ * @param userId - User ID
+ * @param scope - Scope
+ * @param redirectUri - Redirect URI
+ * @returns Generated authorization code
  */
 export function createAuthCode(
   db: Database,
@@ -66,7 +66,7 @@ export function createAuthCode(
   redirectUri: string
 ): string {
   const code = generateToken('code')
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10分後
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes later
 
   db.prepare(
     `INSERT INTO oauth2_auth_codes (code, client_id, user_id, scope, redirect_uri, expires_at)
@@ -77,11 +77,11 @@ export function createAuthCode(
 }
 
 /**
- * 認可コードをアクセストークンに交換します。
- * @param db - データベース
- * @param code - 認可コード
- * @param redirectUri - リダイレクトURI
- * @returns トークンレスポンスまたはNull（失敗時）
+ * Exchanges an authorization code for an access token.
+ * @param db - Database
+ * @param code - Authorization code
+ * @param redirectUri - Redirect URI
+ * @returns Token response, or null on failure
  */
 export function exchangeAuthCode(
   db: Database,
@@ -106,7 +106,7 @@ export function exchangeAuthCode(
 
   if (!authCode) return null
 
-  // コードを使用済みにマーク
+  // Mark the code as used
   db.prepare('UPDATE oauth2_auth_codes SET used = 1 WHERE code = ?').run(code)
 
   const accessToken = generateToken('mock_access_token')
@@ -135,11 +135,11 @@ export function exchangeAuthCode(
 }
 
 /**
- * Client Credentials Flowでアクセストークンを生成します。
- * @param db - データベース
- * @param clientId - クライアントID
- * @param scope - スコープ
- * @returns トークンレスポンス
+ * Generates an access token using the Client Credentials Flow.
+ * @param db - Database
+ * @param clientId - Client ID
+ * @param scope - Scope
+ * @returns Token response
  */
 export function createClientCredentialsToken(
   db: Database,
@@ -163,9 +163,9 @@ export function createClientCredentialsToken(
 }
 
 /**
- * トークンを無効化します。
- * @param db - データベース
- * @param token - 無効化するトークン
+ * Revokes a token.
+ * @param db - Database
+ * @param token - Token to revoke
  */
 export function revokeToken(db: Database, token: string): void {
   db.prepare('DELETE FROM oauth2_access_tokens WHERE token = ?').run(token)
@@ -175,10 +175,10 @@ export function revokeToken(db: Database, token: string): void {
 }
 
 /**
- * アクセストークンの情報を取得します（/oauth2/@me）。
- * @param db - データベース
- * @param token - アクセストークン
- * @returns OAuth2情報またはNull
+ * Retrieves access token information (/oauth2/@me).
+ * @param db - Database
+ * @param token - Access token
+ * @returns OAuth2 information, or null
  */
 export function getOAuth2Me(
   db: Database,

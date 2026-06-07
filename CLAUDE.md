@@ -1,14 +1,14 @@
 # Fauxcord
 
-Discord REST API v10 の挙動を再現するモックサーバー。
-実サービスへの接続なしに Discord ボット・アプリのインテグレーションテストを行える。
+A mock server that replicates the behavior of the Discord REST API v10.
+Run integration tests for Discord bots and apps without connecting to the real service.
 
 ## Tech Stack
 
 - **Runtime**: Node.js 24 + TypeScript (ES2024, NodeNext)
 - **Framework**: Hono (`@hono/node-server`)
-- **DB**: SQLite via `better-sqlite3`（WAL モード・外部キー有効）
-- **型定義**: `discord-api-types` v10（型のみ、ランタイム使用なし）
+- **DB**: SQLite via `better-sqlite3` (WAL mode, foreign keys enabled)
+- **Type definitions**: `discord-api-types` v10 (types only, no runtime usage)
 - **Test**: Vitest
 - **Lint**: ESLint (`@book000/eslint-config`) + Prettier
 - **Package manager**: pnpm 11.2.2
@@ -16,119 +16,127 @@ Discord REST API v10 の挙動を再現するモックサーバー。
 ## Essential Commands
 
 ```bash
-pnpm dev              # 開発サーバー（tsx watch, hot reload）
-pnpm test             # テスト実行（85 件）
+pnpm dev              # Dev server (tsx watch, hot reload)
+pnpm test             # Run tests (85 tests)
 pnpm test:watch       # テスト watch モード
-pnpm lint             # tsc + eslint + prettier（コミット前に必須）
+pnpm lint             # tsc + eslint + prettier (required before committing)
 pnpm fix              # eslint --fix + prettier --write
-pnpm build            # tsc -p tsconfig.build.json（テスト除外）
-pnpm start            # node dist/index.js（本番）
+pnpm build            # tsc -p tsconfig.build.json (excludes test files)
+pnpm start            # node dist/index.js (production)
 ```
 
 ## Architecture
 
 ```
 src/
-├── index.ts          # エントリーポイント・Hono アプリ組み立て・SEED_FILE
-├── config.ts         # 環境変数（PORT, DB_PATH, DISABLE_AUTH, LATENCY_MS 等）
-├── db.ts             # SQLite 初期化・15 テーブル定義
-├── snowflake.ts      # Discord Snowflake ID 生成（Discord Epoch: 1420070400000n）
-├── errors.ts         # DiscordErrorCode 定数・discordError / validationError ヘルパー
+├── index.ts          # Entry point, Hono app setup, SEED_FILE loading
+├── config.ts         # Environment variables (PORT, DB_PATH, DISABLE_AUTH, LATENCY_MS, etc.)
+├── db.ts             # SQLite initialization, 15 table definitions
+├── snowflake.ts      # Discord Snowflake ID generation (Discord Epoch: 1420070400000n)
+├── errors.ts         # DiscordErrorCode constants & discordError / validationError helpers
 ├── middleware/       # auth, cors, latency, rate-limit, version
 ├── routes/           # Hono ルーターファクトリ（createXxxRoutes(db, baseUrl)）
-├── services/         # DB 操作ロジック（ルートから呼ばれる）
-└── validators/       # リクエストバリデーション（エラー形式は Discord 仕様に合わせる）
+├── services/         # DB operation logic (called from routes)
+└── validators/       # Request validation (error format follows Discord spec)
 ```
 
-**データフロー**: `index.ts` → ミドルウェア → `routes/` → `services/` → DB
+**Data flow**: `index.ts` → middleware → `routes/` → `services/` → DB
 
-**ルートマウント**: `/api/v10/`, `/api/`, `/` の 3 プレフィックスをすべてマウントする（`src/index.ts` の `routePrefix` ループ参照）。Webhook ルートも含む。
+**Route mounting**: Mount all three prefixes — `/api/v10/`, `/api/`, and `/` (see the `routePrefix` loop in `src/index.ts`). This includes Webhook routes.
 
 ## Code Conventions
 
-- 関数・インターフェースには **jsdoc（日本語）** を必ず記載
-- コード内コメントは日本語
-- エラーメッセージは英語（例: `"Unknown Channel"`）
-- `skipLibCheck: false` は**絶対に変更しない**
-- `any` 型の使用禁止（ESLint で強制）
-- `.reverse()` → `.toReversed()`、`parseInt` → `Number.parseInt`（unicorn ルール）
+- Every function and interface must have **jsdoc (in English)**
+- In-code comments are written in English
+- Error messages are in English (e.g. `"Unknown Channel"`)
+- **Never change** `skipLibCheck: false`
+- The `any` type is forbidden (enforced by ESLint)
+- `.reverse()` → `.toReversed()`, `parseInt` → `Number.parseInt` (unicorn rules)
 
 ## Key Implementation Patterns
 
-**エラーレスポンス**（Discord API 仕様に厳密準拠）:
+**Error responses** (strictly conforming to the Discord API spec):
+
 ```typescript
-return c.json(discordError(DiscordErrorCode.UNKNOWN_CHANNEL, "Unknown Channel", 404).body, 404)
+return c.json(
+  discordError(DiscordErrorCode.UNKNOWN_CHANNEL, 'Unknown Channel', 404).body,
+  404
+)
 ```
 
-**新規エンドポイント追加時**:
-1. `src/services/` に DB 操作関数を追加（jsdoc 必須）
-2. `src/routes/` のファクトリ関数にルート追加
-3. 必要なら `src/validators/` にバリデーション追加
-4. `src/routes/xxx.test.ts` にテスト追加（TDD 推奨）
+**When adding a new endpoint**:
 
-**ルート定義順序に注意**: Hono は先勝ちマッチ。`/channels/:cid/messages/pins`（リテラル）は `/channels/:cid/messages/:mid`（パラメータ）より**前**に定義する。
+1. Add a DB operation function to `src/services/` (jsdoc required)
+2. Add the route to the factory function in `src/routes/`
+3. Add validation to `src/validators/` if needed
+4. Add tests to `src/routes/xxx.test.ts` (TDD recommended)
+
+**Watch out for route definition order**: Hono uses first-match wins. Define `/channels/:cid/messages/pins` (literal) **before** `/channels/:cid/messages/:mid` (parameterized).
 
 ## Testing
 
 ```bash
-pnpm test                          # 全テスト（85 件）
-pnpm test src/routes/channels      # ファイル指定
-pnpm test:watch                    # watch モード（開発中）
-pnpm test:coverage                 # カバレッジ付き
+pnpm test                          # All tests (85)
+pnpm test src/routes/channels      # Run specific file
+pnpm test:watch                    # Watch mode (during development)
+pnpm test:coverage                 # with coverage
 ```
 
-### 方針（t_wada TDD）
+### Approach (t_wada TDD)
 
-**Red → Green → Refactor** サイクルで実装する。
+Implement using the **Red → Green → Refactor** cycle.
 
-1. **Red**: 失敗するテストを先に書く
-2. **Green**: テストが通る最小限の実装を書く
-3. **Refactor**: テストを通したまま整理する
+1. **Red**: Write a failing test first
+2. **Green**: Write the minimal implementation that makes the test pass
+3. **Refactor**: Clean up while keeping the tests passing
 
-### テストの種類と配置
+### Test Types and Placement
 
-| 種類 | 場所 | 対象 |
-|---|---|---|
-| ユニットテスト | `src/xxx.test.ts` | 純粋関数（snowflake, errors 等） |
-| ルートテスト | `src/routes/xxx.test.ts` | API エンドポイント単体 |
-| 統合テスト | `src/integration.test.ts` | 複数機能を組み合わせたシナリオ |
+| Type              | Location                  | Target                                   |
+| ----------------- | ------------------------- | ---------------------------------------- |
+| Unit tests        | `src/xxx.test.ts`         | Pure functions (snowflake, errors, etc.) |
+| Route tests       | `src/routes/xxx.test.ts`  | Individual API endpoints                 |
+| Integration tests | `src/integration.test.ts` | Scenarios combining multiple features    |
 
-### ルートテストの書き方
+### How to Write Route Tests
 
 ```typescript
-// src/test-helpers.ts の createTestApp を使いインメモリ DB で動かす
+// Use createTestApp from src/test-helpers.ts with an in-memory DB
 const { app, db } = createTestApp()
-const bot = seedBot(db, "Bot testtoken")
-const guild = seedGuild(db, bot, "TestGuild")
-const channel = seedChannel(db, guild, "general")
+const bot = seedBot(db, 'Bot testtoken')
+const guild = seedGuild(db, bot, 'TestGuild')
+const channel = seedChannel(db, guild, 'general')
 
-const res = await app.request("/api/v10/channels/" + channel.id, {
-  headers: { Authorization: "Bot testtoken" },
+const res = await app.request('/api/v10/channels/' + channel.id, {
+  headers: { Authorization: 'Bot testtoken' },
 })
 expect(res.status).toBe(200)
-const body = await res.json() as Record<string, unknown>
+const body = (await res.json()) as Record<string, unknown>
 expect(body.id).toBe(channel.id)
 ```
 
-### 注意点
+### Notes
 
-- インメモリ DB（`:memory:`）を使用 → テスト間は独立（`createTestApp()` を各テストで呼ぶ）
-- WAL モードは `:memory:` では `"memory"` になる → `expect(["wal","memory"]).toContain(result)`
-- 認証ミドルウェアを含まない `createTestApp()` では、`Authorization` ヘッダーを直接 Bot レコードに照合する仕組みになっている（`src/routes/channels.ts` の fallback 参照）
-- 新しいエンドポイントを追加したら、成功ケース・404・401・バリデーションエラーを最低限テストする
+- Uses an in-memory DB (`:memory:`) → tests are independent of each other (call `createTestApp()` in each test)
+- WAL mode reports as `"memory"` on `:memory:` → `expect(["wal","memory"]).toContain(result)`
+- In `createTestApp()`, which does not include the auth middleware, the `Authorization` header is matched directly against Bot records (see the fallback in `src/routes/channels.ts`)
+- When adding a new endpoint, test at minimum the success case, 404, 401, and validation errors
 
 ## Library Compatibility Testing
 
-実際の Discord ライブラリをモックサーバーに向ける方法。
-ベースURLを差し替えるだけで各ライブラリが動作することを確認済み。
+How to point real Discord libraries at the mock server.
+Each library has been confirmed to work by simply swapping the base URL.
 
 ### TypeScript / JavaScript — @discordjs/rest
 
 ```typescript
-import { REST } from "@discordjs/rest"
+import { REST } from '@discordjs/rest'
 
-const rest = new REST({ version: "10", api: "http://localhost:3000/api" }).setToken("your-token")
-// → リクエストは http://localhost:3000/api/v10/... に向かう
+const rest = new REST({
+  version: '10',
+  api: 'http://localhost:3000/api',
+}).setToken('your-token')
+// → requests go to http://localhost:3000/api/v10/...
 ```
 
 ### Python — discord.py 2.7+
@@ -141,7 +149,7 @@ client = discord.Client(intents=discord.Intents.default())
 await client.login("your-token")
 ```
 
-**注意**: discord.py 2.7+ はピン API に `/channels/{id}/messages/pins/{mid}` を使う（旧 `/channels/{id}/pins/{mid}` ではない）。`?wait=True` は `?wait=1` として送信される。
+**Note**: discord.py 2.7+ uses `/channels/{id}/messages/pins/{mid}` for the pin API (not the old `/channels/{id}/pins/{mid}`). `?wait=True` is sent as `?wait=1`.
 
 ### C# — Discord.Net.Rest
 
@@ -154,20 +162,20 @@ var client = new DiscordRestClient(config);
 await client.LoginAsync(TokenType.Bot, "your-token");
 ```
 
-**注意**: Discord.Net はログイン時に `GET /oauth2/applications/@me` を呼ぶ（実装済み）。
+**Note**: Discord.Net calls `GET /oauth2/applications/@me` at login (implemented).
 
 ### Go — discordgo
 
 ```go
 discordgo.EndpointAPI = "http://localhost:3000/api/v10/"
-// 他のエンドポイント変数も必要に応じて書き換える
+// Override other endpoint variables as needed
 
 session, _ := discordgo.New("Bot your-token")
 ```
 
-### テスト環境のセットアップ
+### Test Environment Setup
 
-ライブラリテスト前に `/_test/setup` で Bot・Guild・Channel を登録する:
+Before library testing, register a Bot, Guild, and Channel via `/_test/setup`:
 
 ```bash
 curl -X POST http://localhost:3000/_test/setup \
@@ -180,48 +188,48 @@ curl -X POST http://localhost:3000/_test/setup \
   }'
 ```
 
-### 非対応ライブラリ
+### Unsupported Libraries
 
-- **DSharpPlus 4.x**: ベース URL が `const` で変更不可（5.x nightly は未確認）
+- **DSharpPlus 4.x**: The base URL is a `const` and cannot be changed (5.x nightly not yet tested)
 
 ## Environment Variables
 
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `PORT` | `3000` | リッスンポート |
-| `DB_PATH` | `/data/mock.db` | SQLite ファイルパス |
-| `DISABLE_AUTH` | `false` | `true` で認証バイパス |
-| `LATENCY_MS` | `0` | 全 API レスポンスへの人工遅延 |
-| `SEED_FILE` | _(なし)_ | 起動時自動ロード JSON |
+| Variable       | Default         | Description                                   |
+| -------------- | --------------- | --------------------------------------------- |
+| `PORT`         | `3000`          | Listen port                                   |
+| `DB_PATH`      | `/data/mock.db` | SQLite file path                              |
+| `DISABLE_AUTH` | `false`         | Set to `true` to bypass authentication        |
+| `LATENCY_MS`   | `0`             | Artificial latency added to all API responses |
+| `SEED_FILE`    | _(none)_        | JSON loaded automatically at startup          |
 
 ## Important Gotchas
 
-- **Webhook ルートは `routePrefix` ループ内**にあること（`/api/v10/webhooks/...` に対応するため）
-- **Webhook 実行の `wait` パラメータ**: `"true"` と `"1"` の両方を真と解釈（discord.py は `?wait=1` を送る）
-- **`GET /channels/:id/messages/pins`**（新 API）は `{"items":[...],"has_more":false}` 形式を返す。`GET /channels/:id/pins`（旧 API）はフラット配列
-- **bulk-delete の数値 ID**: JS の JSON.parse で 19 桁 Snowflake が精度消失するため生テキストから正規表現で抽出（`src/routes/channels.ts` 参照）
-- **`embeds: null`**: discordgo 等が送るため null を空配列として扱う
-- **`/users/%40me`**: `@` の percent-encode に対応（`src/routes/users.ts` 参照）
-- **Docker healthcheck**: Alpine の busybox wget は `localhost` を IPv6 解決するため `127.0.0.1` を明示
+- **Webhook routes must be inside the `routePrefix` loop** (to support `/api/v10/webhooks/...`)
+- **Webhook execution `wait` parameter**: Both `"true"` and `"1"` are interpreted as truthy (discord.py sends `?wait=1`)
+- **`GET /channels/:id/messages/pins`** (new API) returns the `{"items":[...],"has_more":false}` format. `GET /channels/:id/pins` (old API) returns a flat array
+- **Numeric IDs in bulk-delete**: 19-digit Snowflakes lose precision in JS's JSON.parse, so they are extracted from the raw text with a regex (see `src/routes/channels.ts`)
+- **`embeds: null`**: Sent by discordgo and others, so null is treated as an empty array
+- **`/users/%40me`**: Supports percent-encoded `@` (see `src/routes/users.ts`)
+- **Docker healthcheck**: Alpine's busybox wget resolves `localhost` to IPv6, so `127.0.0.1` is specified explicitly
 
 ## Discord API v10 Compatibility Notes
 
-- **Snowflake ID**: Discord Epoch (1420070400000n) を使用
-- **エラーコード**: `src/errors.ts` の `DiscordErrorCode` を使用すること
-- **Rate Limit ヘッダー**: 全レスポンスに `x-ratelimit-*` を付与（ダミー値）
-- **`@everyone` ロール**: Guild 作成時に ID = Guild ID で自動生成（`src/services/test-control.ts`）
-- **`/oauth2/applications/@me`**: Discord.Net がログイン時に呼び出すエイリアス（`src/routes/users.ts`）
+- **Snowflake ID**: Uses the Discord Epoch (1420070400000n)
+- **Error codes**: Use `DiscordErrorCode` from `src/errors.ts`
+- **Rate Limit headers**: `x-ratelimit-*` attached to all responses (dummy values)
+- **`@everyone` role**: Auto-generated at Guild creation with ID = Guild ID (`src/services/test-control.ts`)
+- **`/oauth2/applications/@me`**: Alias that Discord.Net calls at login (`src/routes/users.ts`)
 
 ## Git Workflow
 
-- ブランチ: [Conventional Branch](https://conventional-branch.github.io)（`feat/`, `fix/` 等）
-- コミット: [Conventional Commits](https://www.conventionalcommits.org/)、`<description>` は日本語
-- push は **SSH** のみ
-- PR 作成前に `pnpm lint` と `pnpm test` が通ること
+- Branches: [Conventional Branch](https://conventional-branch.github.io) (`feat/`, `fix/`, etc.)
+- Commits: [Conventional Commits](https://www.conventionalcommits.org/), with `<description>` written in Japanese
+- Push via **SSH** only
+- `pnpm lint` and `pnpm test` must pass before creating a PR
 
 ## References
 
-- @docs/getting-started.md — クイックスタート・環境変数・基本的な使い方
-- @docs/test-api.md — `/_test/*` / `/_mock/*` テスト制御 API の詳細
-- @docs/libraries.md — discord.js / discord.py / Discord.Net / discordgo の接続方法
-- @seed.example.json — SEED_FILE フォーマットのサンプル
+- @docs/getting-started.md — Quick start, environment variables, basic usage
+- @docs/test-api.md — Details of the `/_test/*` / `/_mock/*` test control APIs
+- @docs/libraries.md — How to connect discord.js / discord.py / Discord.Net / discordgo
+- @seed.example.json — Sample of the SEED_FILE format

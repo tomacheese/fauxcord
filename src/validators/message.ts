@@ -1,16 +1,16 @@
 /**
- * メッセージバリデーション
+ * Message validation
  *
- * Discord API v10のメッセージ制限に準拠したバリデーションを提供します。
+ * Provides validation conforming to Discord API v10 message limits.
  */
 
 import { maxLengthError, type ValidationErrors } from './common.js'
 
-/** メッセージ送信リクエストの型 */
+/** Message creation request type */
 export interface MessageCreatePayload {
   content?: string
   tts?: boolean
-  /** Discord クライアントは null を送ることがある（discordgo 等）。null は空配列と同等に扱う */
+  /** Discord clients may send null (e.g. discordgo). null is treated the same as an empty array */
   embeds?: EmbedPayload[] | null
   message_reference?: { message_id?: string }
   components?: unknown[]
@@ -18,7 +18,7 @@ export interface MessageCreatePayload {
   attachments?: unknown[]
 }
 
-/** Embedの型 */
+/** Embed type */
 export interface EmbedPayload {
   title?: string
   description?: string
@@ -32,7 +32,7 @@ export interface EmbedPayload {
   thumbnail?: { url: string }
 }
 
-/** メッセージ制限値 */
+/** Message limit values */
 export const MESSAGE_LIMITS = {
   CONTENT_MAX: 2000,
   EMBEDS_MAX: 10,
@@ -48,10 +48,10 @@ export const MESSAGE_LIMITS = {
 } as const
 
 /**
- * メッセージ送信ペイロードをバリデーションします。
- * @param payload - バリデーション対象のペイロード
- * @param _hasAttachments - 添付ファイルがあるか（現在未使用）
- * @returns バリデーションエラーマップ（エラーなしの場合は空オブジェクト）
+ * Validates a message creation payload.
+ * @param payload - Payload to validate
+ * @param _hasAttachments - Whether attachments are present (currently unused)
+ * @returns Validation error map (empty object if no errors)
  */
 export function validateMessageCreate(
   payload: MessageCreatePayload,
@@ -60,7 +60,7 @@ export function validateMessageCreate(
 ): ValidationErrors {
   const errors: ValidationErrors = {}
 
-  // content の長さチェック（null を undefined 同様に扱う。型安全に string かを確認する）
+  // Check content length (treat null like undefined; type-safely verify it is a string)
   if (
     typeof payload.content === 'string' &&
     payload.content.length > MESSAGE_LIMITS.CONTENT_MAX
@@ -70,7 +70,7 @@ export function validateMessageCreate(
     }
   }
 
-  // embeds 数チェック（null は空配列と同等に扱う。discordgo 等は常に null を送る）
+  // Check embeds count (null is treated the same as an empty array; discordgo etc. always send null)
   if (
     Array.isArray(payload.embeds) &&
     payload.embeds.length > MESSAGE_LIMITS.EMBEDS_MAX
@@ -85,7 +85,7 @@ export function validateMessageCreate(
     }
   }
 
-  // embed 各フィールドのバリデーション（Array.isArray で null/undefined を安全にスキップ）
+  // Validate each embed field (Array.isArray safely skips null/undefined)
   if (Array.isArray(payload.embeds)) {
     for (let i = 0; i < payload.embeds.length; i++) {
       const embed = payload.embeds[i]
@@ -133,10 +133,10 @@ export function validateMessageCreate(
 }
 
 /**
- * メッセージが空かどうかをチェックします。
- * @param payload - チェック対象のペイロード
- * @param hasAttachments - 添付ファイルがあるか
- * @returns 空の場合true
+ * Checks whether a message is empty.
+ * @param payload - Payload to check
+ * @param hasAttachments - Whether attachments are present
+ * @returns true if empty
  */
 export function isEmptyMessage(
   payload: MessageCreatePayload,

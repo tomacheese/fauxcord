@@ -1,7 +1,7 @@
 /**
- * OAuth2 API ルーティング
+ * OAuth2 API routing
  *
- * /oauth2/* エンドポイントを実装します。
+ * Implements the /oauth2/* endpoints.
  */
 
 import { Hono } from 'hono'
@@ -15,14 +15,14 @@ import {
 } from '../services/oauth2.js'
 
 /**
- * OAuth2 APIルートを作成します。
- * @param db - データベース
- * @returns Honoルーターインスタンス
+ * Creates the OAuth2 API routes.
+ * @param db - Database
+ * @returns Hono router instance
  */
 export function createOAuth2Routes(db: Database): Hono {
   const app = new Hono()
 
-  // GET /oauth2/@me — OAuth2アクセストークンの情報を取得
+  // GET /oauth2/@me — Retrieve OAuth2 access token information
   app.get('/oauth2/@me', (c) => {
     const authHeader = c.req.header('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
@@ -36,7 +36,7 @@ export function createOAuth2Routes(db: Database): Hono {
     return c.json(me)
   })
 
-  // GET /oauth2/authorize — OAuth2認可コードフローの認可ページにリダイレクト
+  // GET /oauth2/authorize — Redirect for the OAuth2 authorization code flow
   app.get('/oauth2/authorize', (c) => {
     const clientId = c.req.query('client_id')
     const redirectUri = c.req.query('redirect_uri')
@@ -48,8 +48,8 @@ export function createOAuth2Routes(db: Database): Hono {
       return c.json({ message: '400: Bad Request', code: 0 }, 400)
     }
 
-    // oauth2_auth_codes は oauth2_clients（FK）および users（FK ではないが getOAuth2Me で参照）を
-    // 参照するため、client とデフォルトユーザーの存在を先に保証する
+    // oauth2_auth_codes references oauth2_clients (FK) and users (not an FK, but referenced by getOAuth2Me),
+    // so ensure the client and the default user exist first
     db.prepare(
       'INSERT OR IGNORE INTO oauth2_clients (client_id, client_secret) VALUES (?, ?)'
     ).run(clientId, 'mock_secret')
@@ -58,7 +58,7 @@ export function createOAuth2Routes(db: Database): Hono {
       'INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 0)'
     ).run(defaultUserId, 'MockUser', '0')
 
-    // モックは認証画面を表示せず即座にリダイレクト
+    // The mock redirects immediately without showing an authorization page
     const code = createAuthCode(db, clientId, defaultUserId, scope, redirectUri)
 
     const redirectUrl = new URL(redirectUri)
@@ -68,7 +68,7 @@ export function createOAuth2Routes(db: Database): Hono {
     return c.redirect(redirectUrl.toString())
   })
 
-  // POST /oauth2/token — OAuth2トークンを発行
+  // POST /oauth2/token — Issue an OAuth2 token
   app.post('/oauth2/token', async (c) => {
     const contentType = c.req.header('content-type') ?? ''
     let params: URLSearchParams
@@ -101,8 +101,8 @@ export function createOAuth2Routes(db: Database): Hono {
       const scope = params.get('scope') ?? 'identify'
       const clientId = params.get('client_id') ?? 'mock_client'
 
-      // oauth2_access_tokens は oauth2_clients を FK 参照するため、
-      // トークン発行前に client の存在を保証する必要がある
+      // oauth2_access_tokens has an FK reference to oauth2_clients,
+      // so the client must exist before issuing a token
       const existing = db
         .prepare('SELECT client_id FROM oauth2_clients WHERE client_id = ?')
         .get(clientId)
@@ -119,7 +119,7 @@ export function createOAuth2Routes(db: Database): Hono {
     return c.json({ message: '400: Bad Request', code: 0 }, 400)
   })
 
-  // POST /oauth2/token/revoke — OAuth2トークンを無効化
+  // POST /oauth2/token/revoke — Revoke an OAuth2 token
   app.post('/oauth2/token/revoke', async (c) => {
     const body = await c.req.text()
     const params = new URLSearchParams(body)

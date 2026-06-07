@@ -1,13 +1,13 @@
-# ライブラリ別 接続ガイド
+# Library Connection Guide
 
-各 Discord ライブラリをFauxcord に向ける方法です。  
-基本的には**ベース URL を差し替えるだけ**で動作します。
+How to point each Discord library at Fauxcord.  
+In most cases, **swapping the base URL is all it takes**.
 
 ---
 
-## 事前準備（共通）
+## Prerequisites (common)
 
-どのライブラリを使う場合も、まず `/_test/setup` で Bot を登録してください。
+Whichever library you use, first register a Bot via `/_test/setup`.
 
 ```bash
 curl -X POST http://localhost:3000/_test/setup \
@@ -20,61 +20,63 @@ curl -X POST http://localhost:3000/_test/setup \
   }'
 ```
 
-返ってきた `id` をコードで使います。
+Use the returned `id` values in your code.
 
 ---
 
 ## JavaScript / TypeScript — @discordjs/rest
 
-`new REST` の `api` オプションでベース URL を差し替えます。
+Override the base URL with the `api` option of `new REST`.
 
 ```typescript
-import { REST, Routes } from "@discordjs/rest"
+import { REST, Routes } from '@discordjs/rest'
 
-const rest = new REST({ version: "10", api: "http://localhost:3000/api" })
-  .setToken("your-token")
+const rest = new REST({
+  version: '10',
+  api: 'http://localhost:3000/api',
+}).setToken('your-token')
 
-// 通常の Discord API と同じように呼べる
-const channel = await rest.get(Routes.channel("333333333333333333"))
-const message = await rest.post(Routes.channelMessages("333333333333333333"), {
-  body: { content: "Hello from discord.js!" }
+// Call it just like the regular Discord API
+const channel = await rest.get(Routes.channel('333333333333333333'))
+const message = await rest.post(Routes.channelMessages('333333333333333333'), {
+  body: { content: 'Hello from discord.js!' },
 })
 ```
 
-> `api: "http://localhost:3000/api"` と指定すると、実際のリクエストは  
-> `http://localhost:3000/api/v10/...` に向かいます。
+> With `api: "http://localhost:3000/api"`, actual requests go to  
+> `http://localhost:3000/api/v10/...`.
 
-**対応バージョン**: `@discordjs/rest` 2.x 以降
+**Supported versions**: `@discordjs/rest` 2.x and later
 
 ---
 
 ## Python — discord.py 2.x
 
-`Route.BASE` を書き換えます。
+Rewrite `Route.BASE`.
 
 ```python
 import asyncio
 import discord
 import discord.http as dhttp
 
-# Fauxcord に向ける
+# Point at Fauxcord
 dhttp.Route.BASE = "http://localhost:3000/api/v10"
 
 async def main():
     client = discord.Client(intents=discord.Intents.default())
-    await client.login("your-token")  # "Bot " プレフィックスなし
+    await client.login("your-token")  # without the "Bot " prefix
 
-    # チャンネルを取得
+    # Fetch a channel
     channel = await client.fetch_channel(333333333333333333)
 
-    # メッセージを送る
+    # Send a message
     msg = await channel.send("Hello from discord.py!")
     print(f"Sent: {msg.id}")
 
-    # ピン留め
+    # Pin it
     await msg.pin()
 
-    # Webhook を作る
+    # Create a Webhook
     wh = await channel.create_webhook(name="MyWebhook")
     await wh.send("Hello from webhook!", wait=True)
 
@@ -83,19 +85,19 @@ async def main():
 asyncio.run(main())
 ```
 
-**バージョン固有の注意点**:
+**Version-specific notes**:
 
-- **discord.py 2.7+** はピン API に `/channels/{id}/messages/pins/{mid}` を使います  
-  （旧 `/channels/{id}/pins/{mid}` は別途実装済みで両方動きます）
-- `webhook.send(wait=True)` は `?wait=1` として送信されます（Fauxcord は両方サポート）
+- **discord.py 2.7+** uses `/channels/{id}/messages/pins/{mid}` for the pin API  
+  (the old `/channels/{id}/pins/{mid}` is also implemented, so both work)
+- `webhook.send(wait=True)` is sent as `?wait=1` (Fauxcord supports both)
 
-**対応バージョン**: discord.py 2.x（2.7.1 で動作確認済み）
+**Supported versions**: discord.py 2.x (verified with 2.7.1)
 
 ---
 
 ## C# — Discord.Net.Rest
 
-`DiscordRestConfig` の `RestClientProvider` でベース URL を差し替えます。
+Override the base URL via `RestClientProvider` in `DiscordRestConfig`.
 
 ```csharp
 using Discord;
@@ -110,30 +112,30 @@ var config = new DiscordRestConfig
 var client = new DiscordRestClient(config);
 await client.LoginAsync(TokenType.Bot, "your-token");
 
-// チャンネルを取得
+// Fetch a channel
 var channel = (IRestMessageChannel)await client.GetChannelAsync(333333333333333333UL);
 
-// メッセージを送る
+// Send a message
 var msg = await channel.SendMessageAsync("Hello from Discord.Net!");
 
-// Webhook を作る
+// Create a Webhook
 var guildChannel = (IRestTextChannel)await client.GetChannelAsync(333333333333333333UL);
 var webhook = await guildChannel.CreateWebhookAsync("MyWebhook");
 ```
 
-**注意点**:
+**Notes**:
 
-- Discord.Net はログイン時に `GET /oauth2/applications/@me` を呼びます（Fauxcord は対応済み）
-- `IRestTextChannel` にキャストしてから `CreateWebhookAsync` を呼んでください
+- Discord.Net calls `GET /oauth2/applications/@me` at login (Fauxcord supports this)
+- Cast to `IRestTextChannel` before calling `CreateWebhookAsync`
 
-**対応バージョン**: Discord.Net 3.x（3.20.0 で動作確認済み）  
-**非対応**: DSharpPlus 4.x（ベース URL が定数のため変更不可）
+**Supported versions**: Discord.Net 3.x (verified with 3.20.0)  
+**Not supported**: DSharpPlus 4.x (its base URL is a constant and cannot be changed)
 
 ---
 
 ## Go — discordgo
 
-パッケージ変数でエンドポイントを書き換えます。
+Rewrite the endpoint via package variables.
 
 ```go
 package main
@@ -144,7 +146,7 @@ import (
 )
 
 func main() {
-    // Fauxcord に向ける
+    // Point at Fauxcord
     discordgo.EndpointAPI = "http://localhost:3000/api/v10/"
 
     s, err := discordgo.New("Bot your-token")
@@ -152,15 +154,15 @@ func main() {
         panic(err)
     }
 
-    // チャンネルを取得
+    // Fetch a channel
     ch, _ := s.Channel("333333333333333333")
     fmt.Println("Channel:", ch.Name)
 
-    // メッセージを送る
+    // Send a message
     msg, _ := s.ChannelMessageSend("333333333333333333", "Hello from discordgo!")
     fmt.Println("Message ID:", msg.ID)
 
-    // Webhook を作る
+    // Create a Webhook
     wh, _ := s.WebhookCreate("333333333333333333", "MyWebhook", "")
     s.WebhookExecute(wh.ID, wh.Token, true, &discordgo.WebhookParams{
         Content: "Hello from webhook!",
@@ -168,33 +170,33 @@ func main() {
 }
 ```
 
-**注意点**:
+**Notes**:
 
-- `discordgo.ChannelMessageSend()` は `embeds: null` を含むリクエストを送ります（Fauxcord は対応済み）
+- `discordgo.ChannelMessageSend()` sends requests containing `embeds: null` (Fauxcord supports this)
 
-**対応バージョン**: discordgo v0.29.0 で動作確認済み
-
----
-
-## 比較表
-
-| ライブラリ | 言語 | 設定方法 | 対応状況 |
-|---|---|---|---|
-| @discordjs/rest | JS/TS | `new REST({ api: "..." })` | ✅ |
-| discord.py | Python | `Route.BASE = "..."` | ✅ |
-| Discord.Net.Rest | C# | `RestClientProvider` | ✅ |
-| discordgo | Go | `EndpointAPI = "..."` | ✅ |
-| DSharpPlus 4.x | C# | ❌ 不可（定数） | ❌ |
+**Supported versions**: verified with discordgo v0.29.0
 
 ---
 
-## トークン形式について
+## Comparison table
 
-| ライブラリ | セットアップ時 | ログイン時 |
-|---|---|---|
-| discord.py | `"Bot your-token"` | `"your-token"`（Bot プレフィックスなし） |
-| Discord.Net | `"Bot your-token"` | `TokenType.Bot`, `"your-token"` |
-| discordgo | `"Bot your-token"` | `"Bot your-token"` |
-| @discordjs/rest | `"Bot your-token"` | `.setToken("your-token")` |
+| Library          | Language | Configuration              | Status |
+| ---------------- | -------- | -------------------------- | ------ |
+| @discordjs/rest  | JS/TS    | `new REST({ api: "..." })` | ✅     |
+| discord.py       | Python   | `Route.BASE = "..."`       | ✅     |
+| Discord.Net.Rest | C#       | `RestClientProvider`       | ✅     |
+| discordgo        | Go       | `EndpointAPI = "..."`      | ✅     |
+| DSharpPlus 4.x   | C#       | ❌ Not possible (constant) | ❌     |
 
-> `/_test/setup` の `token` フィールドには必ず `"Bot "` プレフィックスを付けてください。
+---
+
+## Token formats
+
+| Library         | At setup           | At login                                |
+| --------------- | ------------------ | --------------------------------------- |
+| discord.py      | `"Bot your-token"` | `"your-token"` (without the Bot prefix) |
+| Discord.Net     | `"Bot your-token"` | `TokenType.Bot`, `"your-token"`         |
+| discordgo       | `"Bot your-token"` | `"Bot your-token"`                      |
+| @discordjs/rest | `"Bot your-token"` | `.setToken("your-token")`               |
+
+> Always include the `"Bot "` prefix in the `token` field of `/_test/setup`.

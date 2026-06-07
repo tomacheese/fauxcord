@@ -1,52 +1,52 @@
 # Discord Mock Server
 
-Discord REST API v10 の挙動を再現するモックサーバーです。  
-実サービスへの接続なしに、Discord ボットやアプリケーションのインテグレーションテストを行えます。
+A mock server that replicates the behavior of the Discord REST API v10.  
+Run integration tests for Discord bots and applications without connecting to the real service.
 
-## 特徴
+## Features
 
-- **Discord API v10 互換** — チャンネル、Guild、メッセージ、Webhook、OAuth2 を網羅
-- **ステートフルな一貫性** — POST したメッセージは GET で取得可能
-- **テスト制御 API** — `/_test/*` でテスト環境のセットアップ・リセットが可能
-- **Rate Limit ヘッダー** — Discord 互換のヘッダーをレスポンスに付与（ダミー値）
-- **Snowflake ID** — Discord 互換の ID を自動採番
-- **ファイル添付** — multipart/form-data でのファイルアップロード対応
+- **Discord API v10 compatible** — Covers channels, Guilds, messages, Webhooks, and OAuth2
+- **Stateful consistency** — Messages created via POST can be retrieved via GET
+- **Test control API** — Set up and reset test environments via `/_test/*`
+- **Rate Limit headers** — Discord-compatible headers attached to responses (dummy values)
+- **Snowflake IDs** — Automatically generates Discord-compatible IDs
+- **File attachments** — Supports file uploads via multipart/form-data
 
-## クイックスタート
+## Quick Start
 
-### Docker Compose (推奨)
+### Docker Compose (recommended)
 
 ```bash
-# リポジトリをクローン
+# Clone the repository
 git clone https://github.com/yourorg/discord-mock
 cd discord-mock
 
-# 起動
+# Start
 docker compose up -d
 
-# 動作確認
+# Verify
 curl http://localhost:3000/_mock/health
 ```
 
-### ローカル実行
+### Running locally
 
-**必要なもの:** Node.js 22 以降（推奨: 24 LTS）、pnpm
+**Requirements:** Node.js 22 or later (recommended: 24 LTS), pnpm
 
 ```bash
-# 依存パッケージのインストール
+# Install dependencies
 pnpm install
 
-# ビルドしてサーバー起動
+# Build and start the server
 pnpm build
 pnpm start
 
-# 開発モード（ビルド不要・ファイル変更を検知して自動再起動）
+# Dev mode (auto-restarts on file changes)
 pnpm dev
 ```
 
-## テスト環境のセットアップ
+## Setting Up a Test Environment
 
-サーバー起動後、まず `/_test/setup` で Bot トークンと Guild を登録します。
+After starting the server, first register a Bot token and Guild via `/_test/setup`.
 
 ```bash
 curl -X POST http://localhost:3000/_test/setup \
@@ -69,7 +69,7 @@ curl -X POST http://localhost:3000/_test/setup \
   }'
 ```
 
-**レスポンス例:**
+**Example response:**
 
 ```json
 {
@@ -87,16 +87,16 @@ curl -X POST http://localhost:3000/_test/setup \
 }
 ```
 
-## 主要 API の使用例
+## Common API Usage Examples
 
-### チャンネル取得
+### Get a channel
 
 ```bash
 curl http://localhost:3000/api/v10/channels/1234567890123456789 \
   -H "Authorization: Bot mytoken123"
 ```
 
-### メッセージ送信
+### Send a message
 
 ```bash
 curl -X POST http://localhost:3000/channels/1234567890123456789/messages \
@@ -105,10 +105,10 @@ curl -X POST http://localhost:3000/channels/1234567890123456789/messages \
   -d '{"content": "Hello, World!"}'
 ```
 
-### Webhook 作成・実行
+### Create and execute a Webhook
 
 ```bash
-# Webhook 作成
+# Create Webhook
 WEBHOOK=$(curl -s -X POST http://localhost:3000/channels/1234567890123456789/webhooks \
   -H "Authorization: Bot mytoken123" \
   -H "Content-Type: application/json" \
@@ -117,20 +117,20 @@ WEBHOOK=$(curl -s -X POST http://localhost:3000/channels/1234567890123456789/web
 WEBHOOK_ID=$(echo $WEBHOOK | jq -r '.id')
 WEBHOOK_TOKEN=$(echo $WEBHOOK | jq -r '.token')
 
-# Webhook 実行
+# Execute Webhook
 curl -X POST "http://localhost:3000/webhooks/$WEBHOOK_ID/$WEBHOOK_TOKEN?wait=true" \
   -H "Content-Type: application/json" \
   -d '{"content": "Webhook message", "username": "CustomBot"}'
 ```
 
-### Guild 情報取得
+### Get Guild information
 
 ```bash
 curl http://localhost:3000/guilds/9876543210987654321 \
   -H "Authorization: Bot mytoken123"
 ```
 
-### メッセージ一括削除
+### Bulk delete messages
 
 ```bash
 curl -X POST http://localhost:3000/channels/1234567890123456789/messages/bulk-delete \
@@ -139,93 +139,93 @@ curl -X POST http://localhost:3000/channels/1234567890123456789/messages/bulk-de
   -d '{"messages": ["id1", "id2", "id3"]}'
 ```
 
-## テスト制御 API
+## Test Control API
 
-### テスト環境リセット
+### Reset the test environment
 
 ```bash
-# 特定 Bot のデータをリセット（Guild・チャンネルは保持）
+# Reset only a specific Bot's data (Guild/channels are kept)
 curl -X POST http://localhost:3000/_test/reset \
   -H "Content-Type: application/json" \
   -d '{"token": "Bot mytoken123"}'
 
-# 全データリセット
+# Full data reset
 curl -X POST http://localhost:3000/_test/reset \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
 
-### テスト環境削除
+### Delete the test environment
 
 ```bash
 curl -X DELETE "http://localhost:3000/_test/setup/Bot%20mytoken123"
 ```
 
-### チャンネルのメッセージ確認（テスト用）
+### Inspect channel messages (for testing)
 
 ```bash
 curl http://localhost:3000/_test/messages/1234567890123456789
 ```
 
-## 環境変数
+## Environment Variables
 
-| 変数名 | デフォルト値 | 説明 |
-|---|---|---|
-| `PORT` | `3000` | リッスンポート |
-| `HOST` | `0.0.0.0` | バインドアドレス |
-| `DB_PATH` | `/data/mock.db` | SQLite ファイルパス |
-| `UPLOAD_PATH` | `/data/uploads` | 添付ファイル保存先ディレクトリ |
-| `BASE_URL` | `http://localhost:3000` | 添付ファイル URL 生成・OAuth2 リダイレクトに使用 |
-| `LOG_LEVEL` | `info` | ログレベル (`debug` / `info` / `warn` / `error`) |
-| `DISABLE_AUTH` | `false` | `true` で任意のトークンを全許可 |
-| `LATENCY_MS` | `0` | 全レスポンスに付加する人工遅延 (ms) |
-| `SEED_FILE` | _(なし)_ | 起動時に自動ロードする JSON ファイルのパス |
+| Variable       | Default                 | Description                                             |
+| -------------- | ----------------------- | ------------------------------------------------------- |
+| `PORT`         | `3000`                  | Listen port                                             |
+| `HOST`         | `0.0.0.0`               | Bind address                                            |
+| `DB_PATH`      | `/data/mock.db`         | SQLite file path                                        |
+| `UPLOAD_PATH`  | `/data/uploads`         | Directory for storing attachments                       |
+| `BASE_URL`     | `http://localhost:3000` | Used for attachment URL generation and OAuth2 redirects |
+| `LOG_LEVEL`    | `info`                  | Log level (`debug` / `info` / `warn` / `error`)         |
+| `DISABLE_AUTH` | `false`                 | Set to `true` to accept any token                       |
+| `LATENCY_MS`   | `0`                     | Artificial latency added to all responses (ms)          |
+| `SEED_FILE`    | _(none)_                | Path to a JSON file loaded automatically at startup     |
 
-### SEED_FILE の使用
+### Using SEED_FILE
 
-起動時に Bot・Guild・チャンネルを自動登録できます。
+You can automatically register Bots, Guilds, and channels at startup.
 
 ```bash
-# 環境変数で指定
+# Specify via environment variable
 SEED_FILE=/path/to/seed.json pnpm start
 ```
 
-`seed.example.json` を参考にシードファイルを作成してください。
+Create a seed file based on `seed.example.json`.
 
-## サポートするパス形式
+## Supported Path Formats
 
-以下のいずれのパス形式でも動作します。
+All of the following path formats work.
 
-| パス形式 | 動作 |
-|---|---|
-| `/api/v10/{endpoint}` | v10 として処理（推奨） |
-| `/api/{endpoint}` | v10 として処理 |
-| `/{endpoint}` | v10 として処理 |
+| Path format           | Behavior                     |
+| --------------------- | ---------------------------- |
+| `/api/v10/{endpoint}` | Handled as v10 (recommended) |
+| `/api/{endpoint}`     | Handled as v10               |
+| `/{endpoint}`         | Handled as v10               |
 
-**非サポートバージョン (v6〜v9) は `400` を返します。**
+**Unsupported versions (v6–v9) return `400`.**
 
-## 認証
+## Authentication
 
-### Bot トークン認証
+### Bot token authentication
 
 ```
 Authorization: Bot <token>
 ```
 
-`/_test/setup` で事前に登録したトークンのみ有効です。
+Only tokens previously registered via `/_test/setup` are valid.
 
-`DISABLE_AUTH=true` を設定すると、任意のトークンを全て許可します。
+Setting `DISABLE_AUTH=true` allows any token.
 
-### 認証不要エンドポイント
+### Endpoints that do not require authentication
 
-- `POST /webhooks/{id}/{token}` (Webhook 実行)
+- `POST /webhooks/{id}/{token}` (Webhook execution)
 - `GET /_mock/health`
 - `/_test/*`
 
-## テスト実行
+## Running Tests
 
 ```bash
-# 全テスト実行
+# Run all tests
 pnpm test
 
 # ウォッチモード
@@ -235,24 +235,24 @@ pnpm test:watch
 pnpm test:coverage
 ```
 
-## ディレクトリ構造
+## Directory Structure
 
 ```
 src/
 ├── index.ts                # エントリーポイント
-├── config.ts               # 環境変数設定
-├── db.ts                   # SQLite 初期化
-├── snowflake.ts            # Snowflake ID 生成
-├── errors.ts               # エラーコード定数・ヘルパー
-├── test-helpers.ts         # テスト用ヘルパー
-├── integration.test.ts     # 統合テスト
+├── config.ts               # Environment variable config
+├── db.ts                   # SQLite initialization
+├── snowflake.ts            # Snowflake ID generation
+├── errors.ts               # Error code constants & helpers
+├── test-helpers.ts         # Test helpers
+├── integration.test.ts     # Integration tests
 │
 ├── middleware/
-│   ├── auth.ts             # Bot/Bearer トークン認証
-│   ├── cors.ts             # CORS 設定
-│   ├── latency.ts          # 人工遅延
+│   ├── auth.ts             # Bot/Bearer token authentication
+│   ├── cors.ts             # CORS configuration
+│   ├── latency.ts          # Artificial latency
 │   ├── rate-limit.ts       # Rate Limit ヘッダー
-│   └── version.ts          # API バージョン解決
+│   └── version.ts          # API version resolution
 │
 ├── routes/
 │   ├── channels.ts         # /channels/* エンドポイント
@@ -264,52 +264,52 @@ src/
 │   └── webhooks.ts         # /webhooks/* エンドポイント
 │
 ├── services/
-│   ├── attachments.ts      # ファイル保存・配信
-│   ├── channels.ts         # チャンネル操作
-│   ├── guilds.ts           # Guild 操作
-│   ├── messages.ts         # メッセージ操作
+│   ├── attachments.ts      # File storage & delivery
+│   ├── channels.ts         # Channel operations
+│   ├── guilds.ts           # Guild operations
+│   ├── messages.ts         # Message operations
 │   ├── oauth2.ts           # OAuth2 フロー
-│   ├── test-control.ts     # テスト制御
-│   ├── users.ts            # ユーザー操作
-│   └── webhooks.ts         # Webhook 操作
+│   ├── test-control.ts     # Test control
+│   ├── users.ts            # User operations
+│   └── webhooks.ts         # Webhook operations
 │
 └── validators/
-    ├── common.ts           # 共通バリデーション
+    ├── common.ts           # Common validation
     ├── guild.ts            # Guild バリデーション
     ├── message.ts          # メッセージバリデーション
     └── webhook.ts          # Webhook バリデーション
 ```
 
-## 技術スタック
+## Tech Stack
 
-| 項目 | 採用技術 |
-|---|---|
-| Runtime | Node.js 24 (LTS) |
-| フレームワーク | [Hono](https://hono.dev/) |
-| DB | SQLite + [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) |
-| 型定義 | [discord-api-types](https://github.com/discordjs/discord-api-types) v10 |
-| テスト | [Vitest](https://vitest.dev/) |
+| Item             | Technology                                                              |
+| ---------------- | ----------------------------------------------------------------------- |
+| Runtime          | Node.js 24 (LTS)                                                        |
+| Framework        | [Hono](https://hono.dev/)                                               |
+| DB               | SQLite + [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)   |
+| Type definitions | [discord-api-types](https://github.com/discordjs/discord-api-types) v10 |
+| Testing          | [Vitest](https://vitest.dev/)                                           |
 
-## エラーコード
+## Error Codes
 
-Discord API v10 と完全互換のエラーコードを返します。
+Returns error codes fully compatible with Discord API v10.
 
-| コード | 説明 |
-|---|---|
-| `10003` | Unknown Channel |
-| `10004` | Unknown Guild |
-| `10007` | Unknown Member |
-| `10008` | Unknown Message |
-| `10013` | Unknown User |
-| `10015` | Unknown Webhook |
-| `30003` | Maximum number of pins reached (50) |
+| Code    | Description                             |
+| ------- | --------------------------------------- |
+| `10003` | Unknown Channel                         |
+| `10004` | Unknown Guild                           |
+| `10007` | Unknown Member                          |
+| `10008` | Unknown Message                         |
+| `10013` | Unknown User                            |
+| `10015` | Unknown Webhook                         |
+| `30003` | Maximum number of pins reached (50)     |
 | `30007` | Maximum number of webhooks reached (15) |
-| `50006` | Cannot send an empty message |
-| `50035` | Invalid Form Body (バリデーションエラー) |
-| `50041` | Invalid API version provided |
+| `50006` | Cannot send an empty message            |
+| `50035` | Invalid Form Body (validation error)    |
+| `50041` | Invalid API version provided            |
 
-詳細は [Getting Started](./docs/getting-started.md) を参照してください。
+See [Getting Started](./docs/getting-started.md) for details.
 
-## ライセンス
+## License
 
 MIT

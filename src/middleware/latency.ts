@@ -1,17 +1,17 @@
 /**
- * 人工遅延ミドルウェア
+ * Artificial latency middleware
  *
- * LATENCY_MS環境変数で指定した時間だけ全レスポンスを遅延させます。
- * 実際のDiscord APIのレイテンシをシミュレートする際に使用します。
+ * Delays all responses by the duration specified in the LATENCY_MS environment variable.
+ * Used to simulate the latency of the real Discord API.
  */
 
 import { setTimeout as sleep } from 'node:timers/promises'
 import type { Context, Next } from 'hono'
 
 /**
- * 指定ミリ秒の人工遅延を付与するミドルウェアを作成します。
- * @param latencyMs - 遅延時間（ミリ秒）。0以下の場合は遅延なし
- * @returns ミドルウェア関数
+ * Creates a middleware that adds an artificial delay of the given milliseconds.
+ * @param latencyMs - Delay duration (ms). No delay if 0 or less
+ * @returns Middleware function
  */
 export const createLatencyMiddleware =
   (latencyMs: number) =>

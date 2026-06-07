@@ -1,14 +1,14 @@
 /**
- * Rate Limitダミーヘッダーミドルウェア
+ * Dummy rate limit header middleware
  *
- * Discord API互換のRate Limitヘッダーを全レスポンスに付与します。
- * モックサーバは実際にはレート制限を行いません。
+ * Adds Discord API-compatible rate limit headers to all responses.
+ * The mock server does not actually perform rate limiting.
  */
 
 import type { Context, Next } from 'hono'
 
 /**
- * Rate Limitダミーヘッダーを付与するミドルウェアを返します。
+ * Returns a middleware that adds dummy rate limit headers.
  */
 export const rateLimitMiddleware = async (
   c: Context,
@@ -18,13 +18,13 @@ export const rateLimitMiddleware = async (
 
   const resetTime = Math.floor(Date.now() / 1000) + 1
 
-  // /api/v10/channels/xxx → /channels/xxx、/api/channels/xxx → /channels/xxx に正規化して
-  // プレフィックスに関わらず同じバケット ID を生成する
+  // Normalize /api/v10/channels/xxx → /channels/xxx and /api/channels/xxx → /channels/xxx
+  // so the same bucket ID is generated regardless of the prefix
   let normalizedPath = c.req.path
   if (normalizedPath.startsWith('/api/v10/')) {
-    normalizedPath = normalizedPath.slice(8) // "/api/v10" を除去
+    normalizedPath = normalizedPath.slice(8) // Strip "/api/v10"
   } else if (normalizedPath.startsWith('/api/')) {
-    normalizedPath = normalizedPath.slice(4) // "/api" を除去
+    normalizedPath = normalizedPath.slice(4) // Strip "/api"
   }
   const pathParts = normalizedPath.split('/')
   const bucketKey = pathParts[1] ?? 'global'

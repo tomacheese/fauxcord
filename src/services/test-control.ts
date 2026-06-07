@@ -1,13 +1,13 @@
 /**
- * テスト制御サービス
+ * Test control service
  *
- * テスト環境のセットアップ・リセットを処理します。
+ * Handles test environment setup and reset.
  */
 
 import type { Database } from '../db.js'
 import { generateSnowflake } from '../snowflake.js'
 
-/** テストセットアップリクエストの型 */
+/** Test setup request type */
 export interface SetupRequest {
   token: string
   user?: {
@@ -18,21 +18,21 @@ export interface SetupRequest {
   guilds?: SetupGuildRequest[]
 }
 
-/** テストセットアップのGuild情報型 */
+/** Guild information type for test setup */
 export interface SetupGuildRequest {
   id?: string
   name: string
   channels?: SetupChannelRequest[]
 }
 
-/** テストセットアップのChannel情報型 */
+/** Channel information type for test setup */
 export interface SetupChannelRequest {
   id?: string
   name: string
   type?: number
 }
 
-/** テストセットアップレスポンスの型 */
+/** Test setup response type */
 export interface SetupResponse {
   token: string
   user: { id: string; username: string }
@@ -44,17 +44,17 @@ export interface SetupResponse {
 }
 
 /**
- * テスト環境をセットアップします。
- * @param db - データベース
- * @param request - セットアップリクエスト
- * @returns セットアップ結果
- * @throws トークンが既に登録済みの場合エラー
+ * Sets up the test environment.
+ * @param db - Database
+ * @param request - Setup request
+ * @returns Setup result
+ * @throws Error if the token is already registered
  */
 export function setupTestEnvironment(
   db: Database,
   request: SetupRequest
 ): SetupResponse {
-  // トークン重複チェック
+  // Duplicate token check
   const existing = db
     .prepare('SELECT token FROM bots WHERE token = ?')
     .get(request.token)
@@ -66,15 +66,15 @@ export function setupTestEnvironment(
   const username = request.user?.username ?? 'MockBot'
   const discriminator = request.user?.discriminator ?? '0'
 
-  // トランザクションで実行し、途中でエラーが発生した場合に部分的な
-  // セットアップ状態（Botだけ登録済みなど）が残らないようにする
+  // Run inside a transaction so that a partial setup state
+  // (e.g. only the Bot registered) is not left behind if an error occurs midway
   const setup = db.transaction((): SetupResponse => {
-    // ユーザー作成
+    // Create the user
     db.prepare(
       'INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 1)'
     ).run(userId, username, discriminator)
 
-    // Bot作成
+    // Create the bot
     db.prepare(
       'INSERT INTO bots (token, user_id, username, discriminator) VALUES (?, ?, ?, ?)'
     ).run(request.token, userId, username, discriminator)
@@ -84,7 +84,7 @@ export function setupTestEnvironment(
     for (const guildReq of request.guilds ?? []) {
       const guildId = guildReq.id ?? generateSnowflake()
 
-      // Guild作成（同一IDが残存していた場合は内容を上書きして再利用＝冪等）
+      // Create the guild (if the same ID still exists, overwrite its contents and reuse it = idempotent)
       db.prepare(
         `INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
@@ -93,8 +93,8 @@ export function setupTestEnvironment(
            bot_token = excluded.bot_token`
       ).run(guildId, guildReq.name, userId, request.token)
 
-      // @everyone ロールを自動作成（Discord API 仕様: Guild には必ず @everyone が存在する）
-      // @everyone のロール ID は Guild ID と同一
+      // Auto-create the @everyone role (Discord API spec: every guild always has @everyone)
+      // The @everyone role ID is identical to the guild ID
       db.prepare(
         `INSERT OR IGNORE INTO roles (id, guild_id, name, permissions, position, color, hoist, mentionable)
          VALUES (?, ?, '@everyone', '1071698660929', 0, 0, 0, 0)`
@@ -106,7 +106,7 @@ export function setupTestEnvironment(
         const channelId = channelReq.id ?? generateSnowflake()
         const channelType = channelReq.type ?? 0
 
-        // Channel作成（同一IDが残存していた場合は内容を上書きして再利用＝冪等）
+        // Create the channel (if the same ID still exists, overwrite its contents and reuse it = idempotent)
         db.prepare(
           `INSERT INTO channels (id, guild_id, name, type) VALUES (?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
@@ -140,28 +140,28 @@ export function setupTestEnvironment(
 }
 
 /**
- * Botトークンとその関連データを全て削除します。
- * @param db - データベース
- * @param token - 削除するBotトークン
- * @returns 削除成功ならtrue
+ * Deletes a bot token and all of its related data.
+ * @param db - Database
+ * @param token - Bot token to delete
+ * @returns true on successful deletion
  */
 export function deleteTestSetup(db: Database, token: string): boolean {
   const bot = db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token)
   if (!bot) return false
 
-  // Cascade Deleteで関連するGuild/Channel/Messageも削除される
+  // Related Guilds/Channels/Messages are also deleted via cascade delete
   db.prepare('DELETE FROM bots WHERE token = ?').run(token)
   return true
 }
 
 /**
- * テストデータをリセットします（トークン・Guild・チャンネルは保持）。
- * @param db - データベース
- * @param token - リセット対象のBotトークン（省略時は全トークン）
+ * Resets test data (tokens, guilds, and channels are kept).
+ * @param db - Database
+ * @param token - Bot token to reset (all tokens if omitted)
  */
 export function resetTestData(db: Database, token?: string): void {
   if (token) {
-    // 特定トークンのメッセージ・Webhookのみリセット
+    // Reset only the messages and webhooks of the specified token
     db.prepare('DELETE FROM messages WHERE author_token = ?').run(token)
     db.prepare(
       `DELETE FROM webhooks WHERE channel_id IN (
@@ -171,7 +171,7 @@ export function resetTestData(db: Database, token?: string): void {
        )`
     ).run(token)
   } else {
-    // 全データリセット（テーブル自体は保持）
+    // Reset all data (the tables themselves are kept)
     db.exec('DELETE FROM messages')
     db.exec('DELETE FROM webhooks')
     db.exec('DELETE FROM reactions')
@@ -182,10 +182,10 @@ export function resetTestData(db: Database, token?: string): void {
 }
 
 /**
- * チャンネルの全メッセージをテスト用フォーマットで取得します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @returns メッセージ一覧
+ * Retrieves all messages in a channel in the test format.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns List of messages
  */
 export function getTestMessages(
   db: Database,

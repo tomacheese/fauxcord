@@ -1,7 +1,7 @@
 /**
- * Webhooks API ルーティング
+ * Webhooks API routing
  *
- * /webhooks/* エンドポイントを実装します。
+ * Implements the /webhooks/* endpoints.
  */
 
 import { Hono } from 'hono'
@@ -24,15 +24,15 @@ import { validateWebhookExecute } from '../validators/webhook.js'
 import { isEmptyMessage } from '../validators/message.js'
 
 /**
- * Webhooks APIルートを作成します。
- * @param db - データベース
- * @param baseUrl - ベースURL
- * @returns Honoルーターインスタンス
+ * Creates the Webhooks API routes.
+ * @param db - Database
+ * @param baseUrl - Base URL
+ * @returns Hono router instance
  */
 export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   const app = new Hono()
 
-  // GET /webhooks/:webhookId — WebhookをID指定で取得
+  // GET /webhooks/:webhookId — Retrieve a webhook by ID
   app.get('/webhooks/:webhookId', (c) => {
     const { webhookId } = c.req.param()
     const webhook = getWebhook(db, webhookId)
@@ -47,7 +47,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(webhook)
   })
 
-  // GET /webhooks/:webhookId/:token — WebhookをトークンでBot認証なしで取得
+  // GET /webhooks/:webhookId/:token — Retrieve a webhook by token without bot authentication
   app.get('/webhooks/:webhookId/:token', (c) => {
     const { webhookId, token } = c.req.param()
     const webhook = getWebhookByToken(db, webhookId, token)
@@ -59,7 +59,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       )
       return c.json(err.body, 404)
     }
-    // tokenフィールドを除外して返す
+    // Return the webhook without the token field
     const webhookWithoutToken: Omit<typeof webhook, 'token'> = {
       id: webhook.id,
       type: webhook.type,
@@ -71,7 +71,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(webhookWithoutToken)
   })
 
-  // PATCH /webhooks/:webhookId — Webhook情報を更新
+  // PATCH /webhooks/:webhookId — Update webhook information
   app.patch('/webhooks/:webhookId', async (c) => {
     const { webhookId } = c.req.param()
     const payload = await c.req.json<{
@@ -91,7 +91,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(updated)
   })
 
-  // DELETE /webhooks/:webhookId — Webhookを削除
+  // DELETE /webhooks/:webhookId — Delete a webhook
   app.delete('/webhooks/:webhookId', (c) => {
     const { webhookId } = c.req.param()
     const deleted = deleteWebhook(db, webhookId)
@@ -106,7 +106,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.body(null, 204)
   })
 
-  // PATCH /webhooks/:webhookId/:token — Webhookをトークンで更新（Bot認証不要）
+  // PATCH /webhooks/:webhookId/:token — Update a webhook by token (no bot authentication required)
   app.patch('/webhooks/:webhookId/:token', async (c) => {
     const { webhookId, token } = c.req.param()
 
@@ -138,7 +138,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    // トークン付きエンドポイントではtokenフィールドを除外して返す
+    // Token-based endpoints return the webhook without the token field
     const webhookWithoutToken: Omit<typeof updated, 'token'> = {
       id: updated.id,
       type: updated.type,
@@ -150,7 +150,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(webhookWithoutToken)
   })
 
-  // DELETE /webhooks/:webhookId/:token — Webhookをトークンで削除（Bot認証不要）
+  // DELETE /webhooks/:webhookId/:token — Delete a webhook by token (no bot authentication required)
   app.delete('/webhooks/:webhookId/:token', (c) => {
     const { webhookId, token } = c.req.param()
 
@@ -168,10 +168,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.body(null, 204)
   })
 
-  // POST /webhooks/:webhookId/:token（実行）
+  // POST /webhooks/:webhookId/:token (execute)
   app.post('/webhooks/:webhookId/:token', async (c) => {
     const { webhookId, token } = c.req.param()
-    // discord.py は wait=True を ?wait=1 として送る。"true" と "1" 両方を真と解釈する
+    // discord.py sends wait=True as ?wait=1. Interpret both "true" and "1" as truthy
     const waitParam = c.req.query('wait') ?? ''
     const wait = waitParam === 'true' || waitParam === '1'
 
@@ -198,9 +198,9 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       payload = await c.req.json<Record<string, unknown>>()
     }
 
-    const hasAttachments = false // Webhook実行でのファイル添付は簡略実装
+    const hasAttachments = false // File attachments on webhook execution are a simplified implementation
 
-    // 空メッセージチェック
+    // Empty message check
     if (isEmptyMessage(payload, hasAttachments)) {
       const err = discordError(
         DiscordErrorCode.EMPTY_MESSAGE,
@@ -210,14 +210,14 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 400)
     }
 
-    // バリデーション
+    // Validation
     const errors = validateWebhookExecute(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
     }
 
     if (!wait) {
-      // waitが false の場合は非同期実行（バックグラウンドでDB保存）
+      // When wait is false, execute asynchronously (save to DB in the background)
       const messageId = generateSnowflake()
       try {
         executeWebhook(
@@ -235,7 +235,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
           baseUrl
         )
       } catch {
-        // バックグラウンド実行のため無視
+        // Ignored because this runs in the background
       }
       return c.body(null, 204)
     }
@@ -259,7 +259,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(msg)
   })
 
-  // GET /webhooks/:webhookId/:token/messages/:messageId — Webhook経由メッセージを取得
+  // GET /webhooks/:webhookId/:token/messages/:messageId — Retrieve a message sent via webhook
   app.get('/webhooks/:webhookId/:token/messages/:messageId', (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
@@ -285,7 +285,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(msg)
   })
 
-  // PATCH /webhooks/:webhookId/:token/messages/:messageId — Webhook経由メッセージを編集
+  // PATCH /webhooks/:webhookId/:token/messages/:messageId — Edit a message sent via webhook
   app.patch('/webhooks/:webhookId/:token/messages/:messageId', async (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
@@ -316,7 +316,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(updated)
   })
 
-  // DELETE /webhooks/:webhookId/:token/messages/:messageId — Webhook経由メッセージを削除
+  // DELETE /webhooks/:webhookId/:token/messages/:messageId — Delete a message sent via webhook
   app.delete('/webhooks/:webhookId/:token/messages/:messageId', (c) => {
     const { webhookId, token, messageId } = c.req.param()
 

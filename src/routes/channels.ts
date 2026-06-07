@@ -1,7 +1,7 @@
 /**
- * Channels API ルーティング
+ * Channels API routing
  *
- * /channels/* エンドポイントを実装します。
+ * Implements the /channels/* endpoints.
  */
 
 import { Hono } from 'hono'
@@ -40,10 +40,10 @@ import type { AppEnv, BotRecord } from '../middleware/auth.js'
 import { WEBHOOK_LIMITS } from '../validators/webhook.js'
 
 /**
- * Channels APIルートを作成します。
- * @param db - データベース
- * @param baseUrl - ベースURL
- * @returns Honoルーターインスタンス
+ * Creates the Channels API routes.
+ * @param db - Database
+ * @param baseUrl - Base URL
+ * @returns Hono router instance
  */
 export function createChannelRoutes(
   db: Database,
@@ -52,7 +52,7 @@ export function createChannelRoutes(
 ): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
-  // GET /channels/:channelId — チャンネル情報を取得
+  // GET /channels/:channelId — Retrieve channel information
   app.get('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
     const channel = getChannel(db, channelId)
@@ -67,7 +67,7 @@ export function createChannelRoutes(
     return c.json(channel)
   })
 
-  // PATCH /channels/:channelId — チャンネル情報を更新
+  // PATCH /channels/:channelId — Update channel information
   app.patch('/channels/:channelId', async (c) => {
     const { channelId } = c.req.param()
     const payload = await c.req.json<{
@@ -90,7 +90,7 @@ export function createChannelRoutes(
     return c.json(updated)
   })
 
-  // DELETE /channels/:channelId — チャンネルを削除
+  // DELETE /channels/:channelId — Delete a channel
   app.delete('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
     const deleted = deleteChannel(db, channelId)
@@ -105,7 +105,7 @@ export function createChannelRoutes(
     return c.json(deleted)
   })
 
-  // GET /channels/:channelId/messages — メッセージ一覧を取得
+  // GET /channels/:channelId/messages — List messages
   app.get('/channels/:channelId/messages', (c) => {
     const { channelId } = c.req.param()
     const channel = getChannel(db, channelId)
@@ -132,17 +132,17 @@ export function createChannelRoutes(
     return c.json(messages)
   })
 
-  // ――― 新ピン API（discord.py 2.7+が使用）――――――――――――――――――――――――――
-  // ※ 必ず GET /channels/:cid/messages/:mid より先に定義すること。
-  //   後に定義すると "pins" がメッセージIDとして解釈されてしまう。
-  // GET /channels/:channelId/messages/pins — ピン留めメッセージ一覧を取得（新API形式）
-  // → discord.py 2.7+ / 新 Discord API 形式:
+  // ――― New pin API (used by discord.py 2.7+) ――――――――――――――――――――――――――
+  // Note: must be defined BEFORE GET /channels/:cid/messages/:mid.
+  //   If defined after, "pins" would be interpreted as a message ID.
+  // GET /channels/:channelId/messages/pins — List pinned messages (new API format)
+  // → discord.py 2.7+ / new Discord API format:
   //   {"items":[{"pinned_at":ISO8601,"message":{...}}],"has_more":false}
-  //   旧エンドポイント GET /channels/:cid/pins はフラット配列のまま
+  //   The legacy endpoint GET /channels/:cid/pins still returns a flat array
   app.get('/channels/:channelId/messages/pins', (c) => {
     const { channelId } = c.req.param()
     const pins = getPinnedMessages(db, channelId, baseUrl)
-    // ピン留め日時を pins テーブルから取得
+    // Fetch pinned-at timestamps from the pins table
     const pinRows = db
       .prepare(
         'SELECT message_id, pinned_at FROM pins WHERE channel_id = ? ORDER BY pinned_at ASC'
@@ -161,7 +161,7 @@ export function createChannelRoutes(
     })
   })
 
-  // PUT /channels/:channelId/messages/pins/:messageId（新形式ピン留め）
+  // PUT /channels/:channelId/messages/pins/:messageId (new-format pin)
   app.put('/channels/:channelId/messages/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
     const result = pinMessage(db, channelId, messageId)
@@ -205,7 +205,7 @@ export function createChannelRoutes(
     }
   })
 
-  // DELETE /channels/:channelId/messages/pins/:messageId（新形式ピン解除）
+  // DELETE /channels/:channelId/messages/pins/:messageId (new-format unpin)
   app.delete('/channels/:channelId/messages/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
     unpinMessage(db, channelId, messageId)
@@ -213,7 +213,7 @@ export function createChannelRoutes(
   })
   // ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
 
-  // GET /channels/:channelId/messages/:messageId — 特定メッセージを取得
+  // GET /channels/:channelId/messages/:messageId — Retrieve a specific message
   app.get('/channels/:channelId/messages/:messageId', (c) => {
     const { messageId } = c.req.param()
     const msg = getMessage(db, messageId, baseUrl)
@@ -228,7 +228,7 @@ export function createChannelRoutes(
     return c.json(msg)
   })
 
-  // POST /channels/:channelId/messages — メッセージを送信
+  // POST /channels/:channelId/messages — Send a message
   app.post('/channels/:channelId/messages', async (c) => {
     const { channelId } = c.req.param()
 
@@ -243,7 +243,7 @@ export function createChannelRoutes(
     }
 
     let bot = c.get('bot')
-    // authミドルウェアを経由しない場合、Authorizationヘッダーからbotを取得
+    // If the auth middleware was not applied, look up the bot from the Authorization header
     if (!bot) {
       const authHeader = c.req.header('Authorization')
       if (authHeader) {
@@ -267,11 +267,11 @@ export function createChannelRoutes(
         ? (JSON.parse(payloadJson as string) as Record<string, unknown>)
         : {}
 
-      // ファイル添付の処理
+      // Handle file attachments
       for (let i = 0; i < 10; i++) {
         const file = formData.get(`files[${i}]`) as File | null
         if (!file) break
-        // ファイルサイズチェック（25MB）
+        // File size check (25MB)
         if (file.size > 25 * 1024 * 1024) {
           const err = discordError(
             DiscordErrorCode.FILE_TOO_LARGE,
@@ -292,7 +292,7 @@ export function createChannelRoutes(
 
     const hasAttachments = attachmentFiles.length > 0
 
-    // 空メッセージチェック
+    // Empty message check
     if (isEmptyMessage(payload, hasAttachments)) {
       const err = discordError(
         DiscordErrorCode.EMPTY_MESSAGE,
@@ -302,7 +302,7 @@ export function createChannelRoutes(
       return c.json(err.body, 400)
     }
 
-    // バリデーション
+    // Validation
     const errors = validateMessageCreate(payload, hasAttachments)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
@@ -328,12 +328,12 @@ export function createChannelRoutes(
       baseUrl
     )
 
-    // 添付ファイルの保存（簡略実装 - インメモリ環境では実際のファイル保存はスキップ）
+    // Save attachments (simplified implementation - actual file saving is skipped in in-memory environments)
     if (attachmentFiles.length > 0) {
       try {
         const { saveAttachment } = await import('../services/attachments.js')
         for (const f of attachmentFiles) {
-          // 各添付ファイルに一意の Snowflake ID を採番する（連番は PRIMARY KEY 衝突を引き起こすため不可）
+          // Assign a unique Snowflake ID to each attachment (sequential numbers would cause PRIMARY KEY collisions)
           await saveAttachment(
             db,
             uploadPath,
@@ -347,14 +347,14 @@ export function createChannelRoutes(
           )
         }
       } catch {
-        // アップロードディレクトリが存在しない場合は無視
+        // Ignore if the upload directory does not exist
       }
     }
 
     return c.json(msg)
   })
 
-  // PATCH /channels/:channelId/messages/:messageId — メッセージを編集
+  // PATCH /channels/:channelId/messages/:messageId — Edit a message
   app.patch('/channels/:channelId/messages/:messageId', async (c) => {
     const { messageId } = c.req.param()
     const bot = c.get('bot')
@@ -369,7 +369,7 @@ export function createChannelRoutes(
       return c.json(err.body, 404)
     }
 
-    // 自分のメッセージのみ編集可能
+    // Only the author's own messages can be edited
     if (bot && existing.author.id !== bot.user_id) {
       const err = discordError(
         DiscordErrorCode.CANNOT_EDIT_OTHER,
@@ -382,7 +382,7 @@ export function createChannelRoutes(
     const payload =
       await c.req.json<Pick<MessageCreatePayload, 'content' | 'embeds'>>()
 
-    // バリデーション
+    // Validation
     const errors = validateMessageCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
@@ -392,7 +392,7 @@ export function createChannelRoutes(
     return c.json(updated)
   })
 
-  // DELETE /channels/:channelId/messages/:messageId — メッセージを削除
+  // DELETE /channels/:channelId/messages/:messageId — Delete a message
   app.delete('/channels/:channelId/messages/:messageId', (c) => {
     const { messageId } = c.req.param()
     const deleted = deleteMessage(db, messageId)
@@ -407,12 +407,12 @@ export function createChannelRoutes(
     return c.body(null, 204)
   })
 
-  // POST /channels/:channelId/messages/bulk-delete — メッセージを一括削除
+  // POST /channels/:channelId/messages/bulk-delete — Bulk delete messages
   app.post('/channels/:channelId/messages/bulk-delete', async (c) => {
-    c.req.param() // チャンネルIDはルートパラメータとして存在するが、このハンドラでは使用しない
+    c.req.param() // The channel ID exists as a route parameter but is not used in this handler
 
-    // JSON.parse は 19 桁の Snowflake 整数を浮動小数点に変換し精度を失う（JavaScript の仕様）。
-    // discord.py などは数値型で Snowflake を送るため、生テキストから正規表現で抽出して精度を保持する。
+    // JSON.parse converts 19-digit Snowflake integers to floating point and loses precision (JavaScript behavior).
+    // Libraries like discord.py send Snowflakes as numbers, so extract them from the raw text with a regex to preserve precision.
     const rawBody = await c.req.text()
     const messagesMatch = /"messages"\s*:\s*\[([^\]]*)\]/.exec(rawBody)
     const messages: string[] = messagesMatch
@@ -428,7 +428,7 @@ export function createChannelRoutes(
       return c.json(err.body, 400)
     }
 
-    // 2週間以上前のメッセージが含まれていないかチェック
+    // Check that no message is older than 2 weeks
     for (const msgId of messages) {
       if (isTooOldForBulkDelete(db, msgId)) {
         const err = discordError(
@@ -447,7 +447,7 @@ export function createChannelRoutes(
     return c.body(null, 204)
   })
 
-  // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me — 自分のリアクションを追加
+  // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me — Add own reaction
   app.put(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/@me',
     (c) => {
@@ -471,7 +471,7 @@ export function createChannelRoutes(
     }
   )
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/@me — 自分のリアクションを削除
+  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/@me — Remove own reaction
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/@me',
     (c) => {
@@ -485,7 +485,7 @@ export function createChannelRoutes(
     }
   )
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/:userId — 特定ユーザーのリアクションを削除
+  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/:userId — Remove a specific user's reaction
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/:userId',
     (c) => {
@@ -497,7 +497,7 @@ export function createChannelRoutes(
     }
   )
 
-  // GET /channels/:channelId/messages/:messageId/reactions/:emoji — リアクションしたユーザー一覧を取得
+  // GET /channels/:channelId/messages/:messageId/reactions/:emoji — List users who reacted
   app.get('/channels/:channelId/messages/:messageId/reactions/:emoji', (c) => {
     const { messageId, emoji } = c.req.param()
     const decodedEmoji = decodeURIComponent(emoji)
@@ -516,7 +516,7 @@ export function createChannelRoutes(
     )
   })
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji — 絵文字のリアクションを全削除
+  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji — Remove all reactions for an emoji
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji',
     (c) => {
@@ -527,21 +527,21 @@ export function createChannelRoutes(
     }
   )
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions — メッセージの全リアクションを削除
+  // DELETE /channels/:channelId/messages/:messageId/reactions — Remove all reactions from a message
   app.delete('/channels/:channelId/messages/:messageId/reactions', (c) => {
     const { messageId } = c.req.param()
     removeAllReactions(db, messageId)
     return c.body(null, 204)
   })
 
-  // GET /channels/:channelId/pins — ピン留めメッセージ一覧を取得（旧API形式）
+  // GET /channels/:channelId/pins — List pinned messages (legacy API format)
   app.get('/channels/:channelId/pins', (c) => {
     const { channelId } = c.req.param()
     const pins = getPinnedMessages(db, channelId, baseUrl)
     return c.json(pins)
   })
 
-  // PUT /channels/:channelId/pins/:messageId — メッセージをピン留め（旧API形式）
+  // PUT /channels/:channelId/pins/:messageId — Pin a message (legacy API format)
   app.put('/channels/:channelId/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
     const result = pinMessage(db, channelId, messageId)
@@ -585,25 +585,25 @@ export function createChannelRoutes(
     }
   })
 
-  // DELETE /channels/:channelId/pins/:messageId — メッセージのピン留めを解除（旧API形式）
+  // DELETE /channels/:channelId/pins/:messageId — Unpin a message (legacy API format)
   app.delete('/channels/:channelId/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
     unpinMessage(db, channelId, messageId)
     return c.body(null, 204)
   })
 
-  // GET /channels/:channelId/webhooks — チャンネルのWebhook一覧を取得
+  // GET /channels/:channelId/webhooks — List webhooks for a channel
   app.get('/channels/:channelId/webhooks', (c) => {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)
     return c.json(webhooks)
   })
 
-  // POST /channels/:channelId/webhooks — Webhookを作成
+  // POST /channels/:channelId/webhooks — Create a webhook
   app.post('/channels/:channelId/webhooks', async (c) => {
     const { channelId } = c.req.param()
 
-    // チャンネルの存在確認
+    // Verify the channel exists
     const channel = getChannel(db, channelId)
     if (!channel) {
       const err = discordError(
@@ -614,7 +614,7 @@ export function createChannelRoutes(
       return c.json(err.body, 404)
     }
 
-    // Webhook上限チェック（15件/チャンネル）
+    // Webhook limit check (15 per channel)
     const existingWebhooks = getChannelWebhooks(db, channelId)
     if (existingWebhooks.length >= WEBHOOK_LIMITS.CHANNEL_WEBHOOKS_MAX) {
       const err = discordError(
@@ -627,7 +627,7 @@ export function createChannelRoutes(
 
     const payload = await c.req.json<{ name: string; avatar?: string | null }>()
 
-    // バリデーション
+    // Validation
     const errors = validateWebhookCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)

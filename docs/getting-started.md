@@ -1,32 +1,34 @@
 # Getting Started
 
-## Fauxcord とは
+## What is Fauxcord?
 
-Discord REST API v10 のモックサーバーです。  
-本物の Discord に接続せずに、ボットやアプリのテストを自動化できます。
+A mock server for Discord REST API v10.  
+It lets you automate testing of bots and apps without connecting to the real Discord.
 
-**できること:**
-- メッセージ送信・取得・編集・削除
-- リアクション、ピン留め、Webhook
-- Guild / チャンネル / メンバー / ロール 操作
-- OAuth2 フロー（Authorization Code / Client Credentials）
-- ファイル添付
+**What it can do:**
 
-**できないこと:**
-- WebSocket（Gateway / リアルタイム通知）
-- 音声・動画
+- Send, fetch, edit, and delete messages
+- Reactions, pins, Webhooks
+- Guild / channel / member / role operations
+- OAuth2 flows (Authorization Code / Client Credentials)
+- File attachments
+
+**What it cannot do:**
+
+- WebSocket (Gateway / real-time notifications)
+- Voice / video
 
 ---
 
-## 1. 起動する
+## 1. Start the server
 
-### Docker（推奨）
+### Docker (recommended)
 
 ```bash
 docker run -p 3000:3000 ghcr.io/tomacheese/fauxcord:latest
 ```
 
-データを永続化する場合:
+To persist data:
 
 ```bash
 docker run -p 3000:3000 -v fauxcord-data:/data ghcr.io/tomacheese/fauxcord:latest
@@ -35,21 +37,21 @@ docker run -p 3000:3000 -v fauxcord-data:/data ghcr.io/tomacheese/fauxcord:lates
 ### Docker Compose
 
 ```bash
-# compose.yaml をダウンロードして起動
+# Download compose.yaml and start
 curl -O https://raw.githubusercontent.com/tomacheese/fauxcord/master/compose.yaml
 docker compose up -d
 ```
 
-### ローカル（Node.js 24 + pnpm）
+### Local (Node.js 24 + pnpm)
 
 ```bash
 git clone https://github.com/tomacheese/fauxcord
 cd fauxcord
 pnpm install
-pnpm dev     # 開発モード（ファイル変更で自動再起動）
+pnpm dev     # Dev mode (auto-restarts on file changes)
 ```
 
-起動確認:
+Verify it's running:
 
 ```bash
 curl http://localhost:3000/_mock/health
@@ -58,10 +60,10 @@ curl http://localhost:3000/_mock/health
 
 ---
 
-## 2. Bot をセットアップする
+## 2. Set up a Bot
 
-Fauxcord は「どの Bot トークンが有効か」を管理します。  
-テスト開始前に `/_test/setup` でトークンと Guild を登録してください。
+Fauxcord keeps track of which Bot tokens are valid.  
+Before running your tests, register a token and Guild via `/_test/setup`.
 
 ```bash
 curl -X POST http://localhost:3000/_test/setup \
@@ -85,15 +87,15 @@ curl -X POST http://localhost:3000/_test/setup \
   }'
 ```
 
-> `id` フィールドはすべて省略可能です。省略すると Discord 互換の Snowflake ID が自動採番されます。
+> All `id` fields are optional. When omitted, a Discord-compatible Snowflake ID is generated automatically.
 
 ---
 
-## 3. API を呼び出す
+## 3. Call the API
 
-セットアップ後は、本物の Discord API と同じ URL 形式でリクエストできます。
+Once set up, you can make requests using the same URL format as the real Discord API.
 
-### メッセージを送る
+### Send a message
 
 ```bash
 curl -X POST http://localhost:3000/api/v10/channels/333333333333333333/messages \
@@ -112,17 +114,17 @@ curl -X POST http://localhost:3000/api/v10/channels/333333333333333333/messages 
 }
 ```
 
-### メッセージ一覧を取得する
+### List messages
 
 ```bash
 curl http://localhost:3000/api/v10/channels/333333333333333333/messages \
   -H "Authorization: Bot mytoken"
 ```
 
-### Webhook を作成・実行する
+### Create and execute a Webhook
 
 ```bash
-# 作成
+# Create
 WH=$(curl -s -X POST http://localhost:3000/api/v10/channels/333333333333333333/webhooks \
   -H "Authorization: Bot mytoken" \
   -H "Content-Type: application/json" \
@@ -131,7 +133,7 @@ WH=$(curl -s -X POST http://localhost:3000/api/v10/channels/333333333333333333/w
 WH_ID=$(echo $WH | jq -r '.id')
 WH_TOKEN=$(echo $WH | jq -r '.token')
 
-# 実行
+# Execute
 curl -X POST "http://localhost:3000/webhooks/$WH_ID/$WH_TOKEN?wait=true" \
   -H "Content-Type: application/json" \
   -d '{"content": "Webhook message!"}'
@@ -139,81 +141,81 @@ curl -X POST "http://localhost:3000/webhooks/$WH_ID/$WH_TOKEN?wait=true" \
 
 ---
 
-## 4. URL 形式
+## 4. URL formats
 
-以下のどの形式でもアクセスできます。
+All of the following formats are accepted.
 
-| URL 形式 | 動作 |
-|---|---|
-| `/api/v10/channels/...` | 推奨（Discord 標準） |
-| `/api/channels/...` | v10 として処理 |
-| `/channels/...` | v10 として処理 |
+| URL format              | Behavior                       |
+| ----------------------- | ------------------------------ |
+| `/api/v10/channels/...` | Recommended (Discord standard) |
+| `/api/channels/...`     | Handled as v10                 |
+| `/channels/...`         | Handled as v10                 |
 
-> `/api/v9/` など v10 以外は `400 (50041)` を返します。
+> Anything other than v10, such as `/api/v9/`, returns `400 (50041)`.
 
 ---
 
-## 5. テストをリセットする
+## 5. Reset test data
 
-各テストケースの前後でデータを初期化できます。
+You can reset data before and after each test case.
 
 ```bash
-# すべてのメッセージ・Webhook を削除（Bot / Guild / Channel は残る）
+# Delete all messages and Webhooks (Bot / Guild / Channel are kept)
 curl -X POST http://localhost:3000/_test/reset \
   -H "Content-Type: application/json" \
   -d '{}'
 
-# 特定 Bot のデータだけリセット
+# Reset only a specific Bot's data
 curl -X POST http://localhost:3000/_test/reset \
   -H "Content-Type: application/json" \
   -d '{"token": "Bot mytoken"}'
 ```
 
-詳しいテスト制御 API は → [test-api.md](./test-api.md)
+For full details on the test control API → [test-api.md](./test-api.md)
 
 ---
 
-## 6. 起動時に自動でデータを投入する（SEED_FILE）
+## 6. Seed data automatically at startup (SEED_FILE)
 
-毎回 `/_test/setup` を呼ぶ代わりに、起動時に自動でデータを投入できます。
+Instead of calling `/_test/setup` every time, you can load data automatically at startup.
 
 ```bash
 SEED_FILE=/path/to/seed.json pnpm start
 ```
 
-`seed.json` の形式は `seed.example.json` を参照してください。
+See `seed.example.json` for the format of `seed.json`.
 
 ---
 
-## 7. 認証を無効化する（DISABLE_AUTH）
+## 7. Disable authentication (DISABLE_AUTH)
 
-どんなトークンでもアクセスを許可したい場合:
+If you want to allow access with any token:
 
 ```bash
 DISABLE_AUTH=true pnpm start
 ```
 
-> セットアップ済みのトークンは引き続きそのユーザー情報で動作します。  
-> 未登録トークンはダミーの Bot (`MockBot`) として扱われます。
+> Tokens that have been set up continue to work with their registered user information.  
+> Unregistered tokens are treated as a dummy Bot (`MockBot`).
 
 ---
 
-## 環境変数一覧
+## Environment variables
 
-| 変数 | デフォルト | 説明 |
-|---|---|---|
-| `PORT` | `3000` | ポート番号 |
-| `HOST` | `0.0.0.0` | バインドアドレス |
-| `DB_PATH` | `/data/mock.db` | SQLite ファイルパス |
-| `UPLOAD_PATH` | `/data/uploads` | 添付ファイル保存先 |
-| `BASE_URL` | `http://localhost:3000` | 添付ファイル URL の生成に使用 |
-| `DISABLE_AUTH` | `false` | `true` で認証バイパス |
-| `LATENCY_MS` | `0` | 全レスポンスへの人工遅延（ms） |
-| `SEED_FILE` | _(なし)_ | 起動時自動ロードする JSON のパス |
+| Variable       | Default                 | Description                                         |
+| -------------- | ----------------------- | --------------------------------------------------- |
+| `PORT`         | `3000`                  | Port number                                         |
+| `HOST`         | `0.0.0.0`               | Bind address                                        |
+| `DB_PATH`      | `/data/mock.db`         | SQLite file path                                    |
+| `UPLOAD_PATH`  | `/data/uploads`         | Attachment storage directory                        |
+| `BASE_URL`     | `http://localhost:3000` | Used to generate attachment URLs                    |
+| `DISABLE_AUTH` | `false`                 | Set `true` to bypass authentication                 |
+| `LATENCY_MS`   | `0`                     | Artificial latency added to all responses (ms)      |
+| `SEED_FILE`    | _(none)_                | Path to a JSON file loaded automatically at startup |
 
 ---
 
-## 次のステップ
+## Next steps
 
-- [test-api.md](./test-api.md) — テスト制御 API の詳細
-- [libraries.md](./libraries.md) — discord.js / discord.py / Discord.Net などの接続方法
+- [test-api.md](./test-api.md) — Details of the test control API
+- [libraries.md](./libraries.md) — How to connect discord.js / discord.py / Discord.Net and more

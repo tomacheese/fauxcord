@@ -1,43 +1,43 @@
 /**
- * 環境変数の読み込みと設定管理
+ * Environment variable loading and configuration management
  *
- * サーバー動作に必要な設定値を環境変数から読み込みます。
+ * Loads the settings required for server operation from environment variables.
  */
 
-/** サーバー設定インターフェース */
+/** Server configuration interface */
 export interface Config {
-  /** リッスンポート */
+  /** Listen port */
   port: number
-  /** バインドアドレス */
+  /** Bind address */
   host: string
-  /** SQLiteファイルパス */
+  /** SQLite file path */
   dbPath: string
-  /** 添付ファイル保存先ディレクトリ */
+  /** Attachment storage directory */
   uploadPath: string
-  /** 添付ファイルURL生成に使用するベースURL */
+  /** Base URL used to generate attachment URLs */
   baseUrl: string
-  /** ログレベル */
+  /** Log level */
   logLevel: 'debug' | 'info' | 'warn' | 'error'
-  /** trueで任意のトークンを全許可 */
+  /** When true, any token is allowed */
   disableAuth: boolean
-  /** 全レスポンスに付加する人工遅延 (ms) */
+  /** Artificial latency added to all responses (ms) */
   latencyMs: number
-  /** 起動時に自動ロードするJSONファイルのパス */
+  /** Path to a JSON file loaded automatically at startup */
   seedFile: string | undefined
 }
 
 /**
- * ログレベルの値が有効かどうかを検証します。
- * @param level - 検証するログレベル文字列
- * @returns 有効なログレベルであればtrue
+ * Validates whether a log level value is valid.
+ * @param level - Log level string to validate
+ * @returns true if the log level is valid
  */
 function isValidLogLevel(level: string): level is Config['logLevel'] {
   return ['debug', 'info', 'warn', 'error'].includes(level)
 }
 
 /**
- * 環境変数から設定を読み込みます。
- * @returns 設定オブジェクト
+ * Loads configuration from environment variables.
+ * @returns Configuration object
  */
 export function loadConfig(): Config {
   const port = Number.parseInt(process.env.PORT ?? '3000', 10)

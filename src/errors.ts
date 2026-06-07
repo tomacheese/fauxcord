@@ -1,14 +1,14 @@
 /**
- * Discord APIエラーコード定数とエラー生成ヘルパー
+ * Discord API error code constants and error generation helpers
  *
- * Discord API v10と完全互換のエラーコードを定義します。
+ * Defines error codes fully compatible with Discord API v10.
  */
 
 /**
- * Discordエラーコード定数
+ * Discord error code constants
  */
 export const DiscordErrorCode = {
-  // 10xxx — リソース不明
+  // 10xxx — Unknown resource
   UNKNOWN_CHANNEL: 10_003,
   UNKNOWN_GUILD: 10_004,
   UNKNOWN_MEMBER: 10_007,
@@ -17,17 +17,17 @@ export const DiscordErrorCode = {
   UNKNOWN_TOKEN: 10_012,
   UNKNOWN_USER: 10_013,
   UNKNOWN_WEBHOOK: 10_015,
-  // 30xxx — 上限超過
+  // 30xxx — Limit exceeded
   MAX_PINS_REACHED: 30_003,
   MAX_ROLES_REACHED: 30_005,
   MAX_WEBHOOKS_REACHED: 30_007,
   MAX_CHANNELS_REACHED: 30_013,
   MAX_ATTACHMENTS: 30_015,
-  // 40xxx — その他エラー
+  // 40xxx — Other errors
   UNAUTHORIZED: 40_001,
   REQUEST_TOO_LARGE: 40_005,
   ALREADY_PINNED: 40_041,
-  // 50xxx — 操作不可
+  // 50xxx — Operation not allowed
   MISSING_ACCESS: 50_001,
   CANNOT_EDIT_OTHER: 50_005,
   EMPTY_MESSAGE: 50_006,
@@ -41,7 +41,7 @@ export const DiscordErrorCode = {
   FILE_TOO_LARGE: 50_045,
 } as const
 
-/** エラーレスポンスの型 */
+/** Error response type */
 export interface DiscordErrorResponse {
   body: {
     message: string
@@ -52,11 +52,11 @@ export interface DiscordErrorResponse {
 }
 
 /**
- * Discord互換エラーレスポンスを生成します。
- * @param code - Discordエラーコード
- * @param message - エラーメッセージ
- * @param status - HTTPステータスコード
- * @returns エラーレスポンスオブジェクト
+ * Generates a Discord-compatible error response.
+ * @param code - Discord error code
+ * @param message - Error message
+ * @param status - HTTP status code
+ * @returns Error response object
  */
 export function discordError(
   code: number,
@@ -70,9 +70,9 @@ export function discordError(
 }
 
 /**
- * バリデーションエラー (50035) レスポンスを生成します。
- * @param errors - フィールドごとのエラー詳細
- * @returns バリデーションエラーレスポンスオブジェクト
+ * Generates a validation error (50035) response.
+ * @param errors - Error details per field
+ * @returns Validation error response object
  */
 export function validationError(
   errors: Record<string, unknown>
@@ -88,7 +88,7 @@ export function validationError(
 }
 
 /**
- * エラーレスポンスからHono用のレスポンスを返すためのヘルパー型
+ * Helper map for building Hono responses from error codes
  */
 export const ERROR_MESSAGES = {
   [DiscordErrorCode.UNKNOWN_CHANNEL]: 'Unknown Channel',

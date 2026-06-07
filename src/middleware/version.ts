@@ -1,21 +1,21 @@
 /**
- * APIバージョンルーティングミドルウェア
+ * API version routing middleware
  *
- * /api/v10/ → そのまま処理
- * /api/ → v10として処理
- * / → v10として処理
- * /api/v6〜v9/ → 400 Bad Request
+ * /api/v10/ → handled as-is
+ * /api/ → handled as v10
+ * / → handled as v10
+ * /api/v6–v9/ → 400 Bad Request
  */
 
 import type { Context, Next } from 'hono'
 import { discordError, DiscordErrorCode } from '../errors.js'
 
-/** サポートされていないAPIバージョンのパターン（v10以外のバージョン指定をブロック）*/
+/** Pattern for unsupported API versions (blocks any version other than v10) */
 const UNSUPPORTED_VERSION_PATTERN = /^\/api\/v(?!10\/)([0-9]+)\//
 
 /**
- * APIバージョンを解決するミドルウェア。
- * 未サポートバージョンへのリクエストは400を返します。
+ * Middleware that resolves the API version.
+ * Requests to unsupported versions return 400.
  */
 export const versionMiddleware = async (
   c: Context,

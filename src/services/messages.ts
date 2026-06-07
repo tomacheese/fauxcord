@@ -1,13 +1,13 @@
 /**
- * メッセージ操作サービス
+ * Message operations service
  *
- * メッセージのCRUD操作・リアクション・ピン留め機能を提供します。
+ * Provides message CRUD operations, reactions, and pinning features.
  */
 
 import type { Database } from '../db.js'
 import { snowflakeToTimestamp } from '../snowflake.js'
 
-/** DBから取得したメッセージレコードの型 */
+/** Message record type retrieved from the DB */
 interface MessageRow {
   id: string
   channel_id: string
@@ -24,7 +24,7 @@ interface MessageRow {
   edited_at: string | null
 }
 
-/** DBから取得したユーザーレコードの型 */
+/** User record type retrieved from the DB */
 interface UserRow {
   id: string
   username: string
@@ -33,7 +33,7 @@ interface UserRow {
   bot: number
 }
 
-/** DBから取得したembedレコードの型 */
+/** Embed record type retrieved from the DB */
 interface EmbedRow {
   id: number
   message_id: string
@@ -41,7 +41,7 @@ interface EmbedRow {
   position: number
 }
 
-/** DBから取得したattachmentレコードの型 */
+/** Attachment record type retrieved from the DB */
 interface AttachmentRow {
   id: string
   message_id: string
@@ -51,28 +51,28 @@ interface AttachmentRow {
   file_path: string
 }
 
-/** DBから取得したリアクション集計レコードの型 */
+/** Reaction aggregation record type retrieved from the DB */
 interface ReactionAggRow {
   emoji: string
   count: number
 }
 
-/** リアクションオブジェクト */
+/** Reaction object */
 export interface ReactionObject {
-  /** リアクション数 */
+  /** Reaction count */
   count: number
-  /** リクエスト元ユーザーがリアクション済みかどうか（モックでは常に false） */
+  /** Whether the requesting user has reacted (always false in the mock) */
   me: boolean
-  /** 絵文字情報 */
+  /** Emoji information */
   emoji: {
-    /** カスタム絵文字のID（標準絵文字の場合はnull） */
+    /** Custom emoji ID (null for standard emoji) */
     id: string | null
-    /** 絵文字文字列（Unicode 絵文字またはカスタム絵文字名） */
+    /** Emoji string (Unicode emoji or custom emoji name) */
     name: string
   }
 }
 
-/** APIレスポンス用メッセージオブジェクト */
+/** Message object for API responses */
 export interface MessageObject {
   id: string
   channel_id: string
@@ -92,17 +92,17 @@ export interface MessageObject {
   mention_roles: never[]
   attachments: AttachmentObject[]
   embeds: unknown[]
-  /** リアクション一覧（リアクションがない場合はフィールド自体が省略される） */
+  /** Reaction list (the field itself is omitted when there are no reactions) */
   reactions?: ReactionObject[]
   pinned: boolean
   type: number
   flags: number
   message_reference?: { message_id: string }
-  /** Webhook経由で送信されたメッセージの場合のWebhook ID */
+  /** Webhook ID when the message was sent via a webhook */
   webhook_id?: string
 }
 
-/** APIレスポンス用添付ファイルオブジェクト */
+/** Attachment object for API responses */
 export interface AttachmentObject {
   id: string
   filename: string
@@ -113,14 +113,14 @@ export interface AttachmentObject {
 }
 
 /**
- * DBのメッセージレコードをAPIレスポンス形式に変換します。
- * @param row - メッセージDBレコード
- * @param author - 作成者ユーザーレコード
- * @param embeds - Embedレコードの配列
- * @param attachments - 添付ファイルレコードの配列
- * @param reactions - リアクション集計レコードの配列
- * @param baseUrl - ベースURL（添付ファイルURLの生成用）
- * @returns APIレスポンス用オブジェクト
+ * Converts a DB message record into the API response format.
+ * @param row - Message DB record
+ * @param author - Author user record
+ * @param embeds - Array of embed records
+ * @param attachments - Array of attachment records
+ * @param reactions - Array of reaction aggregation records
+ * @param baseUrl - Base URL (for generating attachment URLs)
+ * @returns Object for API responses
  */
 export function toMessageObject(
   row: MessageRow,
@@ -169,18 +169,18 @@ export function toMessageObject(
     obj.message_reference = { message_id: row.referenced_message_id }
   }
 
-  // Webhook経由のメッセージにはwebhook_idを付与する（author_id = Webhook ID）
+  // Add webhook_id to messages sent via webhook (author_id = webhook ID)
   if (row.author_token === 'webhook') {
     obj.webhook_id = row.author_id
   }
 
-  // リアクションがある場合のみ reactions フィールドを付与（Discord API 仕様に準拠）
+  // Add the reactions field only when reactions exist (conforming to the Discord API spec)
   if (reactions.length > 0) {
     obj.reactions = reactions.map((r) => ({
       count: r.count,
-      me: false, // モックでは常に false（リクエスト元ユーザーを特定しない）
+      me: false, // Always false in the mock (the requesting user is not identified)
       emoji: {
-        id: null, // 標準絵文字のため常に null
+        id: null, // Always null because these are standard emoji
         name: r.emoji,
       },
     }))
@@ -190,11 +190,11 @@ export function toMessageObject(
 }
 
 /**
- * メッセージをDBから取得してAPIレスポンス形式に変換します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @param baseUrl - ベースURL
- * @returns メッセージオブジェクト（存在しない場合null）
+ * Retrieves a message from the DB and converts it into the API response format.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @param baseUrl - Base URL
+ * @returns Message object, or null if it does not exist
  */
 export function getMessage(
   db: Database,
@@ -228,7 +228,7 @@ export function getMessage(
   return toMessageObject(row, author, embeds, attachments, reactions, baseUrl)
 }
 
-/** メッセージ一覧取得のクエリパラメータ */
+/** Query parameters for listing messages */
 export interface MessageListParams {
   limit?: number
   before?: string
@@ -237,12 +237,12 @@ export interface MessageListParams {
 }
 
 /**
- * チャンネルのメッセージ一覧を取得します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @param params - ページネーションパラメータ
- * @param baseUrl - ベースURL
- * @returns メッセージオブジェクトの配列（新しい順）
+ * Retrieves the list of messages in a channel.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param params - Pagination parameters
+ * @param baseUrl - Base URL
+ * @returns Array of message objects (newest first)
  */
 export function getMessages(
   db: Database,
@@ -265,21 +265,21 @@ export function getMessages(
     queryParams = [channelId, params.after, limit]
   } else if (params.around) {
     const half = Math.floor(limit / 2)
-    // around より前のメッセージ（新しい順で half 件取得）
+    // Messages before "around" (fetch half items in newest-first order)
     const beforeRows = db
       .prepare(
         'SELECT * FROM messages WHERE channel_id = ? AND id < ? ORDER BY id DESC LIMIT ?'
       )
       .all(channelId, params.around, half) as MessageRow[]
-    // around を含む以降のメッセージ（古い順で (limit - half) 件取得）
+    // Messages from "around" onward, inclusive (fetch (limit - half) items in oldest-first order)
     const afterRows = db
       .prepare(
         'SELECT * FROM messages WHERE channel_id = ? AND id >= ? ORDER BY id ASC LIMIT ?'
       )
       .all(channelId, params.around, limit - half) as MessageRow[]
-    // beforeRows は降順（新しい順）、afterRows は昇順（古い順）で取得しているため、
-    // afterRows を reverse して降順に揃え、afterRows → beforeRows の順で結合して
-    // 全体を新しい順（降順）にする
+    // beforeRows is fetched in descending (newest-first) order and afterRows in ascending (oldest-first) order,
+    // so reverse afterRows to align with descending order, then concatenate afterRows → beforeRows
+    // so the whole list is newest-first (descending)
     const rows = [...afterRows.toReversed(), ...beforeRows]
 
     return rows
@@ -312,8 +312,8 @@ export function getMessages(
 
   const rows = db.prepare(query).all(...queryParams) as MessageRow[]
 
-  // after は古い順（ASC）で取得しているため reverse して新しい順にする。
-  // before・指定なしは降順（DESC）で取得済みのためそのまま返す
+  // "after" is fetched in oldest-first (ASC) order, so reverse it to newest-first.
+  // "before" and the default case are already fetched in descending (DESC) order, so return as-is
   const orderedRows = params.after ? rows.toReversed() : rows
 
   return orderedRows
@@ -338,7 +338,7 @@ export function getMessages(
     .filter((m): m is MessageObject => m !== null)
 }
 
-/** メッセージ作成パラメータ */
+/** Message creation parameters */
 export interface MessageCreateParams {
   channelId: string
   authorId: string
@@ -352,11 +352,11 @@ export interface MessageCreateParams {
 }
 
 /**
- * メッセージを作成します。
- * @param db - データベース
- * @param params - メッセージ作成パラメータ
- * @param baseUrl - ベースURL
- * @returns 作成したメッセージオブジェクト
+ * Creates a message.
+ * @param db - Database
+ * @param params - Message creation parameters
+ * @param baseUrl - Base URL
+ * @returns Created message object
  */
 export function createMessage(
   db: Database,
@@ -377,7 +377,7 @@ export function createMessage(
     params.messageReference?.message_id ?? null
   )
 
-  // Embedを保存
+  // Save embeds
   if (params.embeds) {
     for (let i = 0; i < params.embeds.length; i++) {
       db.prepare(
@@ -386,7 +386,7 @@ export function createMessage(
     }
   }
 
-  // チャンネルのlast_message_idを更新
+  // Update the channel's last_message_id
   db.prepare('UPDATE channels SET last_message_id = ? WHERE id = ?').run(
     params.messageId,
     params.channelId
@@ -398,12 +398,12 @@ export function createMessage(
 }
 
 /**
- * メッセージを更新します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @param payload - 更新内容
- * @param baseUrl - ベースURL
- * @returns 更新後のメッセージオブジェクト
+ * Updates a message.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @param payload - Update payload
+ * @param baseUrl - Base URL
+ * @returns Updated message object
  */
 export function updateMessage(
   db: Database,
@@ -422,7 +422,7 @@ export function updateMessage(
     ).run(payload.content, messageId)
   }
 
-  // null は空配列と同等（embeds を全削除）。undefined は「変更なし」として無視する
+  // null is equivalent to an empty array (delete all embeds). undefined means "no change" and is ignored
   if (payload.embeds !== undefined) {
     db.prepare('DELETE FROM embeds WHERE message_id = ?').run(messageId)
     const embedsArray = Array.isArray(payload.embeds) ? payload.embeds : []
@@ -437,38 +437,38 @@ export function updateMessage(
 }
 
 /**
- * メッセージを削除します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @returns 削除成功ならtrue
+ * Deletes a message.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @returns true on successful deletion
  */
 export function deleteMessage(db: Database, messageId: string): boolean {
   const result = db.prepare('DELETE FROM messages WHERE id = ?').run(messageId)
   return result.changes > 0
 }
 
-/** 2週間前のタイムスタンプ（ミリ秒） */
+/** Two-week timestamp (milliseconds) */
 const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000
 
 /**
- * メッセージが2週間以上前かどうかを確認します。
+ * Checks whether a message is older than 2 weeks.
  *
- * 実際の Discord API と同様に、メッセージの存在有無にかかわらず
- * Snowflake ID に埋め込まれたタイムスタンプから経過時間を判定します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @returns 2週間以上前の場合true
+ * Like the real Discord API, the elapsed time is determined from the timestamp
+ * embedded in the Snowflake ID, regardless of whether the message exists.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @returns true if older than 2 weeks
  */
 export function isTooOldForBulkDelete(
   db: Database,
   messageId: string
 ): boolean {
-  // Snowflake ID からタイムスタンプを復元して判定する（実Discordと同じ挙動）
+  // Recover the timestamp from the Snowflake ID to make the determination (same behavior as real Discord)
   try {
     const createdAt = snowflakeToTimestamp(messageId).getTime()
     return Date.now() - createdAt > TWO_WEEKS_MS
   } catch {
-    // Snowflakeとして解釈できないIDはDBのcreated_atにフォールバック
+    // For IDs that cannot be interpreted as Snowflakes, fall back to the DB's created_at
     const row = db
       .prepare('SELECT created_at FROM messages WHERE id = ?')
       .get(messageId) as { created_at: string } | undefined
@@ -480,12 +480,12 @@ export function isTooOldForBulkDelete(
 }
 
 /**
- * リアクションを追加します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @param userId - ユーザーID
- * @param emoji - 絵文字
- * @returns 追加成功ならtrue
+ * Adds a reaction.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @param userId - User ID
+ * @param emoji - Emoji
+ * @returns true on successful addition
  */
 export function addReaction(
   db: Database,
@@ -504,11 +504,11 @@ export function addReaction(
 }
 
 /**
- * リアクションを削除します（自分のリアクション）。
- * @param db - データベース
- * @param messageId - メッセージID
- * @param userId - ユーザーID
- * @param emoji - 絵文字
+ * Removes a reaction (the user's own reaction).
+ * @param db - Database
+ * @param messageId - Message ID
+ * @param userId - User ID
+ * @param emoji - Emoji
  */
 export function removeReaction(
   db: Database,
@@ -522,10 +522,10 @@ export function removeReaction(
 }
 
 /**
- * 指定絵文字の全リアクションを削除します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @param emoji - 絵文字
+ * Removes all reactions for the specified emoji.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @param emoji - Emoji
  */
 export function removeEmojiReactions(
   db: Database,
@@ -539,22 +539,22 @@ export function removeEmojiReactions(
 }
 
 /**
- * メッセージの全リアクションを削除します。
- * @param db - データベース
- * @param messageId - メッセージID
+ * Removes all reactions from a message.
+ * @param db - Database
+ * @param messageId - Message ID
  */
 export function removeAllReactions(db: Database, messageId: string): void {
   db.prepare('DELETE FROM reactions WHERE message_id = ?').run(messageId)
 }
 
 /**
- * リアクションしたユーザー一覧を取得します。
- * @param db - データベース
- * @param messageId - メッセージID
- * @param emoji - 絵文字
- * @param limit - 取得件数（デフォルト25）
- * @param after - ページネーション
- * @returns ユーザーオブジェクトの配列
+ * Retrieves the list of users who reacted.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @param emoji - Emoji
+ * @param limit - Number of items to retrieve (default 25)
+ * @param after - Pagination cursor
+ * @returns Array of user objects
  */
 export function getReactionUsers(
   db: Database,
@@ -585,11 +585,11 @@ export function getReactionUsers(
 }
 
 /**
- * ピン留めされたメッセージ一覧を取得します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @param baseUrl - ベースURL
- * @returns メッセージオブジェクトの配列
+ * Retrieves the list of pinned messages.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param baseUrl - Base URL
+ * @returns Array of message objects
  */
 export function getPinnedMessages(
   db: Database,
@@ -628,33 +628,33 @@ export function getPinnedMessages(
 }
 
 /**
- * メッセージをピン留めします。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @param messageId - メッセージID
- * @returns エラーコード（0=成功、10008=メッセージ不存在、40041=既にピン済み、30003=上限超過、50019=別チャンネル）
+ * Pins a message.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param messageId - Message ID
+ * @returns Error code (0 = success, 10008 = message not found, 40041 = already pinned, 30003 = limit reached, 50019 = different channel)
  */
 export function pinMessage(
   db: Database,
   channelId: string,
   messageId: string
 ): 0 | 10_008 | 40_041 | 30_003 | 50_019 {
-  // メッセージが同じチャンネルにあるか確認
+  // Verify the message is in the same channel
   const msg = db
     .prepare('SELECT channel_id FROM messages WHERE id = ?')
     .get(messageId) as { channel_id: string } | undefined
 
-  // 実Discordと同様に、存在しないメッセージは404 Unknown Messageを返す
+  // Like real Discord, a nonexistent message returns 404 Unknown Message
   if (!msg) return 10_008
   if (msg.channel_id !== channelId) return 50_019
 
-  // ピン済みチェック
+  // Already-pinned check
   const existing = db
     .prepare('SELECT 1 FROM pins WHERE channel_id = ? AND message_id = ?')
     .get(channelId, messageId)
   if (existing) return 40_041
 
-  // 上限チェック
+  // Limit check
   const count = (
     db
       .prepare('SELECT COUNT(*) as cnt FROM pins WHERE channel_id = ?')
@@ -671,10 +671,10 @@ export function pinMessage(
 }
 
 /**
- * メッセージのピン留めを解除します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @param messageId - メッセージID
+ * Unpins a message.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param messageId - Message ID
  */
 export function unpinMessage(
   db: Database,
@@ -685,7 +685,7 @@ export function unpinMessage(
     channelId,
     messageId
   )
-  // 他のチャンネルでピン済みでなければpinned=0に
+  // Set pinned=0 unless still pinned in another channel
   const stillPinned = db
     .prepare('SELECT 1 FROM pins WHERE message_id = ?')
     .get(messageId)

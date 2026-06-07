@@ -1,7 +1,7 @@
 /**
- * ファイル添付サービス
+ * File attachment service
  *
- * 添付ファイルの保存・配信を処理します。
+ * Handles saving and serving attachments.
  */
 
 import { mkdir, writeFile, readFile, access } from 'node:fs/promises'
@@ -9,10 +9,10 @@ import path from 'node:path'
 import { constants } from 'node:fs'
 import type { Database } from '../db.js'
 
-/** 添付ファイルの最大サイズ（25MB） */
+/** Maximum attachment size (25MB) */
 export const MAX_FILE_SIZE = 25 * 1024 * 1024
 
-/** 添付ファイル情報の型 */
+/** Attachment information type */
 export interface AttachmentInfo {
   id: string
   filename: string
@@ -23,17 +23,17 @@ export interface AttachmentInfo {
 }
 
 /**
- * ファイルを保存して添付ファイル情報をDBに記録します。
- * @param db - データベース
- * @param uploadPath - アップロードベースディレクトリ
- * @param baseUrl - ベースURL
- * @param channelId - チャンネルID
- * @param messageId - メッセージID
- * @param attachmentId - 添付ファイルID
- * @param filename - ファイル名
+ * Saves a file and records the attachment information in the DB.
+ * @param db - Database
+ * @param uploadPath - Upload base directory
+ * @param baseUrl - Base URL
+ * @param channelId - Channel ID
+ * @param messageId - Message ID
+ * @param attachmentId - Attachment ID
+ * @param filename - File name
  * @param contentType - Content-Type
- * @param data - ファイルデータ
- * @returns 添付ファイル情報
+ * @param data - File data
+ * @returns Attachment information
  */
 export async function saveAttachment(
   db: Database,
@@ -49,7 +49,7 @@ export async function saveAttachment(
   const dir = path.join(uploadPath, channelId, messageId)
   await mkdir(dir, { recursive: true })
 
-  // ArrayBuffer / Uint8Array のいずれでも受け取れるよう Buffer に正規化する
+  // Normalize to Buffer so both ArrayBuffer and Uint8Array are accepted
   const buffer =
     data instanceof Uint8Array
       ? Buffer.from(data)
@@ -60,7 +60,7 @@ export async function saveAttachment(
 
   const size = buffer.byteLength
 
-  // DBに記録
+  // Record in the DB
   const relativePath = path.join(channelId, messageId, filename)
   db.prepare(
     `INSERT INTO attachments (id, message_id, filename, size, content_type, file_path)
@@ -80,12 +80,12 @@ export async function saveAttachment(
 }
 
 /**
- * 添付ファイルを読み込みます。
- * @param uploadPath - アップロードベースディレクトリ
- * @param channelId - チャンネルID
- * @param messageId - メッセージID
- * @param filename - ファイル名
- * @returns ファイルデータまたはNull（存在しない場合）
+ * Reads an attachment file.
+ * @param uploadPath - Upload base directory
+ * @param channelId - Channel ID
+ * @param messageId - Message ID
+ * @param filename - File name
+ * @returns File data, or null if it does not exist
  */
 export async function getAttachment(
   uploadPath: string,
@@ -103,9 +103,9 @@ export async function getAttachment(
 }
 
 /**
- * ファイル名からContent-Typeを推定します。
- * @param filename - ファイル名
- * @returns Content-Type文字列
+ * Guesses the Content-Type from a file name.
+ * @param filename - File name
+ * @returns Content-Type string
  */
 export function guessContentType(filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase()

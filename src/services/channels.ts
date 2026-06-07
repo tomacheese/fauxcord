@@ -1,12 +1,12 @@
 /**
- * チャンネル操作サービス
+ * Channel operations service
  *
- * チャンネルのCRUD操作を提供します。
+ * Provides CRUD operations for channels.
  */
 
 import type { Database } from '../db.js'
 
-/** DBから取得したチャンネルレコードの型 */
+/** Channel record type retrieved from the DB */
 interface ChannelRow {
   id: string
   guild_id: string | null
@@ -20,7 +20,7 @@ interface ChannelRow {
   last_message_id: string | null
 }
 
-/** API レスポンス用チャンネルオブジェクト */
+/** Channel object for API responses */
 export interface ChannelObject {
   id: string
   type: number
@@ -36,9 +36,9 @@ export interface ChannelObject {
 }
 
 /**
- * DBのチャンネルレコードをAPIレスポンス形式に変換します。
- * @param row - DBレコード
- * @returns APIレスポンス用オブジェクト
+ * Converts a DB channel record into the API response format.
+ * @param row - DB record
+ * @returns Object for API responses
  */
 function toChannelObject(row: ChannelRow): ChannelObject {
   return {
@@ -57,10 +57,10 @@ function toChannelObject(row: ChannelRow): ChannelObject {
 }
 
 /**
- * チャンネルをIDで取得します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @returns チャンネルオブジェクト（存在しない場合null）
+ * Retrieves a channel by ID.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Channel object, or null if it does not exist
  */
 export function getChannel(
   db: Database,
@@ -72,7 +72,7 @@ export function getChannel(
   return row ? toChannelObject(row) : null
 }
 
-/** チャンネル更新リクエストの型 */
+/** Channel update request type */
 export interface ChannelUpdatePayload {
   name?: string
   topic?: string | null
@@ -82,11 +82,11 @@ export interface ChannelUpdatePayload {
 }
 
 /**
- * チャンネル情報を更新します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @param payload - 更新内容
- * @returns 更新後のチャンネルオブジェクト（存在しない場合null）
+ * Updates channel information.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param payload - Update payload
+ * @returns Updated channel object, or null if it does not exist
  */
 export function updateChannel(
   db: Database,
@@ -123,10 +123,10 @@ export function updateChannel(
 }
 
 /**
- * チャンネルを削除します。
- * @param db - データベース
- * @param channelId - チャンネルID
- * @returns 削除したチャンネルオブジェクト（存在しない場合null）
+ * Deletes a channel.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Deleted channel object, or null if it does not exist
  */
 export function deleteChannel(
   db: Database,
@@ -142,10 +142,10 @@ export function deleteChannel(
 }
 
 /**
- * Guildのチャンネル一覧を取得します。
- * @param db - データベース
+ * Retrieves the list of channels in a guild.
+ * @param db - Database
  * @param guildId - Guild ID
- * @returns チャンネルオブジェクトの配列
+ * @returns Array of channel objects
  */
 export function getGuildChannels(
   db: Database,

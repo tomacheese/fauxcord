@@ -1,12 +1,12 @@
 /**
- * Guildバリデーション
+ * Guild validation
  *
- * Discord API v10のGuild制限に準拠したバリデーションを提供します。
+ * Provides validation conforming to Discord API v10 Guild limits.
  */
 
 import { maxLengthError, typeError, type ValidationErrors } from './common.js'
 
-/** Guild制限値 */
+/** Guild limit values */
 export const GUILD_LIMITS = {
   NAME_MIN: 2,
   NAME_MAX: 100,
@@ -16,7 +16,7 @@ export const GUILD_LIMITS = {
   WEBHOOKS_TOTAL_MAX: 1000,
 } as const
 
-/** チャンネル作成リクエストの型 */
+/** Channel creation request type */
 export interface ChannelCreatePayload {
   name: string
   type?: number
@@ -26,7 +26,7 @@ export interface ChannelCreatePayload {
   position?: number | null
 }
 
-/** ロール作成リクエストの型 */
+/** Role creation request type */
 export interface RoleCreatePayload {
   name?: string
   permissions?: string
@@ -36,9 +36,9 @@ export interface RoleCreatePayload {
 }
 
 /**
- * Guild名バリデーションを行います。
- * @param name - Guild名
- * @returns バリデーションエラーマップ
+ * Validates a Guild name.
+ * @param name - Guild name
+ * @returns Validation error map
  */
 export function validateGuildName(name: unknown): ValidationErrors {
   const errors: ValidationErrors = {}
@@ -66,9 +66,9 @@ export function validateGuildName(name: unknown): ValidationErrors {
 }
 
 /**
- * チャンネル作成ペイロードをバリデーションします。
- * @param payload - バリデーション対象のペイロード
- * @returns バリデーションエラーマップ
+ * Validates a channel creation payload.
+ * @param payload - Payload to validate
+ * @returns Validation error map
  */
 export function validateChannelCreate(
   payload: ChannelCreatePayload

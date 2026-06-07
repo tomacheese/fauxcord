@@ -1,14 +1,14 @@
 /**
- * テスト用ヘルパー関数
+ * Test helper functions
  *
- * Hono アプリのテストを簡易化するユーティリティを提供します。
+ * Provides utilities to simplify testing Hono apps.
  */
 
 import { Hono } from 'hono'
 import { initializeDatabase, closeDatabase } from './db.js'
 import type { Database } from './db.js'
 
-/** テスト用のDB・Appペア */
+/** DB/App pair for testing */
 export interface TestContext {
   db: Database
   app: Hono
@@ -16,8 +16,8 @@ export interface TestContext {
 }
 
 /**
- * テスト用のHonoアプリとインメモリDBを作成します。
- * @returns テストコンテキスト
+ * Creates a Hono app and an in-memory DB for testing.
+ * @returns Test context
  */
 export function createTestApp(): TestContext {
   const db = initializeDatabase(':memory:')
@@ -33,11 +33,11 @@ export function createTestApp(): TestContext {
 }
 
 /**
- * テスト用のBotトークンをDBに登録します。
- * @param db - データベース
- * @param token - Botトークン文字列（デフォルト: "Bot testtoken"）
- * @param userId - ユーザーID（デフォルト: "111111111111111111"）
- * @returns 登録したトークン
+ * Registers a Bot token in the DB for testing.
+ * @param db - Database
+ * @param token - Bot token string (default: "Bot testtoken")
+ * @param userId - User ID (default: "111111111111111111")
+ * @returns Registered token
  */
 export function seedBot(
   db: Database,
@@ -54,11 +54,11 @@ export function seedBot(
 }
 
 /**
- * テスト用のGuildをDBに登録します。
- * @param db - データベース
- * @param botToken - 関連するBotトークン
- * @param guildId - Guild ID（デフォルト: "222222222222222222"）
- * @returns 登録したGuild ID
+ * Registers a Guild in the DB for testing.
+ * @param db - Database
+ * @param botToken - Associated Bot token
+ * @param guildId - Guild ID (default: "222222222222222222")
+ * @returns Registered Guild ID
  */
 export function seedGuild(
   db: Database,
@@ -77,11 +77,11 @@ export function seedGuild(
 }
 
 /**
- * テスト用のChannelをDBに登録します。
- * @param db - データベース
- * @param guildId - 所属Guild ID
- * @param channelId - Channel ID（デフォルト: "333333333333333333"）
- * @returns 登録したChannel ID
+ * Registers a Channel in the DB for testing.
+ * @param db - Database
+ * @param guildId - Parent Guild ID
+ * @param channelId - Channel ID (default: "333333333333333333")
+ * @returns Registered Channel ID
  */
 export function seedChannel(
   db: Database,

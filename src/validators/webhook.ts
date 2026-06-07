@@ -1,29 +1,29 @@
 /**
- * Webhookバリデーション
+ * Webhook validation
  *
- * Discord API v10のWebhook制限に準拠したバリデーションを提供します。
+ * Provides validation conforming to Discord API v10 Webhook limits.
  */
 
 import { maxLengthError, type ValidationErrors } from './common.js'
 
-/** Webhook制限値 */
+/** Webhook limit values */
 export const WEBHOOK_LIMITS = {
   NAME_MIN: 1,
   NAME_MAX: 80,
   CONTENT_MAX: 2000,
   USERNAME_MAX: 80,
   EMBEDS_MAX: 10,
-  /** チャンネルあたりの Webhook 数上限 */
+  /** Maximum number of Webhooks per channel */
   CHANNEL_WEBHOOKS_MAX: 15,
 } as const
 
-/** Webhook作成リクエストの型 */
+/** Webhook creation request type */
 export interface WebhookCreatePayload {
   name: string
   avatar?: string | null
 }
 
-/** Webhook実行リクエストの型 */
+/** Webhook execution request type */
 export interface WebhookExecutePayload {
   content?: string
   username?: string
@@ -34,9 +34,9 @@ export interface WebhookExecutePayload {
 }
 
 /**
- * Webhook作成ペイロードをバリデーションします。
- * @param payload - バリデーション対象のペイロード
- * @returns バリデーションエラーマップ
+ * Validates a webhook creation payload.
+ * @param payload - Payload to validate
+ * @returns Validation error map
  */
 export function validateWebhookCreate(
   payload: WebhookCreatePayload
@@ -57,9 +57,9 @@ export function validateWebhookCreate(
 }
 
 /**
- * Webhook実行ペイロードをバリデーションします。
- * @param payload - バリデーション対象のペイロード
- * @returns バリデーションエラーマップ
+ * Validates a webhook execution payload.
+ * @param payload - Payload to validate
+ * @returns Validation error map
  */
 export function validateWebhookExecute(
   payload: WebhookExecutePayload

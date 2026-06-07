@@ -1,7 +1,7 @@
 /**
- * テスト制御 API ルーティング
+ * Test control API routing
  *
- * /_test/* テスト専用エンドポイントを実装します。
+ * Implements the /_test/* test-only endpoints.
  */
 
 import { Hono } from 'hono'
@@ -15,14 +15,14 @@ import {
 import { getChannelWebhooks } from '../services/webhooks.js'
 
 /**
- * テスト制御 APIルートを作成します。
- * @param db - データベース
- * @returns Honoルーターインスタンス
+ * Creates the test control API routes.
+ * @param db - Database
+ * @returns Hono router instance
  */
 export function createTestRoutes(db: Database): Hono {
   const app = new Hono()
 
-  // POST /_test/setup — Bot・Guild・Channelをセットアップ
+  // POST /_test/setup — Set up Bot, Guild, and Channel
   app.post('/_test/setup', async (c) => {
     const payload = await c.req.json<{
       token: string
@@ -49,9 +49,9 @@ export function createTestRoutes(db: Database): Hono {
     }
   })
 
-  // DELETE /_test/setup/:token（:tokenはBot xxx形式）
+  // DELETE /_test/setup/:token (:token is in "Bot xxx" format)
   app.delete('/_test/setup/*', (c) => {
-    // パスパラメータを手動でデコード（Botトークンにスペースが含まれる可能性があるため）
+    // Decode the path parameter manually (Bot tokens may contain spaces)
     const token = decodeURIComponent(c.req.path.replace('/_test/setup/', ''))
     const deleted = deleteTestSetup(db, token)
     if (!deleted) {
@@ -60,28 +60,28 @@ export function createTestRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
-  // POST /_test/reset — テストデータ（メッセージ等）をリセット
+  // POST /_test/reset — Reset test data (messages, etc.)
   app.post('/_test/reset', async (c) => {
     let token: string | undefined
     try {
       const body = await c.req.json<{ token?: string }>()
       token = body.token
     } catch {
-      // ボディなしの場合は全リセット
+      // Reset everything when no body is provided
     }
 
     resetTestData(db, token)
     return c.body(null, 204)
   })
 
-  // GET /_test/messages/:channelId — チャンネルのメッセージ一覧をテスト用に取得
+  // GET /_test/messages/:channelId — List a channel's messages for testing
   app.get('/_test/messages/:channelId', (c) => {
     const { channelId } = c.req.param()
     const messages = getTestMessages(db, channelId)
     return c.json({ messages })
   })
 
-  // GET /_test/webhooks/:channelId — チャンネルのWebhook一覧をテスト用に取得
+  // GET /_test/webhooks/:channelId — List a channel's webhooks for testing
   app.get('/_test/webhooks/:channelId', (c) => {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)

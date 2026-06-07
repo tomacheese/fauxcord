@@ -1,7 +1,7 @@
 /**
- * Users API ルーティング
+ * Users API routing
  *
- * /users/*, /applications/* エンドポイントを実装します。
+ * Implements the /users/* and /applications/* endpoints.
  */
 
 import { Hono } from 'hono'
@@ -12,14 +12,14 @@ import { getBotGuilds } from '../services/guilds.js'
 import type { AppEnv } from '../middleware/auth.js'
 
 /**
- * Users APIルートを作成します。
- * @param db - データベース
- * @returns Honoルーターインスタンス
+ * Creates the Users API routes.
+ * @param db - Database
+ * @returns Hono router instance
  */
 export function createUserRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
-  // GET /users/@me — 認証中のBotユーザー情報を取得
+  // GET /users/@me — Retrieve the authenticated bot user's information
   app.get('/users/@me', (c) => {
     const bot = c.get('bot')
     if (!bot) {
@@ -33,12 +33,12 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(user)
   })
 
-  // GET /users/:userId — 指定ユーザー情報を取得
-  // discord.js など一部ライブラリは @ を percent-encode して %40me で送るため、
-  // パラメータとして受け取った "@me"（デコード済み）も @me 扱いにする
+  // GET /users/:userId — Retrieve the specified user's information
+  // Some libraries such as discord.js percent-encode @ and send %40me,
+  // so a parameter value of "@me" (already decoded) is also treated as @me
   app.get('/users/:userId', (c) => {
-    // Hono はパスパラメータを自動デコードするため %40me → @me に変換済み
-    // decodeURIComponent を再呼び出しすると %25me → %me のように二重デコードで例外が発生する
+    // Hono auto-decodes path parameters, so %40me has already been converted to @me
+    // Calling decodeURIComponent again would double-decode (e.g. %25me → %me) and throw an exception
     const userId = c.req.param('userId')
 
     if (userId === '@me') {
@@ -65,7 +65,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(user)
   })
 
-  // GET /users/@me/guilds — 参加中のGuild一覧を取得
+  // GET /users/@me/guilds — List the guilds the bot has joined
   app.get('/users/@me/guilds', (c) => {
     const bot = c.get('bot')
     if (!bot) {
@@ -76,7 +76,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(guilds)
   })
 
-  // GET /applications/@me — アプリケーション情報を取得
+  // GET /applications/@me — Retrieve application information
   app.get('/applications/@me', (c) => {
     const bot = c.get('bot')
     if (!bot) {
@@ -90,10 +90,10 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(app_)
   })
 
-  // GET /oauth2/applications/@me — アプリケーション情報を取得（Discord.Net互換エイリアス）
-  // Get Current Bot Application Information（旧エンドポイント）。
-  // Discord.Net などのライブラリがログイン時に呼び出すため、
-  // /applications/@me と同じレスポンスを返すエイリアスとして実装する
+  // GET /oauth2/applications/@me — Retrieve application information (Discord.Net-compatible alias)
+  // Get Current Bot Application Information (legacy endpoint).
+  // Libraries such as Discord.Net call this at login,
+  // so it is implemented as an alias that returns the same response as /applications/@me
   app.get('/oauth2/applications/@me', (c) => {
     const bot = c.get('bot')
     if (!bot) {

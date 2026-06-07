@@ -1,8 +1,8 @@
 /**
- * Discord互換のSnowflake ID生成モジュール
+ * Discord-compatible Snowflake ID generation module
  *
- * Discord Epoch (2015-01-01T00:00:00.000Z) からのミリ秒を使った
- * 64bit整数IDを生成します。
+ * Generates 64-bit integer IDs based on milliseconds since
+ * the Discord Epoch (2015-01-01T00:00:00.000Z).
  */
 
 /** Discord Epoch: 2015-01-01T00:00:00.000Z */
@@ -10,26 +10,26 @@ const DISCORD_EPOCH = 1_420_070_400_000n
 const WORKER_ID = 1n
 const PROCESS_ID = 1n
 
-/** インクリメントカウンター（同一ミリ秒内で一意性を保つため） */
+/** Increment counter (to keep uniqueness within the same millisecond) */
 let increment = 0n
-/** 前回 Snowflake を生成したタイムスタンプ */
+/** Timestamp of the last generated Snowflake */
 let lastTimestamp = -1n
 
 /**
- * Discord互換のSnowflake IDを生成します。
+ * Generates a Discord-compatible Snowflake ID.
  *
- * 同一ミリ秒内での呼び出しが 4096 回を超えた場合は次のミリ秒まで待機します。
- * @returns Snowflake IDの文字列表現
+ * If more than 4096 calls occur within the same millisecond, waits until the next millisecond.
+ * @returns String representation of the Snowflake ID
  */
 export function generateSnowflake(): string {
   let timestamp = BigInt(Date.now()) - DISCORD_EPOCH
 
   if (timestamp === lastTimestamp) {
     increment = (increment + 1n) & 0xf_ffn
-    // 同一ミリ秒内のカウンターが溢れた場合は次のミリ秒まで待つ
+    // If the counter overflows within the same millisecond, wait until the next millisecond
     if (increment === 0n) {
       while (BigInt(Date.now()) - DISCORD_EPOCH <= lastTimestamp) {
-        // スピンウェイト（実運用では数マイクロ秒以内）
+        // Spin wait (within a few microseconds in practice)
       }
       timestamp = BigInt(Date.now()) - DISCORD_EPOCH
     }
@@ -46,9 +46,9 @@ export function generateSnowflake(): string {
 }
 
 /**
- * Snowflake IDからタイムスタンプを復元します。
- * @param snowflake - Snowflake IDの文字列
- * @returns タイムスタンプのDateオブジェクト
+ * Restores the timestamp from a Snowflake ID.
+ * @param snowflake - Snowflake ID string
+ * @returns Date object of the timestamp
  */
 export function snowflakeToTimestamp(snowflake: string): Date {
   const id = BigInt(snowflake)

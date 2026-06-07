@@ -1,12 +1,12 @@
 /**
- * ユーザー操作サービス
+ * User operations service
  *
- * ユーザー情報の取得・アプリケーション情報の提供を行います。
+ * Retrieves user information and provides application information.
  */
 
 import type { Database } from '../db.js'
 
-/** DBから取得したBotレコードの型 */
+/** Bot record type retrieved from the DB */
 interface BotRow {
   token: string
   user_id: string
@@ -16,7 +16,7 @@ interface BotRow {
   avatar: string | null
 }
 
-/** APIレスポンス用ユーザーオブジェクト */
+/** User object for API responses */
 export interface UserObject {
   id: string
   username: string
@@ -28,10 +28,10 @@ export interface UserObject {
 }
 
 /**
- * 認証済みBot（@me）の情報を取得します。
- * @param db - データベース
- * @param botToken - Botトークン
- * @returns ユーザーオブジェクトまたはNull
+ * Retrieves the authenticated bot's (@me) information.
+ * @param db - Database
+ * @param botToken - Bot token
+ * @returns User object, or null
  */
 export function getBotUser(db: Database, botToken: string): UserObject | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
@@ -65,10 +65,10 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
 }
 
 /**
- * ユーザーをIDで取得します。
- * @param db - データベース
- * @param userId - ユーザーID
- * @returns ユーザーオブジェクトまたはNull
+ * Retrieves a user by ID.
+ * @param db - Database
+ * @param userId - User ID
+ * @returns User object, or null
  */
 export function getUser(db: Database, userId: string): UserObject | null {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as
@@ -94,10 +94,10 @@ export function getUser(db: Database, userId: string): UserObject | null {
 }
 
 /**
- * アプリケーション情報（@applications/@me）を取得します。
- * @param db - データベース
- * @param botToken - Botトークン
- * @returns アプリケーション情報オブジェクトまたはNull
+ * Retrieves application information (@applications/@me).
+ * @param db - Database
+ * @param botToken - Bot token
+ * @returns Application information object, or null
  */
 export function getApplication(
   db: Database,

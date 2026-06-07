@@ -1,7 +1,7 @@
 /**
- * Guilds API ルーティング
+ * Guilds API routing
  *
- * /guilds/* エンドポイントを実装します。
+ * Implements the /guilds/* endpoints.
  */
 
 import { Hono } from 'hono'
@@ -29,14 +29,14 @@ import { validationError as createValidationError } from '../errors.js'
 import { GUILD_LIMITS } from '../validators/guild.js'
 
 /**
- * Guilds APIルートを作成します。
- * @param db - データベース
- * @returns Honoルーターインスタンス
+ * Creates the Guilds API routes.
+ * @param db - Database
+ * @returns Hono router instance
  */
 export function createGuildRoutes(db: Database): Hono {
   const app = new Hono()
 
-  // GET /guilds/:guildId — Guild情報を取得
+  // GET /guilds/:guildId — Retrieve guild information
   app.get('/guilds/:guildId', (c) => {
     const { guildId } = c.req.param()
     const withCounts = c.req.query('with_counts') === 'true'
@@ -53,7 +53,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(guild)
   })
 
-  // PATCH /guilds/:guildId — Guild情報を更新
+  // PATCH /guilds/:guildId — Update guild information
   app.patch('/guilds/:guildId', async (c) => {
     const { guildId } = c.req.param()
     const payload = await c.req.json<{ name?: string }>()
@@ -70,7 +70,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(updated)
   })
 
-  // DELETE /guilds/:guildId — Guildを削除
+  // DELETE /guilds/:guildId — Delete a guild
   app.delete('/guilds/:guildId', (c) => {
     const { guildId } = c.req.param()
 
@@ -86,7 +86,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
-  // GET /guilds/:guildId/channels — Guildのチャンネル一覧を取得
+  // GET /guilds/:guildId/channels — List a guild's channels
   app.get('/guilds/:guildId/channels', (c) => {
     const { guildId } = c.req.param()
 
@@ -104,7 +104,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(channels)
   })
 
-  // POST /guilds/:guildId/channels — Guildにチャンネルを作成
+  // POST /guilds/:guildId/channels — Create a channel in a guild
   app.post('/guilds/:guildId/channels', async (c) => {
     const { guildId } = c.req.param()
 
@@ -118,7 +118,7 @@ export function createGuildRoutes(db: Database): Hono {
       return c.json(err.body, 404)
     }
 
-    // チャンネル数上限チェック
+    // Channel count limit check
     const channels = getGuildChannels(db, guildId)
     if (channels.length >= GUILD_LIMITS.CHANNELS_MAX) {
       const err = discordError(
@@ -138,7 +138,7 @@ export function createGuildRoutes(db: Database): Hono {
       position?: number | null
     }>()
 
-    // バリデーション
+    // Validation
     const errors = validateChannelCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(createValidationError(errors).body, 400)
@@ -194,7 +194,7 @@ export function createGuildRoutes(db: Database): Hono {
     )
   })
 
-  // GET /guilds/:guildId/members — Guildのメンバー一覧を取得
+  // GET /guilds/:guildId/members — List a guild's members
   app.get('/guilds/:guildId/members', (c) => {
     const { guildId } = c.req.param()
     const limit = Number.parseInt(c.req.query('limit') ?? '1', 10)
@@ -204,7 +204,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(members)
   })
 
-  // GET /guilds/:guildId/members/:userId — Guildの特定メンバー情報を取得
+  // GET /guilds/:guildId/members/:userId — Retrieve a specific guild member
   app.get('/guilds/:guildId/members/:userId', (c) => {
     const { guildId, userId } = c.req.param()
 
@@ -220,14 +220,14 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(member)
   })
 
-  // GET /guilds/:guildId/roles — Guildのロール一覧を取得
+  // GET /guilds/:guildId/roles — List a guild's roles
   app.get('/guilds/:guildId/roles', (c) => {
     const { guildId } = c.req.param()
     const roles = getGuildRoles(db, guildId)
     return c.json(roles)
   })
 
-  // POST /guilds/:guildId/roles — Guildにロールを作成
+  // POST /guilds/:guildId/roles — Create a role in a guild
   app.post('/guilds/:guildId/roles', async (c) => {
     const { guildId } = c.req.param()
 
@@ -241,7 +241,7 @@ export function createGuildRoutes(db: Database): Hono {
       return c.json(err.body, 404)
     }
 
-    // ロール数上限チェック
+    // Role count limit check
     const roles = getGuildRoles(db, guildId)
     if (roles.length >= GUILD_LIMITS.ROLES_MAX) {
       const err = discordError(
@@ -270,7 +270,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(role)
   })
 
-  // PATCH /guilds/:guildId/roles/:roleId — ロール情報を更新
+  // PATCH /guilds/:guildId/roles/:roleId — Update role information
   app.patch('/guilds/:guildId/roles/:roleId', async (c) => {
     const { guildId, roleId } = c.req.param()
 
@@ -304,11 +304,11 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(updated)
   })
 
-  // DELETE /guilds/:guildId/roles/:roleId — ロールを削除
+  // DELETE /guilds/:guildId/roles/:roleId — Delete a role
   app.delete('/guilds/:guildId/roles/:roleId', (c) => {
     const { guildId, roleId } = c.req.param()
 
-    // @everyoneロール（id == guild_id）は削除不可
+    // The @everyone role (id == guild_id) cannot be deleted
     if (roleId === guildId) {
       const err = discordError(
         DiscordErrorCode.INVALID_ROLE,
@@ -330,7 +330,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
-  // PATCH /guilds/:guildId/members/:userId — メンバー情報を更新
+  // PATCH /guilds/:guildId/members/:userId — Update member information
   app.patch('/guilds/:guildId/members/:userId', async (c) => {
     const { guildId, userId } = c.req.param()
 
@@ -339,7 +339,7 @@ export function createGuildRoutes(db: Database): Hono {
       roles?: string[]
     }>()
 
-    // 指定されたロールがすべてGuildに存在するか検証する
+    // Verify that all specified roles exist in the guild
     if (payload.roles !== undefined) {
       for (const roleId of payload.roles) {
         if (!getRole(db, guildId, roleId)) {
@@ -365,7 +365,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.json(updated)
   })
 
-  // DELETE /guilds/:guildId/members/:userId — メンバーをキック
+  // DELETE /guilds/:guildId/members/:userId — Kick a member
   app.delete('/guilds/:guildId/members/:userId', (c) => {
     const { guildId, userId } = c.req.param()
 
@@ -381,7 +381,7 @@ export function createGuildRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
-  // GET /guilds/:guildId/webhooks — GuildのWebhook一覧を取得
+  // GET /guilds/:guildId/webhooks — List a guild's webhooks
   app.get('/guilds/:guildId/webhooks', (c) => {
     const { guildId } = c.req.param()
     const webhooks = getGuildWebhooks(db, guildId)
