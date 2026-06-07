@@ -1,0 +1,43 @@
+# Docker イメージのビルド・公開を行う。
+# プルリクの作成・更新時に動作する。
+
+name: Docker
+
+on:
+  pull_request:
+    branches:
+      - main
+      - master
+    types:
+      - opened
+      - synchronize
+    paths:
+      - .github/workflows/docker.yml
+  pull_request_target:
+    branches:
+      - main
+      - master
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+
+concurrency:
+  # pull_request と pull_request_target が同一グループになると互いをキャンセルしてしまうため
+  # event_name を含めることで両イベントのキャンセルを独立させる
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docker:
+    name: Docker
+    uses: book000/templates/.github/workflows/reusable-docker.yml@master
+    with:
+      targets: >-
+        [
+          { "imageName": "tomacheese/fauxcord", "context": ".", "file": "Dockerfile", "packageName": "fauxcord" }
+        ]
+    secrets:
+      DOCKER_USERNAME: ${{ github.actor }}
+      DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}

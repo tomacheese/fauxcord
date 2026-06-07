@@ -1,0 +1,28 @@
+{
+  "bots": [
+    {
+      "token": "Bot mytoken123",
+      "user": {
+        "id": "1111111111111111111",
+        "username": "TestBot"
+      },
+      "guilds": [
+        {
+          "id": "9876543210987654321",
+          "name": "Test Guild",
+          "channels": [
+            {
+              "id": "1234567890123456789",
+              "name": "general",
+              "type": 0
+            },
+            {
+              "name": "bot-log",
+              "type": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

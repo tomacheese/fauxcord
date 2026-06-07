@@ -1,0 +1,6 @@
+{
+  // 本番ビルド用設定: テストコード・テストヘルパーを dist への出力から除外する
+  // 型チェック (pnpm run lint) はテストを含む tsconfig.json で行う
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/test-helpers.ts"]
+}

@@ -1,0 +1,65 @@
+services:
+  discord-mock:
+    build: .
+    # または ghcr.io から取得する場合:
+    # image: ghcr.io/yourorg/discord-mock:latest
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+      DB_PATH: /data/mock.db
+      UPLOAD_PATH: /data/uploads
+      # BASE_URL はアタッチメント URL などレスポンス内に埋め込まれる URL の生成に使用される。
+      # ホストマシン上のクライアントからアクセスする想定のため localhost を指定している。
+      # 別のコンテナや外部ホストからアクセスする場合は、そのクライアントから到達可能な URL に変更すること。
+      BASE_URL: http://localhost:3000
+      LOG_LEVEL: info
+      DISABLE_AUTH: "false"
+      LATENCY_MS: "0"
+      # SEED_FILE: /config/seed.json
+    volumes:
+      # SQLite データベースとアップロードファイルの永続化用ボリューム
+      - discord-mock-data:/data
+      # 起動時に初期データを投入する場合は、以下のコメントアウトを解除し、
+      # あわせて上記 environment の SEED_FILE も有効化すること。
+      # シードファイルの書式は seed.example.json を参照。
+      # - ./seed.json:/config/seed.json:ro
+    healthcheck:
+      # localhost は busybox wget では ::1 (IPv6) に解決され接続できないため 127.0.0.1 を明示
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/_mock/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # 起動に時間がかかるため少し長めに設定
+      start_period: 15s
+    restart: unless-stopped
+
+  # 開発用サービス: ソースコードの変更を監視して自動再起動する（tsx watch）
+  # 起動例: docker compose --profile dev up discord-mock-dev
+  discord-mock-dev:
+    profiles:
+      - dev
+    build:
+      context: .
+      # builder ステージには devDependencies（tsx など）が含まれている
+      target: builder
+    command: ["node_modules/.bin/tsx", "watch", "src/index.ts"]
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+      DB_PATH: /data/mock.db
+      UPLOAD_PATH: /data/uploads
+      BASE_URL: http://localhost:3000
+      LOG_LEVEL: debug
+      DISABLE_AUTH: "false"
+      LATENCY_MS: "0"
+    volumes:
+      # ホスト側のソースコードをマウントしてホットリロードを有効化
+      - ./src:/app/src
+      - discord-mock-data:/data
+
+volumes:
+  discord-mock-data:
