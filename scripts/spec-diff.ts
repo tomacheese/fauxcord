@@ -310,10 +310,16 @@ const manifestSource = readFileSync(
 )
 
 const implementedSet = new Set<string>()
-// Match patterns like: specPath: '/channels/{channel_id}/messages',
-//                      method: 'get',
+
+// Extract specPath/method pairs by matching each MANIFEST entry block.
+// We look for an opening brace that starts an entry object, then extract
+// specPath and method from within that block.
+//
+// A trailing comma is required after the method value to distinguish the
+// concrete entry assignments (method: 'get',) from the TypeScript interface
+// union definition (method: 'get' | 'post' | ...) which lacks a trailing comma.
 const specPathRe = /specPath:\s*'([^']+)'/g
-const methodRe = /method:\s*'(get|post|put|patch|delete)'/g
+const methodRe = /method:\s*'(get|post|put|patch|delete)',/g
 const spMatches = [...manifestSource.matchAll(specPathRe)]
 const mMatches = [...manifestSource.matchAll(methodRe)]
 
@@ -403,8 +409,10 @@ if (added.length > 0) {
   for (const k of added.toSorted()) {
     const [specPath, method] = k.split('|') as [string, string]
     const isImpl = implementedSet.has(k)
+    // If the new spec path is NOT yet in the manifest, flag it for potential implementation.
+    // If it IS already in the manifest, no warning is needed (already handled by the mock).
     lines.push(
-      `- \`${method.toUpperCase()} ${specPath}\`${isImpl ? ' ⚠️ _not yet in mock_' : ''}`
+      `- \`${method.toUpperCase()} ${specPath}\`${isImpl ? '' : ' ⚠️ _not yet in mock_'}`
     )
   }
   lines.push('')

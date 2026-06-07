@@ -56,11 +56,13 @@ export function createTestApp(): TestContext {
 }
 
 /**
- * Creates a full-stack Hono app with all middleware and routes mounted,
- * mirroring the production `src/index.ts` setup.
+ * Creates a Hono app with core middleware and all routes mounted for contract
+ * testing. Mirrors the production `src/index.ts` route registration order, but
+ * intentionally omits latency (`LATENCY_MS`) and rate-limit middleware that are
+ * irrelevant for deterministic schema validation tests.
  *
- * Used by `src/spec-contract.test.ts` to issue requests through the complete
- * middleware stack (auth, CORS, version check, etc.) with an in-memory DB.
+ * Used by `src/spec-contract.test.ts` to issue requests through the auth,
+ * CORS, and version-check layers with an in-memory DB.
  *
  * @returns Full test context with `app` and `db`
  */
