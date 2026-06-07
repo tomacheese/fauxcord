@@ -44,8 +44,8 @@ const TOKEN_EXPIRES_IN = 604_800
  * @returns ランダムトークン文字列
  */
 function generateToken(prefix: string): string {
-  const random =
-    Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  // Math.random は予測可能なため crypto.randomUUID() に変更する
+  const random = crypto.randomUUID().replaceAll('-', '')
   return `${prefix}_${random}`
 }
 
