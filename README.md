@@ -19,7 +19,7 @@ Run integration tests for Discord bots and applications without connecting to th
 ```bash
 # Clone the repository
 git clone https://github.com/tomacheese/fauxcord
-cd discord-mock
+cd fauxcord
 
 # Start
 docker compose up -d
