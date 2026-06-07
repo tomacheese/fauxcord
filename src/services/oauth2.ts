@@ -92,7 +92,7 @@ export function exchangeAuthCode(
     .prepare(
       `SELECT * FROM oauth2_auth_codes
        WHERE code = ? AND redirect_uri = ?
-       AND expires_at > datetime('now') AND used = 0`
+       AND datetime(expires_at) > datetime('now') AND used = 0`
     )
     .get(code, redirectUri) as
     | {
@@ -186,7 +186,7 @@ export function getOAuth2Me(
 ): OAuth2MeResponse | null {
   const accessToken = db
     .prepare(
-      "SELECT * FROM oauth2_access_tokens WHERE token = ? AND expires_at > datetime('now')"
+      "SELECT * FROM oauth2_access_tokens WHERE token = ? AND datetime(expires_at) > datetime('now')"
     )
     .get(token) as
     | {

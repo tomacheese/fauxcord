@@ -61,7 +61,10 @@ export function createMockRoutes(db: Database, uploadPath: string): Hono {
     const contentType = guessContentType(filename)
     c.header('Content-Type', contentType)
     c.header('Content-Length', String(data.length))
-    return c.body(data as unknown as ReadableStream)
+    // Buffer は BodyInit として直接返せるが Hono の型定義が ReadableStream を要求するため
+    // やむなく型アサーションを使用している（実行時には Buffer として正常に動作する）
+
+    return c.body(data as any)
   })
 
   return app

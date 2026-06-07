@@ -43,7 +43,7 @@ export function requiredError(): FieldError {
  */
 export function typeError(expectedType: string): FieldError {
   return {
-    code: 'BASE_TYPE_BAD_LENGTH',
+    code: 'BASE_TYPE_BAD_TYPE',
     message: `Value must be of type ${expectedType}.`,
   }
 }

@@ -60,9 +60,9 @@ export function validateMessageCreate(
 ): ValidationErrors {
   const errors: ValidationErrors = {}
 
-  // content の長さチェック
+  // content の長さチェック（null を undefined 同様に扱う。型安全に string かを確認する）
   if (
-    payload.content !== undefined &&
+    typeof payload.content === 'string' &&
     payload.content.length > MESSAGE_LIMITS.CONTENT_MAX
   ) {
     errors.content = {

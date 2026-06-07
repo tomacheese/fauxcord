@@ -332,14 +332,15 @@ export function createChannelRoutes(
     if (attachmentFiles.length > 0) {
       try {
         const { saveAttachment } = await import('../services/attachments.js')
-        for (const [i, f] of attachmentFiles.entries()) {
+        for (const f of attachmentFiles) {
+          // 各添付ファイルに一意の Snowflake ID を採番する（連番は PRIMARY KEY 衝突を引き起こすため不可）
           await saveAttachment(
             db,
             uploadPath,
             baseUrl,
             channelId,
             messageId,
-            String(i),
+            generateSnowflake(),
             f.name,
             f.type,
             f.data

@@ -120,7 +120,7 @@ export const createAuthMiddleware =
       const token = authorization.slice(7)
       const accessToken = db
         .prepare(
-          "SELECT * FROM oauth2_access_tokens WHERE token = ? AND expires_at > datetime('now')"
+          "SELECT * FROM oauth2_access_tokens WHERE token = ? AND datetime(expires_at) > datetime('now')"
         )
         .get(token) as AccessTokenRecord | undefined
 

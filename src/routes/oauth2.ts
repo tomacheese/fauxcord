@@ -48,14 +48,18 @@ export function createOAuth2Routes(db: Database): Hono {
       return c.json({ message: '400: Bad Request', code: 0 }, 400)
     }
 
+    // oauth2_auth_codes は oauth2_clients（FK）および users（FK ではないが getOAuth2Me で参照）を
+    // 参照するため、client とデフォルトユーザーの存在を先に保証する
+    db.prepare(
+      'INSERT OR IGNORE INTO oauth2_clients (client_id, client_secret) VALUES (?, ?)'
+    ).run(clientId, 'mock_secret')
+    const defaultUserId = '2222222222222222222'
+    db.prepare(
+      'INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 0)'
+    ).run(defaultUserId, 'MockUser', '0')
+
     // モックは認証画面を表示せず即座にリダイレクト
-    const code = createAuthCode(
-      db,
-      clientId,
-      '2222222222222222222', // テスト用デフォルトユーザーID
-      scope,
-      redirectUri
-    )
+    const code = createAuthCode(db, clientId, defaultUserId, scope, redirectUri)
 
     const redirectUrl = new URL(redirectUri)
     redirectUrl.searchParams.set('code', code)
