@@ -4,8 +4,8 @@
 # 依存パッケージのインストールと TypeScript のビルドを行うステージ
 FROM node:24-alpine AS builder
 
-# better-sqlite3 のネイティブビルドに必要なツール
-# hadolint ignore=DL3018 - ビルドツールはバージョン固定が不要
+# better-sqlite3 のネイティブビルドに必要なツール（ビルドツールはバージョン固定不要）
+# hadolint ignore=DL3018
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
