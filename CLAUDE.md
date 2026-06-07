@@ -71,13 +71,51 @@ return c.json(discordError(DiscordErrorCode.UNKNOWN_CHANNEL, "Unknown Channel", 
 ## Testing
 
 ```bash
-pnpm test                         # 全テスト
-pnpm test src/routes/channels     # ファイル指定
+pnpm test                          # 全テスト（85 件）
+pnpm test src/routes/channels      # ファイル指定
+pnpm test:watch                    # watch モード（開発中）
+pnpm test:coverage                 # カバレッジ付き
 ```
 
-- テストヘルパー: `src/test-helpers.ts`（`createTestApp`, `seedBot`, `seedGuild`, `seedChannel`）
-- インメモリ DB を使用（`:memory:`）→ WAL モードは `"wal"` または `"memory"` を許容
-- 統合テストは `src/integration.test.ts`
+### 方針（t_wada TDD）
+
+**Red → Green → Refactor** サイクルで実装する。
+
+1. **Red**: 失敗するテストを先に書く
+2. **Green**: テストが通る最小限の実装を書く
+3. **Refactor**: テストを通したまま整理する
+
+### テストの種類と配置
+
+| 種類 | 場所 | 対象 |
+|---|---|---|
+| ユニットテスト | `src/xxx.test.ts` | 純粋関数（snowflake, errors 等） |
+| ルートテスト | `src/routes/xxx.test.ts` | API エンドポイント単体 |
+| 統合テスト | `src/integration.test.ts` | 複数機能を組み合わせたシナリオ |
+
+### ルートテストの書き方
+
+```typescript
+// src/test-helpers.ts の createTestApp を使いインメモリ DB で動かす
+const { app, db } = createTestApp()
+const bot = seedBot(db, "Bot testtoken")
+const guild = seedGuild(db, bot, "TestGuild")
+const channel = seedChannel(db, guild, "general")
+
+const res = await app.request("/api/v10/channels/" + channel.id, {
+  headers: { Authorization: "Bot testtoken" },
+})
+expect(res.status).toBe(200)
+const body = await res.json() as Record<string, unknown>
+expect(body.id).toBe(channel.id)
+```
+
+### 注意点
+
+- インメモリ DB（`:memory:`）を使用 → テスト間は独立（`createTestApp()` を各テストで呼ぶ）
+- WAL モードは `:memory:` では `"memory"` になる → `expect(["wal","memory"]).toContain(result)`
+- 認証ミドルウェアを含まない `createTestApp()` では、`Authorization` ヘッダーを直接 Bot レコードに照合する仕組みになっている（`src/routes/channels.ts` の fallback 参照）
+- 新しいエンドポイントを追加したら、成功ケース・404・401・バリデーションエラーを最低限テストする
 
 ## Environment Variables
 
