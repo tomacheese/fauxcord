@@ -19,7 +19,7 @@ import type { AppEnv } from '../middleware/auth.js'
 export function createUserRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
-  // GET /users/@me
+  // GET /users/@me — 認証中のBotユーザー情報を取得
   app.get('/users/@me', (c) => {
     const bot = c.get('bot')
     if (!bot) {
@@ -33,7 +33,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(user)
   })
 
-  // GET /users/:userId
+  // GET /users/:userId — 指定ユーザー情報を取得
   // discord.js など一部ライブラリは @ を percent-encode して %40me で送るため、
   // パラメータとして受け取った "@me"（デコード済み）も @me 扱いにする
   app.get('/users/:userId', (c) => {
@@ -65,7 +65,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(user)
   })
 
-  // GET /users/@me/guilds
+  // GET /users/@me/guilds — 参加中のGuild一覧を取得
   app.get('/users/@me/guilds', (c) => {
     const bot = c.get('bot')
     if (!bot) {
@@ -76,7 +76,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(guilds)
   })
 
-  // GET /applications/@me
+  // GET /applications/@me — アプリケーション情報を取得
   app.get('/applications/@me', (c) => {
     const bot = c.get('bot')
     if (!bot) {
@@ -90,7 +90,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     return c.json(app_)
   })
 
-  // GET /oauth2/applications/@me
+  // GET /oauth2/applications/@me — アプリケーション情報を取得（Discord.Net互換エイリアス）
   // Get Current Bot Application Information（旧エンドポイント）。
   // Discord.Net などのライブラリがログイン時に呼び出すため、
   // /applications/@me と同じレスポンスを返すエイリアスとして実装する

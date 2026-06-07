@@ -22,7 +22,7 @@ import {
 export function createOAuth2Routes(db: Database): Hono {
   const app = new Hono()
 
-  // GET /oauth2/@me
+  // GET /oauth2/@me — OAuth2アクセストークンの情報を取得
   app.get('/oauth2/@me', (c) => {
     const authHeader = c.req.header('Authorization')
     if (!authHeader?.startsWith('Bearer ')) {
@@ -36,7 +36,7 @@ export function createOAuth2Routes(db: Database): Hono {
     return c.json(me)
   })
 
-  // GET /oauth2/authorize
+  // GET /oauth2/authorize — OAuth2認可コードフローの認可ページにリダイレクト
   app.get('/oauth2/authorize', (c) => {
     const clientId = c.req.query('client_id')
     const redirectUri = c.req.query('redirect_uri')
@@ -64,7 +64,7 @@ export function createOAuth2Routes(db: Database): Hono {
     return c.redirect(redirectUrl.toString())
   })
 
-  // POST /oauth2/token
+  // POST /oauth2/token — OAuth2トークンを発行
   app.post('/oauth2/token', async (c) => {
     const contentType = c.req.header('content-type') ?? ''
     let params: URLSearchParams
@@ -97,9 +97,8 @@ export function createOAuth2Routes(db: Database): Hono {
       const scope = params.get('scope') ?? 'identify'
       const clientId = params.get('client_id') ?? 'mock_client'
 
-      const tokenResponse = createClientCredentialsToken(db, clientId, scope)
-
-      // oauth2_clientsに登録がなければ作成
+      // oauth2_access_tokens は oauth2_clients を FK 参照するため、
+      // トークン発行前に client の存在を保証する必要がある
       const existing = db
         .prepare('SELECT client_id FROM oauth2_clients WHERE client_id = ?')
         .get(clientId)
@@ -109,13 +108,14 @@ export function createOAuth2Routes(db: Database): Hono {
         ).run(clientId, 'mock_secret')
       }
 
+      const tokenResponse = createClientCredentialsToken(db, clientId, scope)
       return c.json(tokenResponse)
     }
 
     return c.json({ message: '400: Bad Request', code: 0 }, 400)
   })
 
-  // POST /oauth2/token/revoke
+  // POST /oauth2/token/revoke — OAuth2トークンを無効化
   app.post('/oauth2/token/revoke', async (c) => {
     const body = await c.req.text()
     const params = new URLSearchParams(body)

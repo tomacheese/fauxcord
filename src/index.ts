@@ -61,7 +61,7 @@ app.use('*', rateLimitMiddleware)
 const routePrefix = ['/api/v10', '/api', '']
 
 for (const prefix of routePrefix) {
-  app.route(prefix, createChannelRoutes(db, config.baseUrl))
+  app.route(prefix, createChannelRoutes(db, config.baseUrl, config.uploadPath))
   app.route(prefix, createGuildRoutes(db))
   app.route(prefix, createUserRoutes(db))
   // Webhook ルートも全プレフィックスで有効化（/api/v10/webhooks/... に対応）

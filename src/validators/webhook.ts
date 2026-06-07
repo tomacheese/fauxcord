@@ -13,6 +13,8 @@ export const WEBHOOK_LIMITS = {
   CONTENT_MAX: 2000,
   USERNAME_MAX: 80,
   EMBEDS_MAX: 10,
+  /** チャンネルあたりの Webhook 数上限 */
+  CHANNEL_WEBHOOKS_MAX: 15,
 } as const
 
 /** Webhook作成リクエストの型 */

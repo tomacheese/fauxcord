@@ -22,7 +22,7 @@ import { getChannelWebhooks } from '../services/webhooks.js'
 export function createTestRoutes(db: Database): Hono {
   const app = new Hono()
 
-  // POST /_test/setup
+  // POST /_test/setup — Bot・Guild・Channelをセットアップ
   app.post('/_test/setup', async (c) => {
     const payload = await c.req.json<{
       token: string
@@ -60,7 +60,7 @@ export function createTestRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
-  // POST /_test/reset
+  // POST /_test/reset — テストデータ（メッセージ等）をリセット
   app.post('/_test/reset', async (c) => {
     let token: string | undefined
     try {
@@ -74,14 +74,14 @@ export function createTestRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
-  // GET /_test/messages/:channelId
+  // GET /_test/messages/:channelId — チャンネルのメッセージ一覧をテスト用に取得
   app.get('/_test/messages/:channelId', (c) => {
     const { channelId } = c.req.param()
     const messages = getTestMessages(db, channelId)
     return c.json({ messages })
   })
 
-  // GET /_test/webhooks/:channelId
+  // GET /_test/webhooks/:channelId — チャンネルのWebhook一覧をテスト用に取得
   app.get('/_test/webhooks/:channelId', (c) => {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)

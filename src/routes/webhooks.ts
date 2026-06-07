@@ -32,7 +32,7 @@ import { isEmptyMessage } from '../validators/message.js'
 export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   const app = new Hono()
 
-  // GET /webhooks/:webhookId
+  // GET /webhooks/:webhookId — WebhookをID指定で取得
   app.get('/webhooks/:webhookId', (c) => {
     const { webhookId } = c.req.param()
     const webhook = getWebhook(db, webhookId)
@@ -47,7 +47,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(webhook)
   })
 
-  // GET /webhooks/:webhookId/:token
+  // GET /webhooks/:webhookId/:token — WebhookをトークンでBot認証なしで取得
   app.get('/webhooks/:webhookId/:token', (c) => {
     const { webhookId, token } = c.req.param()
     const webhook = getWebhookByToken(db, webhookId, token)
@@ -71,7 +71,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(webhookWithoutToken)
   })
 
-  // PATCH /webhooks/:webhookId
+  // PATCH /webhooks/:webhookId — Webhook情報を更新
   app.patch('/webhooks/:webhookId', async (c) => {
     const { webhookId } = c.req.param()
     const payload = await c.req.json<{
@@ -91,7 +91,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(updated)
   })
 
-  // DELETE /webhooks/:webhookId
+  // DELETE /webhooks/:webhookId — Webhookを削除
   app.delete('/webhooks/:webhookId', (c) => {
     const { webhookId } = c.req.param()
     const deleted = deleteWebhook(db, webhookId)
@@ -106,7 +106,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.body(null, 204)
   })
 
-  // PATCH /webhooks/:webhookId/:token
+  // PATCH /webhooks/:webhookId/:token — Webhookをトークンで更新（Bot認証不要）
   app.patch('/webhooks/:webhookId/:token', async (c) => {
     const { webhookId, token } = c.req.param()
 
@@ -150,7 +150,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(webhookWithoutToken)
   })
 
-  // DELETE /webhooks/:webhookId/:token
+  // DELETE /webhooks/:webhookId/:token — Webhookをトークンで削除（Bot認証不要）
   app.delete('/webhooks/:webhookId/:token', (c) => {
     const { webhookId, token } = c.req.param()
 
@@ -259,7 +259,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(msg)
   })
 
-  // GET /webhooks/:webhookId/:token/messages/:messageId
+  // GET /webhooks/:webhookId/:token/messages/:messageId — Webhook経由メッセージを取得
   app.get('/webhooks/:webhookId/:token/messages/:messageId', (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
@@ -285,7 +285,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(msg)
   })
 
-  // PATCH /webhooks/:webhookId/:token/messages/:messageId
+  // PATCH /webhooks/:webhookId/:token/messages/:messageId — Webhook経由メッセージを編集
   app.patch('/webhooks/:webhookId/:token/messages/:messageId', async (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
@@ -316,7 +316,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     return c.json(updated)
   })
 
-  // DELETE /webhooks/:webhookId/:token/messages/:messageId
+  // DELETE /webhooks/:webhookId/:token/messages/:messageId — Webhook経由メッセージを削除
   app.delete('/webhooks/:webhookId/:token/messages/:messageId', (c) => {
     const { webhookId, token, messageId } = c.req.param()
 

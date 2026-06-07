@@ -20,7 +20,7 @@ const START_TIME = Date.now()
 export function createMockRoutes(db: Database, uploadPath: string): Hono {
   const app = new Hono()
 
-  // GET /_mock/health
+  // GET /_mock/health — ヘルスチェック
   app.get('/_mock/health', (c) => {
     let dbStatus = 'ok'
     try {
@@ -49,7 +49,7 @@ export function createMockRoutes(db: Database, uploadPath: string): Hono {
     })
   })
 
-  // GET /_mock/attachments/:channelId/:messageId/:filename
+  // GET /_mock/attachments/:channelId/:messageId/:filename — 添付ファイル配信
   app.get('/_mock/attachments/:channelId/:messageId/:filename', async (c) => {
     const { channelId, messageId, filename } = c.req.param()
 

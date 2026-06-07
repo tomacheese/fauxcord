@@ -47,11 +47,12 @@ import { WEBHOOK_LIMITS } from '../validators/webhook.js'
  */
 export function createChannelRoutes(
   db: Database,
-  baseUrl: string
+  baseUrl: string,
+  uploadPath = '/data/uploads'
 ): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
-  // GET /channels/:channelId
+  // GET /channels/:channelId — チャンネル情報を取得
   app.get('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
     const channel = getChannel(db, channelId)
@@ -66,7 +67,7 @@ export function createChannelRoutes(
     return c.json(channel)
   })
 
-  // PATCH /channels/:channelId
+  // PATCH /channels/:channelId — チャンネル情報を更新
   app.patch('/channels/:channelId', async (c) => {
     const { channelId } = c.req.param()
     const payload = await c.req.json<{
@@ -89,7 +90,7 @@ export function createChannelRoutes(
     return c.json(updated)
   })
 
-  // DELETE /channels/:channelId
+  // DELETE /channels/:channelId — チャンネルを削除
   app.delete('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
     const deleted = deleteChannel(db, channelId)
@@ -104,7 +105,7 @@ export function createChannelRoutes(
     return c.json(deleted)
   })
 
-  // GET /channels/:channelId/messages
+  // GET /channels/:channelId/messages — メッセージ一覧を取得
   app.get('/channels/:channelId/messages', (c) => {
     const { channelId } = c.req.param()
     const channel = getChannel(db, channelId)
@@ -134,7 +135,7 @@ export function createChannelRoutes(
   // ――― 新ピン API（discord.py 2.7+が使用）――――――――――――――――――――――――――
   // ※ 必ず GET /channels/:cid/messages/:mid より先に定義すること。
   //   後に定義すると "pins" がメッセージIDとして解釈されてしまう。
-  // GET /channels/:channelId/messages/pins
+  // GET /channels/:channelId/messages/pins — ピン留めメッセージ一覧を取得（新API形式）
   // → discord.py 2.7+ / 新 Discord API 形式:
   //   {"items":[{"pinned_at":ISO8601,"message":{...}}],"has_more":false}
   //   旧エンドポイント GET /channels/:cid/pins はフラット配列のまま
@@ -212,7 +213,7 @@ export function createChannelRoutes(
   })
   // ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
 
-  // GET /channels/:channelId/messages/:messageId
+  // GET /channels/:channelId/messages/:messageId — 特定メッセージを取得
   app.get('/channels/:channelId/messages/:messageId', (c) => {
     const { messageId } = c.req.param()
     const msg = getMessage(db, messageId, baseUrl)
@@ -227,7 +228,7 @@ export function createChannelRoutes(
     return c.json(msg)
   })
 
-  // POST /channels/:channelId/messages
+  // POST /channels/:channelId/messages — メッセージを送信
   app.post('/channels/:channelId/messages', async (c) => {
     const { channelId } = c.req.param()
 
@@ -334,7 +335,7 @@ export function createChannelRoutes(
         for (const [i, f] of attachmentFiles.entries()) {
           await saveAttachment(
             db,
-            '/data/uploads',
+            uploadPath,
             baseUrl,
             channelId,
             messageId,
@@ -352,7 +353,7 @@ export function createChannelRoutes(
     return c.json(msg)
   })
 
-  // PATCH /channels/:channelId/messages/:messageId
+  // PATCH /channels/:channelId/messages/:messageId — メッセージを編集
   app.patch('/channels/:channelId/messages/:messageId', async (c) => {
     const { messageId } = c.req.param()
     const bot = c.get('bot')
@@ -390,7 +391,7 @@ export function createChannelRoutes(
     return c.json(updated)
   })
 
-  // DELETE /channels/:channelId/messages/:messageId
+  // DELETE /channels/:channelId/messages/:messageId — メッセージを削除
   app.delete('/channels/:channelId/messages/:messageId', (c) => {
     const { messageId } = c.req.param()
     const deleted = deleteMessage(db, messageId)
@@ -405,7 +406,7 @@ export function createChannelRoutes(
     return c.body(null, 204)
   })
 
-  // POST /channels/:channelId/messages/bulk-delete
+  // POST /channels/:channelId/messages/bulk-delete — メッセージを一括削除
   app.post('/channels/:channelId/messages/bulk-delete', async (c) => {
     c.req.param() // チャンネルIDはルートパラメータとして存在するが、このハンドラでは使用しない
 
@@ -445,7 +446,7 @@ export function createChannelRoutes(
     return c.body(null, 204)
   })
 
-  // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me
+  // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me — 自分のリアクションを追加
   app.put(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/@me',
     (c) => {
@@ -469,7 +470,7 @@ export function createChannelRoutes(
     }
   )
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/@me
+  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/@me — 自分のリアクションを削除
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/@me',
     (c) => {
@@ -483,7 +484,7 @@ export function createChannelRoutes(
     }
   )
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/:userId
+  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/:userId — 特定ユーザーのリアクションを削除
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/:userId',
     (c) => {
@@ -495,7 +496,7 @@ export function createChannelRoutes(
     }
   )
 
-  // GET /channels/:channelId/messages/:messageId/reactions/:emoji
+  // GET /channels/:channelId/messages/:messageId/reactions/:emoji — リアクションしたユーザー一覧を取得
   app.get('/channels/:channelId/messages/:messageId/reactions/:emoji', (c) => {
     const { messageId, emoji } = c.req.param()
     const decodedEmoji = decodeURIComponent(emoji)
@@ -514,7 +515,7 @@ export function createChannelRoutes(
     )
   })
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji
+  // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji — 絵文字のリアクションを全削除
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji',
     (c) => {
@@ -525,21 +526,21 @@ export function createChannelRoutes(
     }
   )
 
-  // DELETE /channels/:channelId/messages/:messageId/reactions
+  // DELETE /channels/:channelId/messages/:messageId/reactions — メッセージの全リアクションを削除
   app.delete('/channels/:channelId/messages/:messageId/reactions', (c) => {
     const { messageId } = c.req.param()
     removeAllReactions(db, messageId)
     return c.body(null, 204)
   })
 
-  // GET /channels/:channelId/pins
+  // GET /channels/:channelId/pins — ピン留めメッセージ一覧を取得（旧API形式）
   app.get('/channels/:channelId/pins', (c) => {
     const { channelId } = c.req.param()
     const pins = getPinnedMessages(db, channelId, baseUrl)
     return c.json(pins)
   })
 
-  // PUT /channels/:channelId/pins/:messageId
+  // PUT /channels/:channelId/pins/:messageId — メッセージをピン留め（旧API形式）
   app.put('/channels/:channelId/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
     const result = pinMessage(db, channelId, messageId)
@@ -583,21 +584,21 @@ export function createChannelRoutes(
     }
   })
 
-  // DELETE /channels/:channelId/pins/:messageId
+  // DELETE /channels/:channelId/pins/:messageId — メッセージのピン留めを解除（旧API形式）
   app.delete('/channels/:channelId/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
     unpinMessage(db, channelId, messageId)
     return c.body(null, 204)
   })
 
-  // GET /channels/:channelId/webhooks
+  // GET /channels/:channelId/webhooks — チャンネルのWebhook一覧を取得
   app.get('/channels/:channelId/webhooks', (c) => {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)
     return c.json(webhooks)
   })
 
-  // POST /channels/:channelId/webhooks
+  // POST /channels/:channelId/webhooks — Webhookを作成
   app.post('/channels/:channelId/webhooks', async (c) => {
     const { channelId } = c.req.param()
 
@@ -614,7 +615,7 @@ export function createChannelRoutes(
 
     // Webhook上限チェック（15件/チャンネル）
     const existingWebhooks = getChannelWebhooks(db, channelId)
-    if (existingWebhooks.length >= WEBHOOK_LIMITS.NAME_MAX) {
+    if (existingWebhooks.length >= WEBHOOK_LIMITS.CHANNEL_WEBHOOKS_MAX) {
       const err = discordError(
         DiscordErrorCode.MAX_WEBHOOKS_REACHED,
         'Maximum number of webhooks reached (15)',
@@ -629,17 +630,6 @@ export function createChannelRoutes(
     const errors = validateWebhookCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
-    }
-
-    // Webhook数チェック（チャンネルごと15件）
-    const channelWebhookCount = existingWebhooks.length
-    if (channelWebhookCount >= 15) {
-      const err = discordError(
-        DiscordErrorCode.MAX_WEBHOOKS_REACHED,
-        'Maximum number of webhooks reached (15)',
-        400
-      )
-      return c.json(err.body, 400)
     }
 
     const webhookId = generateSnowflake()
