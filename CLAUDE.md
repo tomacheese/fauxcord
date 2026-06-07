@@ -1,0 +1,121 @@
+# Fauxcord
+
+Discord REST API v10 の挙動を再現するモックサーバー。
+実サービスへの接続なしに Discord ボット・アプリのインテグレーションテストを行える。
+
+## Tech Stack
+
+- **Runtime**: Node.js 24 + TypeScript (ES2024, NodeNext)
+- **Framework**: Hono (`@hono/node-server`)
+- **DB**: SQLite via `better-sqlite3`（WAL モード・外部キー有効）
+- **型定義**: `discord-api-types` v10（型のみ、ランタイム使用なし）
+- **Test**: Vitest
+- **Lint**: ESLint (`@book000/eslint-config`) + Prettier
+- **Package manager**: pnpm 11.2.2
+
+## Essential Commands
+
+```bash
+pnpm dev              # 開発サーバー（tsx watch, hot reload）
+pnpm test             # テスト実行（85 件）
+pnpm test:watch       # テスト watch モード
+pnpm lint             # tsc + eslint + prettier（コミット前に必須）
+pnpm fix              # eslint --fix + prettier --write
+pnpm build            # tsc -p tsconfig.build.json（テスト除外）
+pnpm start            # node dist/index.js（本番）
+```
+
+## Architecture
+
+```
+src/
+├── index.ts          # エントリーポイント・Hono アプリ組み立て・SEED_FILE
+├── config.ts         # 環境変数（PORT, DB_PATH, DISABLE_AUTH, LATENCY_MS 等）
+├── db.ts             # SQLite 初期化・15 テーブル定義
+├── snowflake.ts      # Discord Snowflake ID 生成（Discord Epoch: 1420070400000n）
+├── errors.ts         # DiscordErrorCode 定数・discordError / validationError ヘルパー
+├── middleware/       # auth, cors, latency, rate-limit, version
+├── routes/           # Hono ルーターファクトリ（createXxxRoutes(db, baseUrl)）
+├── services/         # DB 操作ロジック（ルートから呼ばれる）
+└── validators/       # リクエストバリデーション（エラー形式は Discord 仕様に合わせる）
+```
+
+**データフロー**: `index.ts` → ミドルウェア → `routes/` → `services/` → DB
+
+**ルートマウント**: `/api/v10/`, `/api/`, `/` の 3 プレフィックスをすべてマウントする（`src/index.ts` の `routePrefix` ループ参照）。Webhook ルートも含む。
+
+## Code Conventions
+
+- 関数・インターフェースには **jsdoc（日本語）** を必ず記載
+- コード内コメントは日本語
+- エラーメッセージは英語（例: `"Unknown Channel"`）
+- `skipLibCheck: false` は**絶対に変更しない**
+- `any` 型の使用禁止（ESLint で強制）
+- `.reverse()` → `.toReversed()`、`parseInt` → `Number.parseInt`（unicorn ルール）
+
+## Key Implementation Patterns
+
+**エラーレスポンス**（Discord API 仕様に厳密準拠）:
+```typescript
+return c.json(discordError(DiscordErrorCode.UNKNOWN_CHANNEL, "Unknown Channel", 404).body, 404)
+```
+
+**新規エンドポイント追加時**:
+1. `src/services/` に DB 操作関数を追加（jsdoc 必須）
+2. `src/routes/` のファクトリ関数にルート追加
+3. 必要なら `src/validators/` にバリデーション追加
+4. `src/routes/xxx.test.ts` にテスト追加（TDD 推奨）
+
+**ルート定義順序に注意**: Hono は先勝ちマッチ。`/channels/:cid/messages/pins`（リテラル）は `/channels/:cid/messages/:mid`（パラメータ）より**前**に定義する。
+
+## Testing
+
+```bash
+pnpm test                         # 全テスト
+pnpm test src/routes/channels     # ファイル指定
+```
+
+- テストヘルパー: `src/test-helpers.ts`（`createTestApp`, `seedBot`, `seedGuild`, `seedChannel`）
+- インメモリ DB を使用（`:memory:`）→ WAL モードは `"wal"` または `"memory"` を許容
+- 統合テストは `src/integration.test.ts`
+
+## Environment Variables
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `PORT` | `3000` | リッスンポート |
+| `DB_PATH` | `/data/mock.db` | SQLite ファイルパス |
+| `DISABLE_AUTH` | `false` | `true` で認証バイパス |
+| `LATENCY_MS` | `0` | 全 API レスポンスへの人工遅延 |
+| `SEED_FILE` | _(なし)_ | 起動時自動ロード JSON |
+
+## Important Gotchas
+
+- **Webhook ルートは `routePrefix` ループ内**にあること（`/api/v10/webhooks/...` に対応するため）
+- **Webhook 実行の `wait` パラメータ**: `"true"` と `"1"` の両方を真と解釈（discord.py は `?wait=1` を送る）
+- **`GET /channels/:id/messages/pins`**（新 API）は `{"items":[...],"has_more":false}` 形式を返す。`GET /channels/:id/pins`（旧 API）はフラット配列
+- **bulk-delete の数値 ID**: JS の JSON.parse で 19 桁 Snowflake が精度消失するため生テキストから正規表現で抽出（`src/routes/channels.ts` 参照）
+- **`embeds: null`**: discordgo 等が送るため null を空配列として扱う
+- **`/users/%40me`**: `@` の percent-encode に対応（`src/routes/users.ts` 参照）
+- **Docker healthcheck**: Alpine の busybox wget は `localhost` を IPv6 解決するため `127.0.0.1` を明示
+
+## Discord API v10 Compatibility Notes
+
+- **Snowflake ID**: Discord Epoch (1420070400000n) を使用
+- **エラーコード**: `src/errors.ts` の `DiscordErrorCode` を使用すること
+- **Rate Limit ヘッダー**: 全レスポンスに `x-ratelimit-*` を付与（ダミー値）
+- **`@everyone` ロール**: Guild 作成時に ID = Guild ID で自動生成（`src/services/test-control.ts`）
+- **`/oauth2/applications/@me`**: Discord.Net がログイン時に呼び出すエイリアス（`src/routes/users.ts`）
+
+## Git Workflow
+
+- ブランチ: [Conventional Branch](https://conventional-branch.github.io)（`feat/`, `fix/` 等）
+- コミット: [Conventional Commits](https://www.conventionalcommits.org/)、`<description>` は日本語
+- push は **SSH** のみ
+- PR 作成前に `pnpm lint` と `pnpm test` が通ること
+
+## References
+
+- @docs/spec.md — API 仕様書（エンドポイント一覧・エラーコード）
+- @docs/design.md — 設計書（アーキテクチャ・DB スキーマ・Docker 設定）
+- @seed.example.json — SEED_FILE フォーマットのサンプル
