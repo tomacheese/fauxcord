@@ -17,12 +17,15 @@ Run integration tests for Discord bots and apps without connecting to the real s
 
 ```bash
 pnpm dev              # Dev server (tsx watch, hot reload)
-pnpm test             # Run tests (85 tests)
+pnpm test             # Run tests (113 tests)
 pnpm test:watch       # テスト watch モード
 pnpm lint             # tsc + eslint + prettier (required before committing)
 pnpm fix              # eslint --fix + prettier --write
 pnpm build            # tsc -p tsconfig.build.json (excludes test files)
 pnpm start            # node dist/index.js (production)
+pnpm spec:fetch       # Download the latest upstream spec to spec/openapi.upstream.json
+pnpm spec:diff        # Diff spec/openapi.json vs spec/openapi.upstream.json (exit 1 = diff)
+pnpm spec:update      # Update the committed spec snapshot (spec/openapi.json) to upstream
 ```
 
 ## Architecture
@@ -70,6 +73,7 @@ return c.json(
 2. Add the route to the factory function in `src/routes/`
 3. Add validation to `src/validators/` if needed
 4. Add tests to `src/routes/xxx.test.ts` (TDD recommended)
+5. **Add an entry to `spec/manifest.ts`** (the single source of truth for drift detection and contract tests)
 
 **Watch out for route definition order**: Hono uses first-match wins. Define `/channels/:cid/messages/pins` (literal) **before** `/channels/:cid/messages/:mid` (parameterized).
 
@@ -219,6 +223,42 @@ curl -X POST http://localhost:3000/_test/setup \
 - **Rate Limit headers**: `x-ratelimit-*` attached to all responses (dummy values)
 - **`@everyone` role**: Auto-generated at Guild creation with ID = Guild ID (`src/services/test-control.ts`)
 - **`/oauth2/applications/@me`**: Alias that Discord.Net calls at login (`src/routes/users.ts`)
+
+## Spec Drift Tracking
+
+Fauxcord tracks the official [Discord OpenAPI spec](https://github.com/discord/discord-api-spec)
+to detect when the real API diverges from the mock.
+
+### Key files
+
+| File | Role |
+| ---- | ---- |
+| `spec/openapi.json` | Committed snapshot of the upstream spec (raw, byte-identical) |
+| `spec/manifest.ts` | Single source of truth: maps every implemented endpoint to its spec path/method. Drives both drift detection and contract tests. |
+| `spec/skip.ts` | Endpoints/assertions skipped due to confirmed spec-side bugs (reason required). |
+| `scripts/spec-fetch.ts` | Downloads the latest upstream spec. |
+| `scripts/spec-diff.ts` | Diffs snapshot vs upstream; emits Markdown, exits 1 when drift exists. |
+| `src/spec-contract.test.ts` | Ajv-based contract tests against the committed snapshot. |
+| `.github/workflows/spec-drift.yml` | Weekly cron + `workflow_dispatch`; opens a `spec-drift` issue on drift. |
+
+### Snapshot update workflow
+
+1. The weekly workflow detects drift and opens a `spec-drift` GitHub Issue.
+2. Pull the latest master and create a branch.
+3. Run `pnpm spec:update` to download the new snapshot.
+4. Run `pnpm test` — contract tests in `src/spec-contract.test.ts` will fail for any mock responses that no longer match the spec.
+5. Fix the mock (or add a justified entry to `spec/skip.ts`) until all tests pass.
+6. Commit and open a PR.
+
+### Skip list policy
+
+Only add to `spec/skip.ts` when the spec itself is provably wrong (e.g., a field is declared `required` but the real Discord API never returns it). Always include a clear `reason`. Do **not** add entries simply because fixing the mock is inconvenient.
+
+### Type drift detection
+
+The services import types from `discord-api-types/v10` and declare compile-time
+compatibility guards. When Renovate bumps `discord-api-types`, running
+`pnpm lint:tsc` will fail if a field used by the mock is renamed or retyped upstream.
 
 ## Git Workflow
 

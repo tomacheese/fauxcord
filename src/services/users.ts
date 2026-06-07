@@ -5,6 +5,25 @@
  */
 
 import type { Database } from '../db.js'
+// Used for compile-time type drift detection.
+import type { APIUser } from 'discord-api-types/v10'
+
+/**
+ * Compile-time guard: ensures the safe-field subset of UserObject is
+ * structurally compatible with APIUser.
+ * Fails to compile when discord-api-types renames or retypes these fields.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _UserCompatGuard =
+  Pick<
+    APIUser,
+    'id' | 'username' | 'discriminator' | 'avatar' | 'bot' | 'global_name'
+  > extends Pick<
+    UserObject,
+    'id' | 'username' | 'discriminator' | 'avatar' | 'bot' | 'global_name'
+  >
+    ? true
+    : never
 
 /** Bot record type retrieved from the DB */
 interface BotRow {
@@ -25,6 +44,14 @@ export interface UserObject {
   bot: boolean
   flags?: number
   public_flags?: number
+  /** Display name (always null in the mock) */
+  global_name?: string | null
+  /** Primary guild info (always null in the mock) */
+  primary_guild?: string | null
+  /** Whether the user has MFA enabled (always false in the mock) */
+  mfa_enabled?: boolean
+  /** User locale (always "en-US" in the mock) */
+  locale?: string
 }
 
 /**
@@ -61,6 +88,9 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
     bot: true,
     flags: 0,
     public_flags: 0,
+    global_name: null,
+    mfa_enabled: false,
+    locale: 'en-US',
   }
 }
 
@@ -89,7 +119,10 @@ export function getUser(db: Database, userId: string): UserObject | null {
     discriminator: user.discriminator,
     avatar: user.avatar,
     bot: user.bot === 1,
+    flags: 0,
     public_flags: 0,
+    global_name: null,
+    primary_guild: null,
   }
 }
 

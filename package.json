@@ -21,13 +21,18 @@
     "lint": "run-s lint:*",
     "fix:eslint": "eslint src/ --fix",
     "fix:prettier": "prettier --write src/",
-    "fix": "run-s fix:*"
+    "fix": "run-s fix:*",
+    "spec:fetch": "tsx scripts/spec-fetch.ts",
+    "spec:diff": "tsx scripts/spec-diff.ts",
+    "spec:update": "tsx scripts/spec-fetch.ts spec/openapi.json"
   },
   "devDependencies": {
     "@book000/eslint-config": "^1.14.53",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.2",
     "@vitest/coverage-v8": "^4.1.8",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "eslint": "^10.4.1",
     "npm-run-all2": "^9.0.1",
     "prettier": "^3.8.3",

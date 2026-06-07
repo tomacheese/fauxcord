@@ -5,6 +5,57 @@
  */
 
 import type { Database } from '../db.js'
+// Used for compile-time type drift detection.
+import type { APIRole, APIGuildMember, APIUser } from 'discord-api-types/v10'
+
+/**
+ * Compile-time guard: ensures the safe-field subset of RoleObject is
+ * structurally compatible with APIRole.
+ * Numeric enum fields (color, flags, permissions string) are excluded.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _RoleCompatGuard =
+  Pick<
+    APIRole,
+    'id' | 'name' | 'hoist' | 'managed' | 'mentionable'
+  > extends Pick<
+    RoleObject,
+    'id' | 'name' | 'hoist' | 'managed' | 'mentionable'
+  >
+    ? true
+    : never
+
+/**
+ * Compile-time guard: ensures the safe-field subset of GuildMemberObject is
+ * structurally compatible with APIGuildMember.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _MemberCompatGuard =
+  Pick<
+    APIGuildMember,
+    'nick' | 'joined_at' | 'pending' | 'flags' | 'deaf' | 'mute'
+  > extends Pick<
+    GuildMemberObject,
+    'nick' | 'joined_at' | 'pending' | 'flags' | 'deaf' | 'mute'
+  >
+    ? true
+    : never
+
+/**
+ * Compile-time guard: ensures the safe-field subset of MemberUserObject is
+ * structurally compatible with APIUser.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _UserCompatGuard =
+  Pick<
+    APIUser,
+    'id' | 'username' | 'discriminator' | 'avatar' | 'bot' | 'global_name'
+  > extends Pick<
+    MemberUserObject,
+    'id' | 'username' | 'discriminator' | 'avatar' | 'bot' | 'global_name'
+  >
+    ? true
+    : never
 
 /** Guild record type retrieved from the DB */
 interface GuildRow {
@@ -55,16 +106,38 @@ export interface GuildObject {
   approximate_member_count?: number
 }
 
+/**
+ * Role color gradient object (GuildRoleColorsResponse).
+ * The mock always uses a flat single color (no gradient), so secondary and
+ * tertiary colors are null and primary_color mirrors the role's `color` field.
+ */
+export interface RoleColors {
+  /** Primary role color (mirrors the `color` field) */
+  primary_color: number
+  /** Secondary gradient color (always null in the mock) */
+  secondary_color: number | null
+  /** Tertiary gradient color (always null in the mock) */
+  tertiary_color: number | null
+}
+
 /** Role object for API responses */
 export interface RoleObject {
   id: string
   name: string
   color: number
+  /** Role color gradient preset (always uses primary_color = color, no gradient) */
+  colors: RoleColors
   hoist: boolean
+  /** Role icon hash (always null in the mock) */
+  icon: string | null
+  /** Role unicode emoji (always null in the mock) */
+  unicode_emoji: string | null
   position: number
   permissions: string
   managed: boolean
   mentionable: boolean
+  /** Role flags bitset (always 0 in the mock) */
+  flags: number
 }
 
 /**
@@ -77,11 +150,19 @@ function toRoleObject(row: RoleRow): RoleObject {
     id: row.id,
     name: row.name,
     color: row.color,
+    colors: {
+      primary_color: row.color,
+      secondary_color: null,
+      tertiary_color: null,
+    },
     hoist: row.hoist === 1,
+    icon: null,
+    unicode_emoji: null,
     position: row.position,
     permissions: row.permissions,
     managed: row.managed === 1,
     mentionable: row.mentionable === 1,
+    flags: 0,
   }
 }
 
@@ -204,6 +285,8 @@ export function getBotGuilds(
   id: string
   name: string
   icon: string | null
+  /** Guild banner hash (always null in the mock) */
+  banner: string | null
   owner: boolean
   permissions: string
   features: never[]
@@ -215,6 +298,7 @@ export function getBotGuilds(
     id: r.id,
     name: r.name,
     icon: r.icon,
+    banner: null,
     owner: false,
     permissions: '0',
     features: [],
@@ -380,21 +464,42 @@ interface MemberRow {
   flags: number
 }
 
+/** User sub-object embedded in GuildMemberObject */
+export interface MemberUserObject {
+  id: string
+  username: string
+  discriminator: string
+  avatar: string | null
+  bot: boolean
+  /** User account flags (always 0 in the mock) */
+  flags: number
+  /** User public flags bitset (always 0 in the mock) */
+  public_flags: number
+  /** Display name (always null in the mock) */
+  global_name: string | null
+  /** Primary guild info (always null in the mock) */
+  primary_guild: string | null
+}
+
 /** GuildMember object for API responses */
 export interface GuildMemberObject {
-  user: {
-    id: string
-    username: string
-    discriminator: string
-    avatar: string | null
-    bot: boolean
-  }
-  nick: string | null
-  roles: string[]
-  joined_at: string
-  deaf: boolean
-  mute: boolean
+  /** Member's guild-specific avatar hash (always null in the mock) */
+  avatar: string | null
+  /** Member's guild-specific banner hash (always null in the mock) */
+  banner: string | null
+  /** Timestamp when the member's timeout expires (always null in the mock) */
+  communication_disabled_until: string | null
   flags: number
+  joined_at: string
+  nick: string | null
+  /** Whether the member has not yet passed the guild's membership screening (always false in the mock) */
+  pending: boolean
+  /** Timestamp when the member started boosting the guild (always null in the mock) */
+  premium_since: string | null
+  roles: string[]
+  user: MemberUserObject
+  mute: boolean
+  deaf: boolean
 }
 
 /**
@@ -446,19 +551,28 @@ export function getGuildMember(
   if (!user) return null
 
   return {
+    avatar: null,
+    banner: null,
+    communication_disabled_until: null,
+    flags: member.flags,
+    joined_at: new Date(member.joined_at).toISOString(),
+    nick: member.nick,
+    pending: false,
+    premium_since: null,
+    roles: getMemberRoleIds(db, guildId, userId),
     user: {
       id: user.id,
       username: user.username,
       discriminator: user.discriminator,
       avatar: user.avatar,
       bot: user.bot === 1,
+      flags: 0,
+      public_flags: 0,
+      global_name: null,
+      primary_guild: null,
     },
-    nick: member.nick,
-    roles: getMemberRoleIds(db, guildId, userId),
-    joined_at: new Date(member.joined_at).toISOString(),
-    deaf: member.deaf === 1,
     mute: member.mute === 1,
-    flags: member.flags,
+    deaf: member.deaf === 1,
   }
 }
 
@@ -493,19 +607,28 @@ export function getGuildMembers(
   })[]
 
   return members.map((m) => ({
+    avatar: null,
+    banner: null,
+    communication_disabled_until: null,
+    flags: m.flags,
+    joined_at: new Date(m.joined_at).toISOString(),
+    nick: m.nick,
+    pending: false,
+    premium_since: null,
+    roles: getMemberRoleIds(db, guildId, m.user_id),
     user: {
       id: m.user_id,
       username: m.username,
       discriminator: m.discriminator,
       avatar: m.avatar,
       bot: m.bot === 1,
+      flags: 0,
+      public_flags: 0,
+      global_name: null,
+      primary_guild: null,
     },
-    nick: m.nick,
-    roles: getMemberRoleIds(db, guildId, m.user_id),
-    joined_at: new Date(m.joined_at).toISOString(),
-    deaf: m.deaf === 1,
     mute: m.mute === 1,
-    flags: m.flags,
+    deaf: m.deaf === 1,
   }))
 }
 

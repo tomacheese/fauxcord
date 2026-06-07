@@ -7,6 +7,25 @@
 import type { Database } from '../db.js'
 import type { MessageObject } from './messages.js'
 import { createMessage } from './messages.js'
+// Used for compile-time type drift detection.
+import type { APIWebhook } from 'discord-api-types/v10'
+
+/**
+ * Compile-time guard: ensures the safe-field subset of WebhookObject is
+ * structurally compatible with APIWebhook.
+ * Fails to compile when discord-api-types renames or retypes these fields.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _WebhookCompatGuard =
+  Pick<
+    APIWebhook,
+    'id' | 'channel_id' | 'guild_id' | 'name' | 'avatar'
+  > extends Pick<
+    WebhookObject,
+    'id' | 'channel_id' | 'guild_id' | 'name' | 'avatar'
+  >
+    ? true
+    : never
 
 /** Webhook record type retrieved from the DB */
 interface WebhookRow {
@@ -23,6 +42,8 @@ interface WebhookRow {
 export interface WebhookObject {
   id: string
   type: number
+  /** Application ID that created the webhook (always null in the mock) */
+  application_id: string | null
   guild_id: string | null
   channel_id: string
   name: string
@@ -39,6 +60,7 @@ function toWebhookObject(row: WebhookRow): WebhookObject {
   return {
     id: row.id,
     type: row.type,
+    application_id: null,
     guild_id: row.guild_id,
     channel_id: row.channel_id,
     name: row.name,

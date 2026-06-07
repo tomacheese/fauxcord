@@ -5,6 +5,26 @@
  */
 
 import type { Database } from '../db.js'
+// Used for compile-time type drift detection.
+import type { APIGuildTextChannel } from 'discord-api-types/v10'
+import type { ChannelType } from 'discord-api-types/v10'
+
+/**
+ * Compile-time guard: ensures the safe-field subset of ChannelObject is
+ * structurally compatible with APIGuildTextChannel.
+ * Fails to compile when discord-api-types renames or retypes these fields.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _ChannelCompatGuard =
+  Pick<
+    APIGuildTextChannel<ChannelType.GuildText>,
+    'id' | 'guild_id' | 'position' | 'name' | 'flags'
+  > extends Pick<
+    ChannelObject,
+    'id' | 'guild_id' | 'position' | 'name' | 'flags'
+  >
+    ? true
+    : never
 
 /** Channel record type retrieved from the DB */
 interface ChannelRow {
@@ -24,6 +44,8 @@ interface ChannelRow {
 export interface ChannelObject {
   id: string
   type: number
+  /** Channel flags bitset (always 0 in the mock) */
+  flags: number
   guild_id: string | null
   position: number
   name: string | null
@@ -44,6 +66,7 @@ function toChannelObject(row: ChannelRow): ChannelObject {
   return {
     id: row.id,
     type: row.type,
+    flags: 0,
     guild_id: row.guild_id,
     position: row.position,
     name: row.name,

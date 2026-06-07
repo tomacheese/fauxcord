@@ -2,16 +2,39 @@
  * Test helper functions
  *
  * Provides utilities to simplify testing Hono apps.
+ * Includes both lightweight single-route helpers and a full-stack app factory
+ * that wires middleware and all routes (used by contract tests).
  */
 
 import { Hono } from 'hono'
 import { initializeDatabase, closeDatabase } from './db.js'
 import type { Database } from './db.js'
+import { createAuthMiddleware, type AppEnv } from './middleware/auth.js'
+import { corsMiddleware } from './middleware/cors.js'
+import { versionMiddleware } from './middleware/version.js'
+import { createChannelRoutes } from './routes/channels.js'
+import { createGuildRoutes } from './routes/guilds.js'
+import { createUserRoutes } from './routes/users.js'
+import { createWebhookRoutes } from './routes/webhooks.js'
+import { createOAuth2Routes } from './routes/oauth2.js'
+import { createTestRoutes } from './routes/test.js'
+import { createMockRoutes } from './routes/mock.js'
+import { generateSnowflake } from './snowflake.js'
+
+const TEST_BASE_URL = 'http://localhost:3000'
+const TEST_UPLOAD_PATH = '/tmp/fauxcord-test-uploads'
 
 /** DB/App pair for testing */
 export interface TestContext {
   db: Database
   app: Hono
+  cleanup: () => void
+}
+
+/** DB/App pair for full-stack contract testing */
+export interface FullTestContext {
+  db: Database
+  app: Hono<AppEnv>
   cleanup: () => void
 }
 
@@ -22,6 +45,52 @@ export interface TestContext {
 export function createTestApp(): TestContext {
   const db = initializeDatabase(':memory:')
   const app = new Hono()
+
+  return {
+    db,
+    app,
+    cleanup: () => {
+      closeDatabase(db)
+    },
+  }
+}
+
+/**
+ * Creates a Hono app with core middleware and all routes mounted for contract
+ * testing. Mirrors the production `src/index.ts` route registration order, but
+ * intentionally omits latency (`LATENCY_MS`) and rate-limit middleware that are
+ * irrelevant for deterministic schema validation tests.
+ *
+ * Used by `src/spec-contract.test.ts` to issue requests through the auth,
+ * CORS, and version-check layers with an in-memory DB.
+ *
+ * @returns Full test context with `app` and `db`
+ */
+export function createFullTestApp(): FullTestContext {
+  const db = initializeDatabase(':memory:')
+  const app = new Hono<AppEnv>()
+
+  // Middleware (same order as index.ts)
+  app.use('*', corsMiddleware)
+  app.use('*', versionMiddleware)
+
+  // Routes that do not require authentication (mounted before auth middleware)
+  app.route('/', createMockRoutes(db, TEST_UPLOAD_PATH))
+  app.route('/', createTestRoutes(db))
+  app.route('/', createOAuth2Routes(db))
+
+  // Authentication middleware
+  const authMiddleware = createAuthMiddleware(db, false)
+  app.use('*', authMiddleware)
+
+  // Discord API routes (mounted under all three prefixes)
+  const routePrefixes = ['/api/v10', '/api', '']
+  for (const prefix of routePrefixes) {
+    app.route(prefix, createChannelRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH))
+    app.route(prefix, createGuildRoutes(db))
+    app.route(prefix, createUserRoutes(db))
+    app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
+  }
 
   return {
     db,
@@ -92,4 +161,97 @@ export function seedChannel(
     'INSERT OR IGNORE INTO channels (id, guild_id, name, type) VALUES (?, ?, ?, 0)'
   ).run(channelId, guildId, 'general')
   return channelId
+}
+
+/**
+ * Inserts a message into the DB for testing.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param authorId - Author user ID
+ * @param authorToken - Author Bot token (or "webhook" for webhook messages)
+ * @param content - Message content
+ * @returns Generated message ID
+ */
+export function seedMessage(
+  db: Database,
+  channelId: string,
+  authorId: string,
+  authorToken: string,
+  content = 'Test message'
+): string {
+  const messageId = generateSnowflake()
+  db.prepare(
+    'INSERT INTO messages (id, channel_id, author_id, author_token, content) VALUES (?, ?, ?, ?, ?)'
+  ).run(messageId, channelId, authorId, authorToken, content)
+  return messageId
+}
+
+/**
+ * Inserts a webhook into the DB for testing.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param guildId - Guild ID (nullable)
+ * @param name - Webhook name
+ * @returns Object with webhookId and webhookToken
+ */
+export function seedWebhook(
+  db: Database,
+  channelId: string,
+  guildId: string | null,
+  name = 'Test Webhook'
+): { webhookId: string; webhookToken: string } {
+  const webhookId = generateSnowflake()
+  const webhookToken = `mock_wh_token_${webhookId}`
+  db.prepare(
+    'INSERT INTO webhooks (id, guild_id, channel_id, name, token) VALUES (?, ?, ?, ?, ?)'
+  ).run(webhookId, guildId, channelId, name, webhookToken)
+  return { webhookId, webhookToken }
+}
+
+/**
+ * Inserts a role into the DB for testing.
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param name - Role name
+ * @returns Generated role ID
+ */
+export function seedRole(
+  db: Database,
+  guildId: string,
+  name = 'test-role'
+): string {
+  const roleId = generateSnowflake()
+  const maxPosition = (
+    db
+      .prepare(
+        'SELECT COALESCE(MAX(position), 0) as pos FROM roles WHERE guild_id = ?'
+      )
+      .get(guildId) as { pos: number }
+  ).pos
+  db.prepare(
+    'INSERT INTO roles (id, guild_id, name, color, hoist, position, permissions, mentionable) VALUES (?, ?, ?, 0, 0, ?, ?, 0)'
+  ).run(roleId, guildId, name, maxPosition + 1, '0')
+  return roleId
+}
+
+/**
+ * Registers a second user and adds them as a guild member for testing.
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param userId - User ID (auto-generated if omitted)
+ * @returns User ID of the registered member
+ */
+export function seedMember(
+  db: Database,
+  guildId: string,
+  userId?: string
+): string {
+  const memberId = userId ?? generateSnowflake()
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'TestMember', '0', 0)"
+  ).run(memberId)
+  db.prepare(
+    'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+  ).run(guildId, memberId)
+  return memberId
 }

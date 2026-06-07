@@ -180,6 +180,7 @@ export function createGuildRoutes(db: Database): Hono {
       {
         id: newChannel.id,
         type: newChannel.type,
+        flags: 0,
         guild_id: newChannel.guild_id,
         position: newChannel.position,
         name: newChannel.name,

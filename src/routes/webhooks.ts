@@ -59,10 +59,13 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       )
       return c.json(err.body, 404)
     }
-    // Return the webhook without the token field
+    // Return the webhook without the token field.
+    // The Omit annotation ensures TypeScript catches any future addition
+    // of sensitive fields to WebhookObject that should not be leaked here.
     const webhookWithoutToken: Omit<typeof webhook, 'token'> = {
       id: webhook.id,
       type: webhook.type,
+      application_id: webhook.application_id,
       guild_id: webhook.guild_id,
       channel_id: webhook.channel_id,
       name: webhook.name,
@@ -138,10 +141,13 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    // Token-based endpoints return the webhook without the token field
+    // Token-based endpoints return the webhook without the token field.
+    // The Omit annotation ensures TypeScript catches any future addition
+    // of sensitive fields to WebhookObject that should not be leaked here.
     const webhookWithoutToken: Omit<typeof updated, 'token'> = {
       id: updated.id,
       type: updated.type,
+      application_id: updated.application_id,
       guild_id: updated.guild_id,
       channel_id: updated.channel_id,
       name: updated.name,

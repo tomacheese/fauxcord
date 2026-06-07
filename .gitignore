@@ -9,3 +9,4 @@ dist/
 coverage/
 .venv*/
 *.log
+spec/openapi.upstream.json
