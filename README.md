@@ -1,4 +1,4 @@
-# Discord Mock Server
+# Fauxcord - Discord Mock Server
 
 A mock server that replicates the behavior of the Discord REST API v10.  
 Run integration tests for Discord bots and applications without connecting to the real service.
