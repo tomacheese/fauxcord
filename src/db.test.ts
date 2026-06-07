@@ -9,21 +9,21 @@ describe('initializeDatabase', () => {
     closeDatabase(db)
   })
 
-  it('インメモリDBを初期化できること', () => {
+  it('initializes an in-memory database', () => {
     db = initializeDatabase(':memory:')
     expect(db).toBeDefined()
   })
 
-  it('journal_modeがセットされていること（インメモリDBはmemory）', () => {
+  it('sets journal_mode (in-memory DB uses memory mode)', () => {
     db = initializeDatabase(':memory:')
     const result = db.prepare('PRAGMA journal_mode').get() as {
       journal_mode: string
     }
-    // インメモリDBはWALをサポートしないためmemoryモードになる
+    // In-memory DB does not support WAL, so it falls back to memory mode
     expect(['wal', 'memory']).toContain(result.journal_mode)
   })
 
-  it('外部キー制約が有効になっていること', () => {
+  it('enables foreign key constraints', () => {
     db = initializeDatabase(':memory:')
     const result = db.prepare('PRAGMA foreign_keys').get() as {
       foreign_keys: number
@@ -31,7 +31,7 @@ describe('initializeDatabase', () => {
     expect(result.foreign_keys).toBe(1)
   })
 
-  it('全テーブルが作成されていること', () => {
+  it('creates all expected tables', () => {
     db = initializeDatabase(':memory:')
     const tables = db
       .prepare(
@@ -63,7 +63,7 @@ describe('initializeDatabase', () => {
     }
   })
 
-  it('botsテーブルに正しいスキーマがあること', () => {
+  it('bots table has the correct schema', () => {
     db = initializeDatabase(':memory:')
     const info = db.prepare('PRAGMA table_info(bots)').all() as {
       name: string

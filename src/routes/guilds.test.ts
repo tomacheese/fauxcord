@@ -12,9 +12,9 @@ describe('Guilds API', () => {
   let token: string
 
   /**
-   * テスト用のRoleをDBに登録します。
+   * Inserts a test Role into the database.
    * @param roleId - Role ID
-   * @param name - Role名
+   * @param name - Role name
    */
   function seedRole(roleId: string, name = 'Test Role'): string {
     db.prepare(
@@ -24,9 +24,9 @@ describe('Guilds API', () => {
   }
 
   /**
-   * テスト用のGuildメンバーをDBに登録します。
-   * @param userId - ユーザーID
-   * @param nick - ニックネーム
+   * Inserts a test Guild member into the database.
+   * @param userId - User ID
+   * @param nick - Nickname
    */
   function seedMember(userId: string, nick: string | null = null): string {
     db.prepare(
@@ -52,7 +52,7 @@ describe('Guilds API', () => {
   })
 
   describe('PATCH /guilds/:guildId', () => {
-    it('Guild名を更新できること', async () => {
+    it('updates the Guild name', async () => {
       const res = await app.request(`/guilds/${guildId}`, {
         method: 'PATCH',
         headers: {
@@ -67,7 +67,7 @@ describe('Guilds API', () => {
       expect(body.name).toBe('Updated Guild')
     })
 
-    it('nameを省略した場合は変更されないこと', async () => {
+    it('leaves name unchanged when omitted from the request', async () => {
       const res = await app.request(`/guilds/${guildId}`, {
         method: 'PATCH',
         headers: {
@@ -81,7 +81,7 @@ describe('Guilds API', () => {
       expect(body.name).toBe('Test Guild')
     })
 
-    it('存在しないGuildは404を返すこと', async () => {
+    it('returns 404 for a non-existent Guild', async () => {
       const res = await app.request('/guilds/999999999999999999', {
         method: 'PATCH',
         headers: {
@@ -97,21 +97,21 @@ describe('Guilds API', () => {
   })
 
   describe('DELETE /guilds/:guildId', () => {
-    it('Guildを削除できること', async () => {
+    it('deletes a Guild', async () => {
       const res = await app.request(`/guilds/${guildId}`, {
         method: 'DELETE',
         headers: { Authorization: token },
       })
       expect(res.status).toBe(204)
 
-      // 削除後は取得できないこと
+      // The deleted Guild should not be retrievable
       const getRes = await app.request(`/guilds/${guildId}`, {
         headers: { Authorization: token },
       })
       expect(getRes.status).toBe(404)
     })
 
-    it('存在しないGuildは404を返すこと', async () => {
+    it('returns 404 for a non-existent Guild', async () => {
       const res = await app.request('/guilds/999999999999999999', {
         method: 'DELETE',
         headers: { Authorization: token },
@@ -123,7 +123,7 @@ describe('Guilds API', () => {
   })
 
   describe('PATCH /guilds/:guildId/roles/:roleId', () => {
-    it('ロールを更新できること', async () => {
+    it('updates a role', async () => {
       const roleId = seedRole('444444444444444444')
       const res = await app.request(`/guilds/${guildId}/roles/${roleId}`, {
         method: 'PATCH',
@@ -149,7 +149,7 @@ describe('Guilds API', () => {
       expect(body.permissions).toBe('8')
     })
 
-    it('一部のフィールドのみ更新できること', async () => {
+    it('updates only the specified fields', async () => {
       const roleId = seedRole('444444444444444444', 'Original')
       const res = await app.request(`/guilds/${guildId}/roles/${roleId}`, {
         method: 'PATCH',
@@ -165,7 +165,7 @@ describe('Guilds API', () => {
       expect(body.color).toBe(123)
     })
 
-    it('存在しないGuildは404 (10004) を返すこと', async () => {
+    it('returns 404 (10004) for a non-existent Guild', async () => {
       const res = await app.request(
         '/guilds/999999999999999999/roles/444444444444444444',
         {
@@ -182,7 +182,7 @@ describe('Guilds API', () => {
       expect(body.code).toBe(10_004)
     })
 
-    it('存在しないRoleは404 (10011) を返すこと', async () => {
+    it('returns 404 (10011) for a non-existent Role', async () => {
       const res = await app.request(
         `/guilds/${guildId}/roles/999999999999999999`,
         {
@@ -201,7 +201,7 @@ describe('Guilds API', () => {
   })
 
   describe('DELETE /guilds/:guildId/roles/:roleId', () => {
-    it('ロールを削除できること', async () => {
+    it('deletes a role', async () => {
       const roleId = seedRole('444444444444444444')
       const res = await app.request(`/guilds/${guildId}/roles/${roleId}`, {
         method: 'DELETE',
@@ -209,7 +209,7 @@ describe('Guilds API', () => {
       })
       expect(res.status).toBe(204)
 
-      // 削除後はロール一覧に含まれないこと
+      // The deleted role should not appear in the role list
       const listRes = await app.request(`/guilds/${guildId}/roles`, {
         headers: { Authorization: token },
       })
@@ -217,7 +217,7 @@ describe('Guilds API', () => {
       expect(roles.some((r) => r.id === roleId)).toBe(false)
     })
 
-    it('存在しないRoleは404 (10011) を返すこと', async () => {
+    it('returns 404 (10011) for a non-existent Role', async () => {
       const res = await app.request(
         `/guilds/${guildId}/roles/999999999999999999`,
         {
@@ -230,8 +230,8 @@ describe('Guilds API', () => {
       expect(body.code).toBe(10_011)
     })
 
-    it('@everyoneロール (id == guild_id) は削除できず400を返すこと', async () => {
-      // @everyone ロールは id が guild_id と同一
+    it('returns 400 when attempting to delete the @everyone role (id == guild_id)', async () => {
+      // The @everyone role has the same id as the guild_id
       seedRole(guildId, '@everyone')
       const res = await app.request(`/guilds/${guildId}/roles/${guildId}`, {
         method: 'DELETE',
@@ -242,7 +242,7 @@ describe('Guilds API', () => {
   })
 
   describe('PATCH /guilds/:guildId/members/:userId', () => {
-    it('ニックネームを更新できること', async () => {
+    it('updates the nickname', async () => {
       const userId = seedMember('555555555555555555')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
@@ -261,7 +261,7 @@ describe('Guilds API', () => {
       expect(body.user.id).toBe(userId)
     })
 
-    it('nick: null でニックネームをクリアできること', async () => {
+    it('clears the nickname when nick is set to null', async () => {
       const userId = seedMember('555555555555555555', 'OldNick')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
@@ -276,7 +276,7 @@ describe('Guilds API', () => {
       expect(body.nick).toBeNull()
     })
 
-    it('ロールを設定できること', async () => {
+    it('assigns roles to a member', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
@@ -292,7 +292,7 @@ describe('Guilds API', () => {
       expect(body.roles).toEqual([roleId])
     })
 
-    it('存在しないロールを指定した場合は404 (10011) を返すこと', async () => {
+    it('returns 404 (10011) when a non-existent role is specified', async () => {
       const userId = seedMember('555555555555555555')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
@@ -307,7 +307,7 @@ describe('Guilds API', () => {
       expect(body.code).toBe(10_011)
     })
 
-    it('存在しないメンバーは404 (10007) を返すこと', async () => {
+    it('returns 404 (10007) for a non-existent member', async () => {
       const res = await app.request(
         `/guilds/${guildId}/members/999999999999999999`,
         {
@@ -326,7 +326,7 @@ describe('Guilds API', () => {
   })
 
   describe('DELETE /guilds/:guildId/members/:userId', () => {
-    it('メンバーをキックできること', async () => {
+    it('kicks a member', async () => {
       const userId = seedMember('555555555555555555')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'DELETE',
@@ -334,14 +334,14 @@ describe('Guilds API', () => {
       })
       expect(res.status).toBe(204)
 
-      // キック後は取得できないこと
+      // The kicked member should not be retrievable
       const getRes = await app.request(`/guilds/${guildId}/members/${userId}`, {
         headers: { Authorization: token },
       })
       expect(getRes.status).toBe(404)
     })
 
-    it('存在しないメンバーは404 (10007) を返すこと', async () => {
+    it('returns 404 (10007) for a non-existent member', async () => {
       const res = await app.request(
         `/guilds/${guildId}/members/999999999999999999`,
         {

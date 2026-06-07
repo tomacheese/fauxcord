@@ -19,7 +19,7 @@ describe('Test Control API', () => {
   })
 
   describe('POST /_test/setup', () => {
-    it('テスト環境をセットアップできること', async () => {
+    it('sets up the test environment', async () => {
       const res = await app.request('/_test/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -48,7 +48,7 @@ describe('Test Control API', () => {
       expect(body.guilds[0].channels[0].id).toBe('333333333333333333')
     })
 
-    it('IDを省略した場合は自動採番されること', async () => {
+    it('auto-generates IDs when omitted', async () => {
       const res = await app.request('/_test/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,7 +70,7 @@ describe('Test Control API', () => {
       expect(body.guilds[0].channels[0].id).toBeTruthy()
     })
 
-    it('重複トークンは409を返すこと', async () => {
+    it('returns 409 for a duplicate token', async () => {
       const setupBody = JSON.stringify({
         token: 'Bot duplicatetoken',
         guilds: [],
@@ -92,7 +92,7 @@ describe('Test Control API', () => {
   })
 
   describe('POST /_test/reset', () => {
-    it('全データをリセットできること', async () => {
+    it('resets all data', async () => {
       const res = await app.request('/_test/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -103,7 +103,7 @@ describe('Test Control API', () => {
   })
 
   describe('GET /_test/messages/:channelId', () => {
-    it('チャンネルのメッセージを取得できること', async () => {
+    it('retrieves messages for a channel', async () => {
       const res = await app.request('/_test/messages/333333333333333333')
       expect(res.status).toBe(200)
       const body = (await res.json()) as Record<string, unknown>

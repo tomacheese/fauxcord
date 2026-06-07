@@ -9,7 +9,7 @@ const BASE_URL = 'http://localhost:3000'
 const WEBHOOK_ID = '666666666666666666'
 const WEBHOOK_TOKEN = 'test-webhook-token'
 
-describe('Webhooks API (トークン付き)', () => {
+describe('Webhooks API (with token)', () => {
   let db: Database
   let app: Hono
 
@@ -32,7 +32,7 @@ describe('Webhooks API (トークン付き)', () => {
   })
 
   describe('PATCH /webhooks/:webhookId/:token', () => {
-    it('Webhook名を更新できること（tokenは返さない）', async () => {
+    it('updates the Webhook name (token is not returned)', async () => {
       const res = await app.request(
         `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`,
         {
@@ -48,7 +48,7 @@ describe('Webhooks API (トークン付き)', () => {
       expect(body.token).toBeUndefined()
     })
 
-    it('avatarを更新できること', async () => {
+    it('updates the avatar', async () => {
       const res = await app.request(
         `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`,
         {
@@ -62,7 +62,7 @@ describe('Webhooks API (トークン付き)', () => {
       expect(body.avatar).toBe('abc123')
     })
 
-    it('avatar: null でavatarをクリアできること', async () => {
+    it('clears the avatar when avatar is set to null', async () => {
       db.prepare("UPDATE webhooks SET avatar = 'old' WHERE id = ?").run(
         WEBHOOK_ID
       )
@@ -79,7 +79,7 @@ describe('Webhooks API (トークン付き)', () => {
       expect(body.avatar).toBeNull()
     })
 
-    it('不正なtokenは404 (10015) を返すこと', async () => {
+    it('returns 404 (10015) for an invalid token', async () => {
       const res = await app.request(`/webhooks/${WEBHOOK_ID}/invalid-token`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -92,21 +92,21 @@ describe('Webhooks API (トークン付き)', () => {
   })
 
   describe('DELETE /webhooks/:webhookId/:token', () => {
-    it('Webhookを削除できること', async () => {
+    it('deletes a Webhook', async () => {
       const res = await app.request(
         `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`,
         { method: 'DELETE' }
       )
       expect(res.status).toBe(204)
 
-      // 削除後は取得できないこと
+      // The deleted Webhook should not be retrievable
       const getRes = await app.request(
         `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`
       )
       expect(getRes.status).toBe(404)
     })
 
-    it('不正なtokenは404 (10015) を返すこと', async () => {
+    it('returns 404 (10015) for an invalid token', async () => {
       const res = await app.request(`/webhooks/${WEBHOOK_ID}/invalid-token`, {
         method: 'DELETE',
       })

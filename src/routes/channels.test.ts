@@ -28,7 +28,7 @@ describe('Channels API', () => {
   })
 
   describe('GET /channels/:channelId', () => {
-    it('チャンネルを取得できること', async () => {
+    it('retrieves a channel', async () => {
       const res = await app.request(`/channels/${channelId}`, {
         headers: { Authorization: token },
       })
@@ -38,7 +38,7 @@ describe('Channels API', () => {
       expect(body.name).toBe('general')
     })
 
-    it('存在しないチャンネルは404を返すこと', async () => {
+    it('returns 404 for a non-existent channel', async () => {
       const res = await app.request('/channels/999999999999999999', {
         headers: { Authorization: token },
       })
@@ -49,7 +49,7 @@ describe('Channels API', () => {
   })
 
   describe('PATCH /channels/:channelId', () => {
-    it('チャンネル名を更新できること', async () => {
+    it('updates the channel name', async () => {
       const res = await app.request(`/channels/${channelId}`, {
         method: 'PATCH',
         headers: {
@@ -65,7 +65,7 @@ describe('Channels API', () => {
   })
 
   describe('POST /channels/:channelId/messages', () => {
-    it('メッセージを送信できること', async () => {
+    it('sends a message', async () => {
       const res = await app.request(`/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -80,7 +80,7 @@ describe('Channels API', () => {
       expect(body.channel_id).toBe(channelId)
     })
 
-    it('空メッセージは400を返すこと', async () => {
+    it('returns 400 for an empty message', async () => {
       const res = await app.request(`/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -94,7 +94,7 @@ describe('Channels API', () => {
       expect(body.code).toBe(50_006)
     })
 
-    it('2001文字以上のcontentは400を返すこと', async () => {
+    it('returns 400 when content exceeds 2000 characters', async () => {
       const res = await app.request(`/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -110,8 +110,8 @@ describe('Channels API', () => {
   })
 
   describe('GET /channels/:channelId/messages', () => {
-    it('メッセージ一覧を取得できること', async () => {
-      // メッセージ投稿
+    it('retrieves a list of messages', async () => {
+      // Post a message first
       await app.request(`/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -130,8 +130,8 @@ describe('Channels API', () => {
       expect(body.length).toBeGreaterThan(0)
     })
 
-    it('limitパラメータが機能すること', async () => {
-      // 5件投稿
+    it('limit parameter works correctly', async () => {
+      // Post 5 messages
       for (let i = 0; i < 5; i++) {
         await app.request(`/channels/${channelId}/messages`, {
           method: 'POST',
@@ -153,8 +153,8 @@ describe('Channels API', () => {
   })
 
   describe('DELETE /channels/:channelId/messages/:messageId', () => {
-    it('メッセージを削除できること', async () => {
-      // 投稿
+    it('deletes a message', async () => {
+      // Post a message
       const postRes = await app.request(`/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -177,8 +177,8 @@ describe('Channels API', () => {
   })
 
   describe('DELETE /channels/:channelId/messages/:messageId/reactions/:emoji/:userId', () => {
-    it('特定ユーザーのリアクションを削除できること', async () => {
-      // メッセージ投稿
+    it("deletes a specific user's reaction", async () => {
+      // Post a message
       const postRes = await app.request(`/channels/${channelId}/messages`, {
         method: 'POST',
         headers: {
@@ -189,7 +189,7 @@ describe('Channels API', () => {
       })
       const { id: messageId } = await postRes.json()
 
-      // 別ユーザーのリアクションをDBに直接登録
+      // Register a reaction for another user directly in the DB
       const reactingUserId = '777777777777777777'
       db.prepare("INSERT INTO users (id, username) VALUES (?, 'Reactor')").run(
         reactingUserId
@@ -208,7 +208,7 @@ describe('Channels API', () => {
       )
       expect(res.status).toBe(204)
 
-      // 削除後はリアクションユーザー一覧に含まれないこと
+      // The deleted user should not appear in the reaction user list
       const listRes = await app.request(
         `/channels/${channelId}/messages/${messageId}/reactions/${emoji}`,
         { headers: { Authorization: token } }
@@ -219,7 +219,7 @@ describe('Channels API', () => {
   })
 
   describe('GET /channels/:channelId/pins', () => {
-    it('ピン留めメッセージ一覧を取得できること', async () => {
+    it('retrieves the list of pinned messages', async () => {
       const res = await app.request(`/channels/${channelId}/pins`, {
         headers: { Authorization: token },
       })
