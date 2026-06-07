@@ -5,8 +5,8 @@
  * 実際のDiscord APIのレイテンシをシミュレートする際に使用します。
  */
 
-import { setTimeout as sleep } from "node:timers/promises";
-import type { Context, Next } from "hono";
+import { setTimeout as sleep } from 'node:timers/promises'
+import type { Context, Next } from 'hono'
 
 /**
  * 指定ミリ秒の人工遅延を付与するミドルウェアを作成します。
@@ -17,7 +17,7 @@ export const createLatencyMiddleware =
   (latencyMs: number) =>
   async (_c: Context, next: Next): Promise<void> => {
     if (latencyMs > 0) {
-      await sleep(latencyMs);
+      await sleep(latencyMs)
     }
-    await next();
-  };
+    await next()
+  }

@@ -7,45 +7,23 @@
 /** サーバー設定インターフェース */
 export interface Config {
   /** リッスンポート */
-  port: number;
+  port: number
   /** バインドアドレス */
-  host: string;
+  host: string
   /** SQLiteファイルパス */
-  dbPath: string;
+  dbPath: string
   /** 添付ファイル保存先ディレクトリ */
-  uploadPath: string;
+  uploadPath: string
   /** 添付ファイルURL生成に使用するベースURL */
-  baseUrl: string;
+  baseUrl: string
   /** ログレベル */
-  logLevel: "debug" | "info" | "warn" | "error";
+  logLevel: 'debug' | 'info' | 'warn' | 'error'
   /** trueで任意のトークンを全許可 */
-  disableAuth: boolean;
+  disableAuth: boolean
   /** 全レスポンスに付加する人工遅延 (ms) */
-  latencyMs: number;
+  latencyMs: number
   /** 起動時に自動ロードするJSONファイルのパス */
-  seedFile: string | undefined;
-}
-
-/**
- * 環境変数から設定を読み込みます。
- * @returns 設定オブジェクト
- */
-export function loadConfig(): Config {
-  const port = parseInt(process.env.PORT ?? "3000", 10);
-  const latencyMs = parseInt(process.env.LATENCY_MS ?? "0", 10);
-  const logLevel = process.env.LOG_LEVEL ?? "info";
-
-  return {
-    port: isNaN(port) ? 3000 : port,
-    host: process.env.HOST ?? "0.0.0.0",
-    dbPath: process.env.DB_PATH ?? "/data/mock.db",
-    uploadPath: process.env.UPLOAD_PATH ?? "/data/uploads",
-    baseUrl: process.env.BASE_URL ?? "http://localhost:3000",
-    logLevel: isValidLogLevel(logLevel) ? logLevel : "info",
-    disableAuth: process.env.DISABLE_AUTH === "true",
-    latencyMs: isNaN(latencyMs) ? 0 : latencyMs,
-    seedFile: process.env.SEED_FILE,
-  };
+  seedFile: string | undefined
 }
 
 /**
@@ -53,6 +31,28 @@ export function loadConfig(): Config {
  * @param level - 検証するログレベル文字列
  * @returns 有効なログレベルであればtrue
  */
-function isValidLogLevel(level: string): level is Config["logLevel"] {
-  return ["debug", "info", "warn", "error"].includes(level);
+function isValidLogLevel(level: string): level is Config['logLevel'] {
+  return ['debug', 'info', 'warn', 'error'].includes(level)
+}
+
+/**
+ * 環境変数から設定を読み込みます。
+ * @returns 設定オブジェクト
+ */
+export function loadConfig(): Config {
+  const port = Number.parseInt(process.env.PORT ?? '3000', 10)
+  const latencyMs = Number.parseInt(process.env.LATENCY_MS ?? '0', 10)
+  const logLevel = process.env.LOG_LEVEL ?? 'info'
+
+  return {
+    port: Number.isNaN(port) ? 3000 : port,
+    host: process.env.HOST ?? '0.0.0.0',
+    dbPath: process.env.DB_PATH ?? '/data/mock.db',
+    uploadPath: process.env.UPLOAD_PATH ?? '/data/uploads',
+    baseUrl: process.env.BASE_URL ?? 'http://localhost:3000',
+    logLevel: isValidLogLevel(logLevel) ? logLevel : 'info',
+    disableAuth: process.env.DISABLE_AUTH === 'true',
+    latencyMs: Number.isNaN(latencyMs) ? 0 : latencyMs,
+    seedFile: process.env.SEED_FILE,
+  }
 }

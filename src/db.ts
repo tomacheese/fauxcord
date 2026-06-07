@@ -4,10 +4,8 @@
  * better-sqlite3 を使用し、WALモードで動作させます。
  */
 
-import BetterSqlite3 from "better-sqlite3";
-import type { Database } from "better-sqlite3";
-
-export type { Database };
+import BetterSqlite3 from 'better-sqlite3'
+import type { Database } from 'better-sqlite3'
 
 /**
  * データベースを初期化してテーブルを作成します。
@@ -15,12 +13,12 @@ export type { Database };
  * @returns 初期化済みのDatabaseインスタンス
  */
 export function initializeDatabase(dbPath: string): Database {
-  const db = new BetterSqlite3(dbPath);
+  const db = new BetterSqlite3(dbPath)
 
   // パフォーマンス・整合性設定
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec("PRAGMA synchronous = NORMAL");
+  db.exec('PRAGMA journal_mode = WAL')
+  db.exec('PRAGMA foreign_keys = ON')
+  db.exec('PRAGMA synchronous = NORMAL')
 
   // テーブル作成
   db.exec(`
@@ -208,9 +206,9 @@ export function initializeDatabase(dbPath: string): Database {
       expires_at    TEXT NOT NULL,
       refresh_token TEXT UNIQUE
     );
-  `);
+  `)
 
-  return db;
+  return db
 }
 
 /**
@@ -219,6 +217,8 @@ export function initializeDatabase(dbPath: string): Database {
  */
 export function closeDatabase(db: Database): void {
   if (db.open) {
-    db.close();
+    db.close()
   }
 }
+
+export { type Database } from 'better-sqlite3'

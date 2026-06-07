@@ -6,15 +6,12 @@
 
 /** フィールドエラーの型 */
 export interface FieldError {
-  code: string;
-  message: string;
+  code: string
+  message: string
 }
 
 /** バリデーションエラーマップの型 */
-export type ValidationErrors = Record<
-  string,
-  { _errors: FieldError[] }
->;
+export type ValidationErrors = Record<string, { _errors: FieldError[] }>
 
 /**
  * 文字列の最大長バリデーションエラーを生成します。
@@ -23,9 +20,9 @@ export type ValidationErrors = Record<
  */
 export function maxLengthError(maxLength: number): FieldError {
   return {
-    code: "BASE_TYPE_MAX_LENGTH",
+    code: 'BASE_TYPE_MAX_LENGTH',
     message: `Must be ${maxLength} or fewer in length.`,
-  };
+  }
 }
 
 /**
@@ -34,9 +31,9 @@ export function maxLengthError(maxLength: number): FieldError {
  */
 export function requiredError(): FieldError {
   return {
-    code: "BASE_TYPE_REQUIRED",
-    message: "This field is required.",
-  };
+    code: 'BASE_TYPE_REQUIRED',
+    message: 'This field is required.',
+  }
 }
 
 /**
@@ -46,7 +43,7 @@ export function requiredError(): FieldError {
  */
 export function typeError(expectedType: string): FieldError {
   return {
-    code: "BASE_TYPE_BAD_LENGTH",
+    code: 'BASE_TYPE_BAD_LENGTH',
     message: `Value must be of type ${expectedType}.`,
-  };
+  }
 }

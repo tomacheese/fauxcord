@@ -4,22 +4,22 @@
  * 添付ファイルの保存・配信を処理します。
  */
 
-import { mkdir, writeFile, readFile, access } from "node:fs/promises";
-import { join } from "node:path";
-import { constants } from "node:fs";
-import type { Database } from "../db.js";
+import { mkdir, writeFile, readFile, access } from 'node:fs/promises'
+import path from 'node:path'
+import { constants } from 'node:fs'
+import type { Database } from '../db.js'
 
 /** 添付ファイルの最大サイズ（25MB） */
-export const MAX_FILE_SIZE = 25 * 1024 * 1024;
+export const MAX_FILE_SIZE = 25 * 1024 * 1024
 
 /** 添付ファイル情報の型 */
 export interface AttachmentInfo {
-  id: string;
-  filename: string;
-  size: number;
-  contentType: string;
-  url: string;
-  proxyUrl: string;
+  id: string
+  filename: string
+  size: number
+  contentType: string
+  url: string
+  proxyUrl: string
 }
 
 /**
@@ -44,30 +44,30 @@ export async function saveAttachment(
   attachmentId: string,
   filename: string,
   contentType: string,
-  data: ArrayBuffer | Uint8Array,
+  data: ArrayBuffer | Uint8Array
 ): Promise<AttachmentInfo> {
-  const dir = join(uploadPath, channelId, messageId);
-  await mkdir(dir, { recursive: true });
+  const dir = path.join(uploadPath, channelId, messageId)
+  await mkdir(dir, { recursive: true })
 
   // ArrayBuffer / Uint8Array のいずれでも受け取れるよう Buffer に正規化する
   const buffer =
     data instanceof Uint8Array
       ? Buffer.from(data)
-      : Buffer.from(new Uint8Array(data));
+      : Buffer.from(new Uint8Array(data))
 
-  const filePath = join(dir, filename);
-  await writeFile(filePath, buffer);
+  const filePath = path.join(dir, filename)
+  await writeFile(filePath, buffer)
 
-  const size = buffer.byteLength;
+  const size = buffer.byteLength
 
   // DBに記録
-  const relativePath = join(channelId, messageId, filename);
+  const relativePath = path.join(channelId, messageId, filename)
   db.prepare(
     `INSERT INTO attachments (id, message_id, filename, size, content_type, file_path)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(attachmentId, messageId, filename, size, contentType, relativePath);
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(attachmentId, messageId, filename, size, contentType, relativePath)
 
-  const url = `${baseUrl}/_mock/attachments/${channelId}/${messageId}/${filename}`;
+  const url = `${baseUrl}/_mock/attachments/${channelId}/${messageId}/${filename}`
 
   return {
     id: attachmentId,
@@ -76,7 +76,7 @@ export async function saveAttachment(
     contentType,
     url,
     proxyUrl: url,
-  };
+  }
 }
 
 /**
@@ -91,14 +91,14 @@ export async function getAttachment(
   uploadPath: string,
   channelId: string,
   messageId: string,
-  filename: string,
+  filename: string
 ): Promise<Buffer | null> {
-  const filePath = join(uploadPath, channelId, messageId, filename);
+  const filePath = path.join(uploadPath, channelId, messageId, filename)
   try {
-    await access(filePath, constants.R_OK);
-    return await readFile(filePath);
+    await access(filePath, constants.R_OK)
+    return await readFile(filePath)
   } catch {
-    return null;
+    return null
   }
 }
 
@@ -108,21 +108,21 @@ export async function getAttachment(
  * @returns Content-Type文字列
  */
 export function guessContentType(filename: string): string {
-  const ext = filename.split(".").pop()?.toLowerCase();
+  const ext = filename.split('.').pop()?.toLowerCase()
   const types: Record<string, string> = {
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    gif: "image/gif",
-    webp: "image/webp",
-    mp4: "video/mp4",
-    webm: "video/webm",
-    mp3: "audio/mpeg",
-    wav: "audio/wav",
-    pdf: "application/pdf",
-    txt: "text/plain",
-    json: "application/json",
-    zip: "application/zip",
-  };
-  return types[ext ?? ""] ?? "application/octet-stream";
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    json: 'application/json',
+    zip: 'application/zip',
+  }
+  return types[ext ?? ''] ?? 'application/octet-stream'
 }

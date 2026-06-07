@@ -4,12 +4,12 @@
  * /users/*, /applications/* エンドポイントを実装します。
  */
 
-import { Hono } from "hono";
-import type { Database } from "../db.js";
-import { DiscordErrorCode, discordError } from "../errors.js";
-import { getBotUser, getUser, getApplication } from "../services/users.js";
-import { getBotGuilds } from "../services/guilds.js";
-import type { AppEnv } from "../middleware/auth.js";
+import { Hono } from 'hono'
+import type { Database } from '../db.js'
+import { DiscordErrorCode, discordError } from '../errors.js'
+import { getBotUser, getUser, getApplication } from '../services/users.js'
+import { getBotGuilds } from '../services/guilds.js'
+import type { AppEnv } from '../middleware/auth.js'
 
 /**
  * Users APIルートを作成します。
@@ -17,95 +17,95 @@ import type { AppEnv } from "../middleware/auth.js";
  * @returns Honoルーターインスタンス
  */
 export function createUserRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>();
+  const app = new Hono<AppEnv>()
 
   // GET /users/@me
-  app.get("/users/@me", (c) => {
-    const bot = c.get("bot");
+  app.get('/users/@me', (c) => {
+    const bot = c.get('bot')
     if (!bot) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const user = getBotUser(db, bot.token);
+    const user = getBotUser(db, bot.token)
     if (!user) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
-    return c.json(user);
-  });
+    return c.json(user)
+  })
 
   // GET /users/:userId
   // discord.js など一部ライブラリは @ を percent-encode して %40me で送るため、
   // パラメータとして受け取った "@me"（デコード済み）も @me 扱いにする
-  app.get("/users/:userId", (c) => {
-    const rawUserId = c.req.param("userId");
+  app.get('/users/:userId', (c) => {
+    const rawUserId = c.req.param('userId')
     // Hono はパスパラメータを自動デコードするため %40me → @me になる
-    const userId = decodeURIComponent(rawUserId);
+    const userId = decodeURIComponent(rawUserId)
 
-    if (userId === "@me") {
-      const bot = c.get("bot");
+    if (userId === '@me') {
+      const bot = c.get('bot')
       if (!bot) {
-        return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
       }
-      const user = getBotUser(db, bot.token);
+      const user = getBotUser(db, bot.token)
       if (!user) {
-        return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
       }
-      return c.json(user);
+      return c.json(user)
     }
 
-    const user = getUser(db, userId);
+    const user = getUser(db, userId)
     if (!user) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_USER,
-        "Unknown User",
-        404,
-      );
-      return c.json(err.body, 404);
+        'Unknown User',
+        404
+      )
+      return c.json(err.body, 404)
     }
-    return c.json(user);
-  });
+    return c.json(user)
+  })
 
   // GET /users/@me/guilds
-  app.get("/users/@me/guilds", (c) => {
-    const bot = c.get("bot");
+  app.get('/users/@me/guilds', (c) => {
+    const bot = c.get('bot')
     if (!bot) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const guilds = getBotGuilds(db, bot.token);
-    return c.json(guilds);
-  });
+    const guilds = getBotGuilds(db, bot.token)
+    return c.json(guilds)
+  })
 
   // GET /applications/@me
-  app.get("/applications/@me", (c) => {
-    const bot = c.get("bot");
+  app.get('/applications/@me', (c) => {
+    const bot = c.get('bot')
     if (!bot) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const app_ = getApplication(db, bot.token);
+    const app_ = getApplication(db, bot.token)
     if (!app_) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
-    return c.json(app_);
-  });
+    return c.json(app_)
+  })
 
   // GET /oauth2/applications/@me
   // Get Current Bot Application Information（旧エンドポイント）。
   // Discord.Net などのライブラリがログイン時に呼び出すため、
   // /applications/@me と同じレスポンスを返すエイリアスとして実装する
-  app.get("/oauth2/applications/@me", (c) => {
-    const bot = c.get("bot");
+  app.get('/oauth2/applications/@me', (c) => {
+    const bot = c.get('bot')
     if (!bot) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const app_ = getApplication(db, bot.token);
+    const app_ = getApplication(db, bot.token)
     if (!app_) {
-      return c.json({ message: "401: Unauthorized", code: 0 }, 401);
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
-    return c.json(app_);
-  });
+    return c.json(app_)
+  })
 
-  return app;
+  return app
 }

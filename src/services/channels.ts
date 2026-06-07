@@ -4,35 +4,35 @@
  * チャンネルのCRUD操作を提供します。
  */
 
-import type { Database } from "../db.js";
+import type { Database } from '../db.js'
 
 /** DBから取得したチャンネルレコードの型 */
 interface ChannelRow {
-  id: string;
-  guild_id: string | null;
-  type: number;
-  name: string | null;
-  topic: string | null;
-  nsfw: number;
-  position: number;
-  rate_limit_per_user: number;
-  parent_id: string | null;
-  last_message_id: string | null;
+  id: string
+  guild_id: string | null
+  type: number
+  name: string | null
+  topic: string | null
+  nsfw: number
+  position: number
+  rate_limit_per_user: number
+  parent_id: string | null
+  last_message_id: string | null
 }
 
 /** API レスポンス用チャンネルオブジェクト */
 export interface ChannelObject {
-  id: string;
-  type: number;
-  guild_id: string | null;
-  position: number;
-  name: string | null;
-  topic: string | null;
-  nsfw: boolean;
-  last_message_id: string | null;
-  rate_limit_per_user: number;
-  parent_id: string | null;
-  permission_overwrites: never[];
+  id: string
+  type: number
+  guild_id: string | null
+  position: number
+  name: string | null
+  topic: string | null
+  nsfw: boolean
+  last_message_id: string | null
+  rate_limit_per_user: number
+  parent_id: string | null
+  permission_overwrites: never[]
 }
 
 /**
@@ -53,7 +53,7 @@ function toChannelObject(row: ChannelRow): ChannelObject {
     rate_limit_per_user: row.rate_limit_per_user,
     parent_id: row.parent_id,
     permission_overwrites: [],
-  };
+  }
 }
 
 /**
@@ -64,21 +64,21 @@ function toChannelObject(row: ChannelRow): ChannelObject {
  */
 export function getChannel(
   db: Database,
-  channelId: string,
+  channelId: string
 ): ChannelObject | null {
   const row = db
-    .prepare("SELECT * FROM channels WHERE id = ?")
-    .get(channelId) as ChannelRow | undefined;
-  return row ? toChannelObject(row) : null;
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow | undefined
+  return row ? toChannelObject(row) : null
 }
 
 /** チャンネル更新リクエストの型 */
 export interface ChannelUpdatePayload {
-  name?: string;
-  topic?: string | null;
-  nsfw?: boolean;
-  rate_limit_per_user?: number;
-  position?: number;
+  name?: string
+  topic?: string | null
+  nsfw?: boolean
+  rate_limit_per_user?: number
+  position?: number
 }
 
 /**
@@ -91,35 +91,35 @@ export interface ChannelUpdatePayload {
 export function updateChannel(
   db: Database,
   channelId: string,
-  payload: ChannelUpdatePayload,
+  payload: ChannelUpdatePayload
 ): ChannelObject | null {
   const current = db
-    .prepare("SELECT * FROM channels WHERE id = ?")
-    .get(channelId) as ChannelRow | undefined;
-  if (!current) return null;
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow | undefined
+  if (!current) return null
 
-  const updates: Record<string, unknown> = {};
-  if (payload.name !== undefined) updates["name"] = payload.name;
-  if (payload.topic !== undefined) updates["topic"] = payload.topic;
-  if (payload.nsfw !== undefined) updates["nsfw"] = payload.nsfw ? 1 : 0;
+  const updates: Record<string, unknown> = {}
+  if (payload.name !== undefined) updates.name = payload.name
+  if (payload.topic !== undefined) updates.topic = payload.topic
+  if (payload.nsfw !== undefined) updates.nsfw = payload.nsfw ? 1 : 0
   if (payload.rate_limit_per_user !== undefined)
-    updates["rate_limit_per_user"] = payload.rate_limit_per_user;
-  if (payload.position !== undefined) updates["position"] = payload.position;
+    updates.rate_limit_per_user = payload.rate_limit_per_user
+  if (payload.position !== undefined) updates.position = payload.position
 
   if (Object.keys(updates).length > 0) {
     const setClauses = Object.keys(updates)
       .map((k) => `${k} = ?`)
-      .join(", ");
+      .join(', ')
     db.prepare(`UPDATE channels SET ${setClauses} WHERE id = ?`).run(
       ...Object.values(updates),
-      channelId,
-    );
+      channelId
+    )
   }
 
   const updated = db
-    .prepare("SELECT * FROM channels WHERE id = ?")
-    .get(channelId) as ChannelRow;
-  return toChannelObject(updated);
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow
+  return toChannelObject(updated)
 }
 
 /**
@@ -130,15 +130,15 @@ export function updateChannel(
  */
 export function deleteChannel(
   db: Database,
-  channelId: string,
+  channelId: string
 ): ChannelObject | null {
   const row = db
-    .prepare("SELECT * FROM channels WHERE id = ?")
-    .get(channelId) as ChannelRow | undefined;
-  if (!row) return null;
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow | undefined
+  if (!row) return null
 
-  db.prepare("DELETE FROM channels WHERE id = ?").run(channelId);
-  return toChannelObject(row);
+  db.prepare('DELETE FROM channels WHERE id = ?').run(channelId)
+  return toChannelObject(row)
 }
 
 /**
@@ -149,10 +149,10 @@ export function deleteChannel(
  */
 export function getGuildChannels(
   db: Database,
-  guildId: string,
+  guildId: string
 ): ChannelObject[] {
   const rows = db
-    .prepare("SELECT * FROM channels WHERE guild_id = ? ORDER BY position, id")
-    .all(guildId) as ChannelRow[];
-  return rows.map(toChannelObject);
+    .prepare('SELECT * FROM channels WHERE guild_id = ? ORDER BY position, id')
+    .all(guildId) as ChannelRow[]
+  return rows.map((row) => toChannelObject(row))
 }
