@@ -12,7 +12,7 @@ on:
       - opened
       - synchronize
     paths:
-      - .github/workflows/docker-publish.yml
+      - .github/workflows/docker.yml
   pull_request_target:
     branches:
       - main

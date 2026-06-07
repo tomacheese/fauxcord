@@ -308,7 +308,7 @@ Discord API v10 と完全互換のエラーコードを返します。
 | `50035` | Invalid Form Body (バリデーションエラー) |
 | `50041` | Invalid API version provided |
 
-詳細は [API 仕様書](./docs/spec.md) を参照してください。
+詳細は [Getting Started](./docs/getting-started.md) を参照してください。
 
 ## ライセンス
 
