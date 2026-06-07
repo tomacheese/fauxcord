@@ -20,7 +20,7 @@ describe('createAuthMiddleware', () => {
     closeDatabase(db)
   })
 
-  it('有効なBotトークンで認証成功すること', async () => {
+  it('authenticates successfully with a valid Bot token', async () => {
     seedBot(db, 'Bot validtoken')
     const res = await app.request('/test', {
       headers: { Authorization: 'Bot validtoken' },
@@ -28,7 +28,7 @@ describe('createAuthMiddleware', () => {
     expect(res.status).toBe(200)
   })
 
-  it('未登録のトークンは401を返すこと', async () => {
+  it('returns 401 for an unregistered token', async () => {
     const res = await app.request('/test', {
       headers: { Authorization: 'Bot unknowntoken' },
     })
@@ -37,12 +37,12 @@ describe('createAuthMiddleware', () => {
     expect(body.code).toBe(0)
   })
 
-  it('Authorizationヘッダーなしは401を返すこと', async () => {
+  it('returns 401 when Authorization header is missing', async () => {
     const res = await app.request('/test')
     expect(res.status).toBe(401)
   })
 
-  it('DISABLE_AUTH=trueの場合、未知のトークンも許可すること', async () => {
+  it('allows unknown tokens when DISABLE_AUTH=true', async () => {
     const appNoAuth = new Hono()
     appNoAuth.use('*', createAuthMiddleware(db, true))
     appNoAuth.get('/test', (c) => c.json({ ok: true }))
@@ -53,9 +53,9 @@ describe('createAuthMiddleware', () => {
     expect(res.status).toBe(200)
   })
 
-  it('認証不要パスは認証をスキップすること', async () => {
+  it('skips authentication for auth-exempt paths', async () => {
     app.get('/_mock/health', (c) => c.json({ status: 'ok' }))
-    // /_mock/healthはAuth不要なのでDBにトークンがなくてもOK
+    // /_mock/health does not require auth, so it works even without a registered token
     const appWithAuth = new Hono()
     appWithAuth.get('/_mock/health', (c) => c.json({ status: 'ok' }))
     appWithAuth.use('*', createAuthMiddleware(db, false))

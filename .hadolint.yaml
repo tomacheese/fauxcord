@@ -1,2 +1,2 @@
 ignore:
-  - DL3018  # Pin versions in apk add: ビルドツールはバージョン固定が不要
+  - DL3018  # Pin versions in apk add: build tools do not need version pinning

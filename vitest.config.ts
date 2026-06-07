@@ -2,18 +2,18 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    // テスト環境設定
+    // Test environment settings
     environment: "node",
-    // グローバル変数を使用しない（明示的インポートを強制）
+    // Do not use globals (require explicit imports)
     globals: false,
-    // カバレッジ設定
+    // Coverage settings
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
       include: ["src/**/*.ts"],
       exclude: ["src/**/*.test.ts", "src/index.ts"],
     },
-    // テストファイルのパターン
+    // Test file pattern
     include: ["src/**/*.test.ts"],
   },
 });

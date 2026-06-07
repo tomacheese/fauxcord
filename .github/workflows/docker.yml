@@ -1,5 +1,5 @@
-# Docker イメージのビルド・公開を行う。
-# プルリクの作成・更新時に動作する。
+# Build and publish Docker images.
+# Triggered on pull request creation and updates.
 
 name: Docker
 
@@ -24,8 +24,8 @@ on:
       - closed
 
 concurrency:
-  # pull_request と pull_request_target が同一グループになると互いをキャンセルしてしまうため
-  # event_name を含めることで両イベントのキャンセルを独立させる
+  # If pull_request and pull_request_target share the same group, they cancel each other,
+  # so include event_name in the group to make cancellation independent per event.
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 

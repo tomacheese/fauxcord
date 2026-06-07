@@ -1,7 +1,7 @@
 /**
- * 統合テスト
+ * Integration tests
  *
- * 実際のサーバー全体のエンドツーエンドテストを行います。
+ * End-to-end tests for the entire server.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -25,21 +25,21 @@ const GUILD_ID = '100000000000000001'
 const CHANNEL_ID = '100000000000000002'
 const USER_ID = '100000000000000003'
 
-/** テスト用サーバーを組み立てます */
+/** Assembles the test server */
 function buildTestServer(db: Database): Hono {
   const app = new Hono()
 
   app.use('*', corsMiddleware)
   app.use('*', versionMiddleware)
 
-  // 認証不要エンドポイント
+  // Auth-exempt endpoints
   app.route('/', createMockRoutes(db, '/tmp/uploads-test'))
   app.route('/', createTestRoutes(db))
 
-  // Webhook実行は認証不要なのでauthより前に登録
+  // Webhook execution does not require auth — register before the auth middleware
   app.route('/', createWebhookRoutes(db, BASE_URL))
 
-  // 認証必須
+  // Auth-required endpoints
   app.use('*', createAuthMiddleware(db, false))
   app.use('*', rateLimitMiddleware)
 
@@ -62,7 +62,7 @@ function buildTestServer(db: Database): Hono {
   return app
 }
 
-describe('統合テスト', () => {
+describe('Integration tests', () => {
   let db: Database
   let app: Hono
 
@@ -70,7 +70,7 @@ describe('統合テスト', () => {
     db = initializeDatabase(':memory:')
     app = buildTestServer(db)
 
-    // テスト環境セットアップ
+    // Set up test environment
     await app.request('/_test/setup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -92,8 +92,8 @@ describe('統合テスト', () => {
     closeDatabase(db)
   })
 
-  describe('ヘルスチェック', () => {
-    it('GET /_mock/health は200を返すこと', async () => {
+  describe('Health check', () => {
+    it('GET /_mock/health returns 200', async () => {
       const res = await app.request('/_mock/health')
       expect(res.status).toBe(200)
       const body = (await res.json()) as Record<string, unknown>
@@ -103,29 +103,29 @@ describe('統合テスト', () => {
     })
   })
 
-  describe('バージョンルーティング', () => {
-    it('/api/v10/ プレフィックスで動作すること', async () => {
+  describe('Version routing', () => {
+    it('works with /api/v10/ prefix', async () => {
       const res = await app.request(`/api/v10/channels/${CHANNEL_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
       expect(res.status).toBe(200)
     })
 
-    it('/api/ プレフィックスで動作すること', async () => {
+    it('works with /api/ prefix', async () => {
       const res = await app.request(`/api/channels/${CHANNEL_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
       expect(res.status).toBe(200)
     })
 
-    it('/ プレフィックスで動作すること', async () => {
+    it('works with / prefix', async () => {
       const res = await app.request(`/channels/${CHANNEL_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
       expect(res.status).toBe(200)
     })
 
-    it('/api/v9/ は400を返すこと', async () => {
+    it('/api/v9/ returns 400', async () => {
       const res = await app.request(`/api/v9/channels/${CHANNEL_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -135,29 +135,29 @@ describe('統合テスト', () => {
     })
   })
 
-  describe('認証', () => {
-    it('有効なトークンで認証できること', async () => {
+  describe('Authentication', () => {
+    it('authenticates with a valid token', async () => {
       const res = await app.request(`/channels/${CHANNEL_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
       expect(res.status).toBe(200)
     })
 
-    it('無効なトークンは401を返すこと', async () => {
+    it('returns 401 for an invalid token', async () => {
       const res = await app.request(`/channels/${CHANNEL_ID}`, {
         headers: { Authorization: 'Bot invalidtoken' },
       })
       expect(res.status).toBe(401)
     })
 
-    it('認証ヘッダーなしは401を返すこと', async () => {
+    it('returns 401 when the Authorization header is absent', async () => {
       const res = await app.request(`/channels/${CHANNEL_ID}`)
       expect(res.status).toBe(401)
     })
   })
 
-  describe('Rate Limitヘッダー', () => {
-    it('レスポンスにRate Limitヘッダーが含まれること', async () => {
+  describe('Rate Limit headers', () => {
+    it('response includes Rate Limit headers', async () => {
       const res = await app.request(`/channels/${CHANNEL_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -169,9 +169,9 @@ describe('統合テスト', () => {
     })
   })
 
-  describe('メッセージのライフサイクル', () => {
-    it('メッセージの作成→取得→更新→削除ができること', async () => {
-      // 作成
+  describe('Message lifecycle', () => {
+    it('supports create → get → update → delete', async () => {
+      // Create
       const createRes = await app.request(`/channels/${CHANNEL_ID}/messages`, {
         method: 'POST',
         headers: {
@@ -185,7 +185,7 @@ describe('統合テスト', () => {
       expect(created.content).toBe('Integration test message')
       const messageId = created.id as string
 
-      // 取得
+      // Get
       const getRes = await app.request(
         `/channels/${CHANNEL_ID}/messages/${messageId}`,
         { headers: { Authorization: TEST_TOKEN } }
@@ -194,7 +194,7 @@ describe('統合テスト', () => {
       const got = (await getRes.json()) as Record<string, unknown>
       expect(got.id).toBe(messageId)
 
-      // 更新
+      // Update
       const patchRes = await app.request(
         `/channels/${CHANNEL_ID}/messages/${messageId}`,
         {
@@ -211,7 +211,7 @@ describe('統合テスト', () => {
       expect(patched.content).toBe('Updated content')
       expect(patched.edited_timestamp).not.toBeNull()
 
-      // 削除
+      // Delete
       const deleteRes = await app.request(
         `/channels/${CHANNEL_ID}/messages/${messageId}`,
         {
@@ -221,7 +221,7 @@ describe('統合テスト', () => {
       )
       expect(deleteRes.status).toBe(204)
 
-      // 削除後は404
+      // Returns 404 after deletion
       const get404 = await app.request(
         `/channels/${CHANNEL_ID}/messages/${messageId}`,
         { headers: { Authorization: TEST_TOKEN } }
@@ -230,9 +230,9 @@ describe('統合テスト', () => {
     })
   })
 
-  describe('ピン留め', () => {
-    it('メッセージをピン留め・解除できること', async () => {
-      // メッセージ作成
+  describe('Pins', () => {
+    it('pins and unpins a message', async () => {
+      // Create a message
       const createRes = await app.request(`/channels/${CHANNEL_ID}/messages`, {
         method: 'POST',
         headers: {
@@ -243,7 +243,7 @@ describe('統合テスト', () => {
       })
       const { id: messageId } = await createRes.json()
 
-      // ピン留め
+      // Pin
       const pinRes = await app.request(
         `/channels/${CHANNEL_ID}/pins/${messageId}`,
         {
@@ -253,7 +253,7 @@ describe('統合テスト', () => {
       )
       expect(pinRes.status).toBe(204)
 
-      // ピン済みリスト
+      // Pinned list
       const pinsRes = await app.request(`/channels/${CHANNEL_ID}/pins`, {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -261,7 +261,7 @@ describe('統合テスト', () => {
       const pins = (await pinsRes.json()) as { id: string }[]
       expect(pins.some((m) => m.id === messageId)).toBe(true)
 
-      // 解除
+      // Unpin
       const unpinRes = await app.request(
         `/channels/${CHANNEL_ID}/pins/${messageId}`,
         {
@@ -274,7 +274,7 @@ describe('統合テスト', () => {
   })
 
   describe('Guilds API', () => {
-    it('Guild情報を取得できること', async () => {
+    it('retrieves Guild information', async () => {
       const res = await app.request(`/guilds/${GUILD_ID}`, {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -284,7 +284,7 @@ describe('統合テスト', () => {
       expect(body.name).toBe('Integration Test Guild')
     })
 
-    it('Guildのチャンネル一覧を取得できること', async () => {
+    it('retrieves the Guild channel list', async () => {
       const res = await app.request(`/guilds/${GUILD_ID}/channels`, {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -294,7 +294,7 @@ describe('統合テスト', () => {
       expect(body.some((c) => c.id === CHANNEL_ID)).toBe(true)
     })
 
-    it('チャンネルを作成できること', async () => {
+    it('creates a channel', async () => {
       const res = await app.request(`/guilds/${GUILD_ID}/channels`, {
         method: 'POST',
         headers: {
@@ -310,7 +310,7 @@ describe('統合テスト', () => {
   })
 
   describe('Users API', () => {
-    it('GET /users/@me はBot情報を返すこと', async () => {
+    it('GET /users/@me returns Bot information', async () => {
       const res = await app.request('/users/@me', {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -320,7 +320,7 @@ describe('統合テスト', () => {
       expect(body.bot).toBe(true)
     })
 
-    it('GET /users/@me/guilds はGuild一覧を返すこと', async () => {
+    it('GET /users/@me/guilds returns the Guild list', async () => {
       const res = await app.request('/users/@me/guilds', {
         headers: { Authorization: TEST_TOKEN },
       })
@@ -331,8 +331,8 @@ describe('統合テスト', () => {
   })
 
   describe('Webhooks API', () => {
-    it('Webhookを作成・実行できること', async () => {
-      // Webhook作成
+    it('creates and executes a Webhook', async () => {
+      // Create Webhook
       const createRes = await app.request(`/channels/${CHANNEL_ID}/webhooks`, {
         method: 'POST',
         headers: {
@@ -345,7 +345,7 @@ describe('統合テスト', () => {
       const webhook = (await createRes.json()) as Record<string, string>
       expect(webhook.name).toBe('TestWebhook')
 
-      // Webhook実行 (wait=true)
+      // Execute Webhook (wait=true)
       const execRes = await app.request(
         `/webhooks/${webhook.id}/${webhook.token}?wait=true`,
         {
@@ -360,10 +360,10 @@ describe('統合テスト', () => {
     })
   })
 
-  describe('テスト制御 API', () => {
-    it('POST /_test/reset (全体) でメッセージがリセットされること', async () => {
-      // まず別チャンネルを使って独立したテストを行う
-      // 新規チャンネルを作成
+  describe('Test control API', () => {
+    it('POST /_test/reset (full) clears messages', async () => {
+      // Use a separate channel to keep the test isolated
+      // Create a new channel
       const chRes = await app.request(`/guilds/${GUILD_ID}/channels`, {
         method: 'POST',
         headers: {
@@ -374,7 +374,7 @@ describe('統合テスト', () => {
       })
       const { id: resetChannelId } = await chRes.json()
 
-      // メッセージを送信
+      // Send a message
       await app.request(`/channels/${resetChannelId}/messages`, {
         method: 'POST',
         headers: {
@@ -384,7 +384,7 @@ describe('統合テスト', () => {
         body: JSON.stringify({ content: 'Before reset' }),
       })
 
-      // リセット（全体）
+      // Full reset
       const resetRes = await app.request('/_test/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -392,7 +392,7 @@ describe('統合テスト', () => {
       })
       expect(resetRes.status).toBe(204)
 
-      // メッセージが消えていること
+      // Messages should be gone
       const msgsRes = await app.request(`/_test/messages/${resetChannelId}`)
       const body = (await msgsRes.json()) as { messages: unknown[] }
       expect(body.messages.length).toBe(0)

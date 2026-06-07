@@ -18,8 +18,8 @@ Run integration tests for Discord bots and applications without connecting to th
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourorg/discord-mock
-cd discord-mock
+git clone https://github.com/tomacheese/fauxcord
+cd fauxcord
 
 # Start
 docker compose up -d
@@ -228,10 +228,10 @@ Setting `DISABLE_AUTH=true` allows any token.
 # Run all tests
 pnpm test
 
-# ウォッチモード
+# Watch mode
 pnpm test:watch
 
-# カバレッジ
+# Coverage
 pnpm test:coverage
 ```
 
@@ -239,7 +239,7 @@ pnpm test:coverage
 
 ```
 src/
-├── index.ts                # エントリーポイント
+├── index.ts                # Entry point
 ├── config.ts               # Environment variable config
 ├── db.ts                   # SQLite initialization
 ├── snowflake.ts            # Snowflake ID generation
@@ -251,33 +251,33 @@ src/
 │   ├── auth.ts             # Bot/Bearer token authentication
 │   ├── cors.ts             # CORS configuration
 │   ├── latency.ts          # Artificial latency
-│   ├── rate-limit.ts       # Rate Limit ヘッダー
+│   ├── rate-limit.ts       # Rate Limit headers
 │   └── version.ts          # API version resolution
 │
 ├── routes/
-│   ├── channels.ts         # /channels/* エンドポイント
-│   ├── guilds.ts           # /guilds/* エンドポイント
-│   ├── mock.ts             # /_mock/* エンドポイント
-│   ├── oauth2.ts           # /oauth2/* エンドポイント
-│   ├── test.ts             # /_test/* エンドポイント
+│   ├── channels.ts         # /channels/* endpoints
+│   ├── guilds.ts           # /guilds/* endpoints
+│   ├── mock.ts             # /_mock/* endpoints
+│   ├── oauth2.ts           # /oauth2/* endpoints
+│   ├── test.ts             # /_test/* endpoints
 │   ├── users.ts            # /users/*, /applications/*
-│   └── webhooks.ts         # /webhooks/* エンドポイント
+│   └── webhooks.ts         # /webhooks/* endpoints
 │
 ├── services/
 │   ├── attachments.ts      # File storage & delivery
 │   ├── channels.ts         # Channel operations
 │   ├── guilds.ts           # Guild operations
 │   ├── messages.ts         # Message operations
-│   ├── oauth2.ts           # OAuth2 フロー
+│   ├── oauth2.ts           # OAuth2 flow
 │   ├── test-control.ts     # Test control
 │   ├── users.ts            # User operations
 │   └── webhooks.ts         # Webhook operations
 │
 └── validators/
     ├── common.ts           # Common validation
-    ├── guild.ts            # Guild バリデーション
-    ├── message.ts          # メッセージバリデーション
-    └── webhook.ts          # Webhook バリデーション
+    ├── guild.ts            # Guild validation
+    ├── message.ts          # Message validation
+    └── webhook.ts          # Webhook validation
 ```
 
 ## Tech Stack
