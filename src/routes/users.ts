@@ -37,9 +37,9 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
   // discord.js など一部ライブラリは @ を percent-encode して %40me で送るため、
   // パラメータとして受け取った "@me"（デコード済み）も @me 扱いにする
   app.get('/users/:userId', (c) => {
-    const rawUserId = c.req.param('userId')
-    // Hono はパスパラメータを自動デコードするため %40me → @me になる
-    const userId = decodeURIComponent(rawUserId)
+    // Hono はパスパラメータを自動デコードするため %40me → @me に変換済み
+    // decodeURIComponent を再呼び出しすると %25me → %me のように二重デコードで例外が発生する
+    const userId = c.req.param('userId')
 
     if (userId === '@me') {
       const bot = c.get('bot')

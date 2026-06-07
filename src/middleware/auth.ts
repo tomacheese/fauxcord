@@ -8,8 +8,14 @@
 import type { Context, Next } from 'hono'
 import type { Database } from '../db.js'
 
-/** 認証不要なパスのプレフィックス */
-const AUTH_EXEMPT_PREFIXES = ['/_mock/health', '/_mock/attachments']
+/**
+ * 認証不要なパスのプレフィックス
+ *
+ * `/_test/` は index.ts で createTestRoutes を authMiddleware より先にマウントしているため
+ * 実質認証をバイパスしているが、明示的にここにも追加することでルート登録順が変わっても
+ * 意図通りの挙動が維持されるよう保証する
+ */
+const AUTH_EXEMPT_PREFIXES = ['/_mock/health', '/_mock/attachments', '/_test/']
 /**
  * Webhookトークンベース操作パターン（認証不要）
  *

@@ -81,8 +81,8 @@ export function validateChannelCreate(
         { code: 'BASE_TYPE_REQUIRED', message: 'This field is required.' },
       ],
     }
-  } else if (payload.name.length > 100) {
-    errors.name = { _errors: [maxLengthError(100)] }
+  } else if (payload.name.length > GUILD_LIMITS.NAME_MAX) {
+    errors.name = { _errors: [maxLengthError(GUILD_LIMITS.NAME_MAX)] }
   }
 
   return errors

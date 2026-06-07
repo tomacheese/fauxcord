@@ -81,7 +81,10 @@ export function validateWebhookExecute(
     }
   }
 
-  if (payload.embeds && payload.embeds.length > WEBHOOK_LIMITS.EMBEDS_MAX) {
+  if (
+    Array.isArray(payload.embeds) &&
+    payload.embeds.length > WEBHOOK_LIMITS.EMBEDS_MAX
+  ) {
     errors.embeds = {
       _errors: [maxLengthError(WEBHOOK_LIMITS.EMBEDS_MAX)],
     }

@@ -17,8 +17,17 @@ export const rateLimitMiddleware = async (
   await next()
 
   const resetTime = Math.floor(Date.now() / 1000) + 1
-  const pathParts = c.req.path.split('/')
-  const bucketKey = pathParts[2] ?? 'global'
+
+  // /api/v10/channels/xxx → /channels/xxx、/api/channels/xxx → /channels/xxx に正規化して
+  // プレフィックスに関わらず同じバケット ID を生成する
+  let normalizedPath = c.req.path
+  if (normalizedPath.startsWith('/api/v10/')) {
+    normalizedPath = normalizedPath.slice(8) // "/api/v10" を除去
+  } else if (normalizedPath.startsWith('/api/')) {
+    normalizedPath = normalizedPath.slice(4) // "/api" を除去
+  }
+  const pathParts = normalizedPath.split('/')
+  const bucketKey = pathParts[1] ?? 'global'
   const bucket = `mock-${c.req.method.toLowerCase()}-${bucketKey}`
 
   c.header('X-RateLimit-Limit', '5')
