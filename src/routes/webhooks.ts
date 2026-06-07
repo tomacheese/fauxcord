@@ -60,9 +60,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
     // Return the webhook without the token field
-    const webhookWithoutToken: Omit<typeof webhook, 'token'> = {
+    const webhookWithoutToken = {
       id: webhook.id,
       type: webhook.type,
+      application_id: webhook.application_id,
       guild_id: webhook.guild_id,
       channel_id: webhook.channel_id,
       name: webhook.name,
@@ -139,9 +140,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     }
 
     // Token-based endpoints return the webhook without the token field
-    const webhookWithoutToken: Omit<typeof updated, 'token'> = {
+    const webhookWithoutToken = {
       id: updated.id,
       type: updated.type,
+      application_id: updated.application_id,
       guild_id: updated.guild_id,
       channel_id: updated.channel_id,
       name: updated.name,

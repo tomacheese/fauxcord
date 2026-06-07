@@ -6,6 +6,43 @@
 
 import type { Database } from '../db.js'
 import { snowflakeToTimestamp } from '../snowflake.js'
+// Used for compile-time type drift detection.
+// When Renovate bumps discord-api-types, `pnpm lint:tsc` will fail if the
+// safe-field subset of MessageResponse is renamed or retyped upstream.
+import type { APIMessage } from 'discord-api-types/v10'
+
+/**
+ * Compile-time guard: ensures the safe-field subset of MessageObject is
+ * structurally compatible with APIMessage.
+ * Fails to compile when discord-api-types renames or retypes these fields.
+ * String/boolean fields are checked here; numeric enum fields (type, flags)
+ * use `number` in the mock for flexibility and are excluded from this check.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _MessageCompatGuard =
+  Pick<
+    APIMessage,
+    | 'id'
+    | 'channel_id'
+    | 'content'
+    | 'timestamp'
+    | 'edited_timestamp'
+    | 'tts'
+    | 'mention_everyone'
+    | 'pinned'
+  > extends Pick<
+    MessageObject,
+    | 'id'
+    | 'channel_id'
+    | 'content'
+    | 'timestamp'
+    | 'edited_timestamp'
+    | 'tts'
+    | 'mention_everyone'
+    | 'pinned'
+  >
+    ? true
+    : never
 
 /** Message record type retrieved from the DB */
 interface MessageRow {
@@ -82,6 +119,14 @@ export interface MessageObject {
     discriminator: string
     bot: boolean
     avatar: string | null
+    /** Public flags bitset (always 0 in the mock) */
+    public_flags: number
+    /** Account flags bitset (always 0 in the mock) */
+    flags: number
+    /** Display name (always null in the mock) */
+    global_name: string | null
+    /** Primary guild info (always null in the mock) */
+    primary_guild: string | null
   }
   content: string
   timestamp: string
@@ -92,6 +137,8 @@ export interface MessageObject {
   mention_roles: never[]
   attachments: AttachmentObject[]
   embeds: unknown[]
+  /** Message components (slash command components, always empty in the mock) */
+  components: never[]
   /** Reaction list (the field itself is omitted when there are no reactions) */
   reactions?: ReactionObject[]
   pinned: boolean
@@ -139,6 +186,10 @@ export function toMessageObject(
       discriminator: author.discriminator,
       bot: author.bot === 1,
       avatar: author.avatar,
+      public_flags: 0,
+      flags: 0,
+      global_name: null,
+      primary_guild: null,
     },
     content: row.content,
     timestamp: new Date(row.created_at).toISOString(),
@@ -160,6 +211,7 @@ export function toMessageObject(
     embeds: embeds
       .toSorted((a, b) => a.position - b.position)
       .map((e) => JSON.parse(e.data) as unknown),
+    components: [],
     pinned: row.pinned === 1,
     type: row.type,
     flags: row.flags,

@@ -1,2 +1,2 @@
-ignores:
-  - discord-api-types
+# discord-api-types is now imported in src/services/*.ts via `satisfies` expressions
+# and is no longer an unused dependency.

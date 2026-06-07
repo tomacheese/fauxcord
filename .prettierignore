@@ -1,0 +1,3 @@
+# Committed as-is to stay byte-identical with the upstream discord/discord-api-spec repository.
+# Prettier must not reformat these files or diffs will include formatting noise.
+spec/

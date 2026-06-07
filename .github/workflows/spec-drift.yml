@@ -1,0 +1,131 @@
+# Weekly Discord API spec drift detection.
+#
+# This workflow fetches the latest Discord OpenAPI spec from the official
+# discord/discord-api-spec repository, compares it against the committed
+# snapshot (spec/openapi.json), and opens a GitHub Issue if differences are
+# found. The issue lists a detailed field-level diff for Fauxcord-implemented
+# endpoints and a count-summary for others.
+#
+# Human workflow after an issue is created:
+#   1. Pull the latest master.
+#   2. Create a branch: git checkout -b fix/spec-drift-YYYY-MM-DD
+#   3. Update the snapshot: pnpm spec:update
+#   4. Run the contract tests: pnpm test src/spec-contract.test.ts
+#   5. Fix any failing mock responses, or add justified entries to spec/skip.ts.
+#   6. Commit, push, and open a PR.
+
+name: Discord API Spec Drift
+
+on:
+  schedule:
+    # Mondays at 06:17 UTC. Off-peak, non-:00 minute to reduce load spikes.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  spec-drift:
+    name: Check spec drift
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch latest upstream spec
+        run: pnpm spec:fetch
+
+      - name: Run spec diff
+        id: diff
+        run: |
+          set +e
+          REPORT=$(pnpm --silent spec:diff 2>&1)
+          EXIT_CODE=$?
+          set -e
+          # Escape for GitHub Actions multiline output
+          {
+            echo "report<<SPEC_DIFF_EOF"
+            echo "$REPORT"
+            echo "SPEC_DIFF_EOF"
+            echo "changed=$( [ $EXIT_CODE -eq 1 ] && echo 'true' || echo 'false' )"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Ensure spec-drift label exists
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create spec-drift \
+            --color 'd93f0b' \
+            --description 'Discord API spec drift detected' \
+            2>/dev/null || true
+
+      - name: Check for existing open drift issue
+        if: steps.diff.outputs.changed == 'true'
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          COUNT=$(gh issue list \
+            --label spec-drift \
+            --state open \
+            --json id \
+            --jq 'length')
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Open drift issue
+        if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.count == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          cat > /tmp/issue-body.md << 'ISSUE_EOF'
+          The weekly spec-drift check detected differences between the committed
+          snapshot (`spec/openapi.json`) and the current upstream Discord OpenAPI spec.
+
+          **How to update:**
+
+          ```bash
+          git checkout -b fix/spec-drift-${{ github.run_id }}
+          pnpm spec:update        # Download the latest spec into spec/openapi.json
+          pnpm test               # Contract tests show which mock responses changed
+          # Fix failing tests or add entries to spec/skip.ts with a reason
+          git add spec/openapi.json src/ spec/skip.ts
+          git commit -m "fix: Discord API spec スナップショットを最新版に更新"
+          git push origin HEAD
+          gh pr create --title "fix: Discord API spec drift ($DATE)" --body "Closes this issue"
+          ```
+
+          ---
+
+          ISSUE_EOF
+          echo "${{ steps.diff.outputs.report }}" >> /tmp/issue-body.md
+
+          gh issue create \
+            --title "Discord API spec drift detected ($DATE)" \
+            --label spec-drift \
+            --body-file /tmp/issue-body.md
+
+      - name: Log skipped (open issue exists)
+        if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.count != '0'
+        run: |
+          echo "An open spec-drift issue already exists — skipping issue creation."
+          echo "Close or merge the existing PR/issue first, then re-run this workflow."
+
+      - name: Log no drift
+        if: steps.diff.outputs.changed == 'false'
+        run: echo "No spec drift detected. The committed snapshot is up to date."
