@@ -1,2 +1,9 @@
-# discord-api-types is now imported in src/services/*.ts via `satisfies` expressions
+# discord-api-types is imported in src/services/*.ts for compile-time type guards
 # and is no longer an unused dependency.
+#
+# ajv-formats is used in src/spec-contract.test.ts via createRequire (dynamic CJS interop)
+# because its default export is a callable function that TypeScript cannot represent
+# correctly as an ESM default import under "module: NodeNext". Depcheck cannot detect
+# dynamic require() calls, so the package is explicitly listed here.
+ignores:
+  - ajv-formats
