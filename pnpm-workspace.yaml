@@ -4,5 +4,7 @@
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+# @book000/*: Renovate 側で stabilityDays チェックから除外されているスコープのため、
+# pnpm 側の minimumReleaseAge チェックからも除外し、公開直後の Docker CI 失敗を防ぐ
 minimumReleaseAgeExclude:
   - '@book000/*'
