@@ -26,6 +26,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ENUM_NOISE } from '../spec/enum-noise.js'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,8 @@ export interface FieldDiff {
   added: string[]
   removed: string[]
   typeChanged: { field: string; oldType: string; newType: string }[]
+  /** Type changes suppressed because they are enum-addition-only noise on an allow-listed field. */
+  suppressedTypeChanged: { field: string; oldType: string; newType: string }[]
 }
 
 /** Result of diffing a single manifest-registered operation. */
@@ -90,6 +93,11 @@ export interface SpecDiffResult {
   report: string
   hasDiff: boolean
 }
+
+/** Set of `specPath|method|field` keys eligible for enum-addition-only suppression. */
+const enumNoiseSet = new Set(
+  ENUM_NOISE.map((e) => `${e.specPath}|${e.method}|${e.field}`)
+)
 
 /**
  * Determines whether a type-string change represents a pure enum-choice
@@ -215,25 +223,42 @@ export function extractFields(
 }
 
 /**
- * Diffs two field maps and returns added/removed/changed fields.
+ * Diffs two field maps and returns added/removed/changed fields. A type
+ * change is routed to `suppressedTypeChanged` instead of `typeChanged` when
+ * the field is listed in spec/enum-noise.ts for this specPath/method AND the
+ * change is a pure enum-choice-count increase (see isEnumAdditionOnly).
  * @param oldFields - Fields from the old spec.
  * @param newFields - Fields from the new spec.
+ * @param specPath - Spec path template these fields belong to.
+ * @param method - HTTP method these fields belong to.
  * @returns Diff result.
  */
 export function diffFields(
   oldFields: Map<string, string>,
-  newFields: Map<string, string>
+  newFields: Map<string, string>,
+  specPath: string,
+  method: string
 ): FieldDiff {
   const added: string[] = []
   const removed: string[] = []
   const typeChanged: { field: string; oldType: string; newType: string }[] = []
+  const suppressedTypeChanged: {
+    field: string
+    oldType: string
+    newType: string
+  }[] = []
 
   for (const [key, newType] of newFields) {
     const oldType = oldFields.get(key)
     if (oldType === undefined) {
       added.push(`${key}: ${newType}`)
     } else if (oldType !== newType) {
-      typeChanged.push({ field: key, oldType, newType })
+      const isExempt = enumNoiseSet.has(`${specPath}|${method}|${key}`)
+      if (isExempt && isEnumAdditionOnly(oldType, newType)) {
+        suppressedTypeChanged.push({ field: key, oldType, newType })
+      } else {
+        typeChanged.push({ field: key, oldType, newType })
+      }
     }
   }
   for (const [key, oldType] of oldFields) {
@@ -242,7 +267,7 @@ export function diffFields(
     }
   }
 
-  return { added, removed, typeChanged }
+  return { added, removed, typeChanged, suppressedTypeChanged }
 }
 
 /**
@@ -264,6 +289,9 @@ export function getSuccessSchema(op: OperationObject): SchemaObject | undefined 
 
 /**
  * Diffs an operation's request and response schemas between old and new specs.
+ * Real (non-suppressed) changes and suppressed enum-addition-only changes are
+ * rendered as two separate Markdown sub-sections; only real changes count
+ * toward `hasRealDiff`.
  * @param specPath - Spec path template.
  * @param method - HTTP method.
  * @param oldSpec - Old spec.
@@ -293,19 +321,33 @@ export function diffOperation(
     ? extractFields(newRespSchema, newSpec)
     : new Map<string, string>()
 
-  const respDiff = diffFields(oldFields, newFields)
+  const respDiff = diffFields(oldFields, newFields, specPath, method)
   const hasRealDiff =
     respDiff.added.length > 0 ||
     respDiff.removed.length > 0 ||
     respDiff.typeChanged.length > 0
 
-  if (!hasRealDiff) return { lines, hasRealDiff: false }
+  if (!hasRealDiff && respDiff.suppressedTypeChanged.length === 0) {
+    return { lines, hasRealDiff: false }
+  }
 
-  lines.push(`#### \`${method.toUpperCase()} ${specPath}\` — response schema`)
-  for (const f of respDiff.added) lines.push(`- ➕ ${f}`)
-  for (const f of respDiff.removed) lines.push(`- ➖ ${f}`)
-  for (const c of respDiff.typeChanged)
-    lines.push(`- 🔄 \`${c.field}\`: \`${c.oldType}\` → \`${c.newType}\``)
+  if (hasRealDiff) {
+    lines.push(`#### \`${method.toUpperCase()} ${specPath}\` — response schema`)
+    for (const f of respDiff.added) lines.push(`- ➕ ${f}`)
+    for (const f of respDiff.removed) lines.push(`- ➖ ${f}`)
+    for (const c of respDiff.typeChanged)
+      lines.push(`- 🔄 \`${c.field}\`: \`${c.oldType}\` → \`${c.newType}\``)
+  }
+
+  if (respDiff.suppressedTypeChanged.length > 0) {
+    lines.push(
+      `#### \`${method.toUpperCase()} ${specPath}\` — 🔇 no action needed (enum choices added only)`
+    )
+    for (const c of respDiff.suppressedTypeChanged)
+      lines.push(
+        `- 🔇 \`${c.field}\`: \`${c.oldType}\` → \`${c.newType}\` _(Fauxcord always returns a fixed value for this field — see spec/enum-noise.ts)_`
+      )
+  }
 
   return { lines, hasRealDiff }
 }
@@ -404,7 +446,7 @@ export function runSpecDiff(
     const newFields = newSchema
       ? extractFields(newSchema, newSpec)
       : new Map<string, string>()
-    const diff = diffFields(oldFields, newFields)
+    const diff = diffFields(oldFields, newFields, specPath, method)
     return (
       diff.added.length > 0 ||
       diff.removed.length > 0 ||

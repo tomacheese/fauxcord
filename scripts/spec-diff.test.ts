@@ -159,6 +159,223 @@ describe('isEnumAdditionOnly', () => {
   })
 })
 
+describe('runSpecDiff — enum-noise suppression', () => {
+  /** A minimal manifest.ts source registering GET /guilds/{guild_id}. */
+  const GUILD_MANIFEST_SOURCE = `
+export const MANIFEST = [
+  {
+    specPath: '/guilds/{guild_id}',
+    method: 'get',
+  },
+]
+`
+
+  it('suppresses an enum-addition-only change on an allow-listed field: exit 0, but still shown in the report', () => {
+    const oldSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        features: {
+                          oneOf: Array.from({ length: 28 }, () => ({
+                            type: 'string',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+    const newSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        features: {
+                          oneOf: Array.from({ length: 29 }, () => ({
+                            type: 'string',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const result = runSpecDiff(
+      oldSpec,
+      newSpec,
+      GUILD_MANIFEST_SOURCE,
+      'old.json',
+      'new.json'
+    )
+
+    expect(result.hasDiff).toBe(false)
+    expect(result.report).toContain('🔇 no action needed')
+    expect(result.report).toContain('features')
+    expect(result.report).toContain('oneOf(28)')
+    expect(result.report).toContain('oneOf(29)')
+  })
+
+  it('does NOT suppress an enum-addition-only change on a field not in the allow-list (e.g. verification_level)', () => {
+    const oldSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        verification_level: {
+                          oneOf: Array.from({ length: 5 }, () => ({
+                            type: 'integer',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+    const newSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        verification_level: {
+                          oneOf: Array.from({ length: 6 }, () => ({
+                            type: 'integer',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const result = runSpecDiff(
+      oldSpec,
+      newSpec,
+      GUILD_MANIFEST_SOURCE,
+      'old.json',
+      'new.json'
+    )
+
+    expect(result.hasDiff).toBe(true)
+    expect(result.report).toContain('— response schema')
+    expect(result.report).toContain('verification_level')
+    expect(result.report).not.toContain('🔇 no action needed')
+  })
+
+  it('does NOT suppress an enum choice removal on an allow-listed field', () => {
+    const oldSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        features: {
+                          oneOf: Array.from({ length: 29 }, () => ({
+                            type: 'string',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+    const newSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        features: {
+                          oneOf: Array.from({ length: 28 }, () => ({
+                            type: 'string',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const result = runSpecDiff(
+      oldSpec,
+      newSpec,
+      GUILD_MANIFEST_SOURCE,
+      'old.json',
+      'new.json'
+    )
+
+    expect(result.hasDiff).toBe(true)
+    expect(result.report).toContain('— response schema')
+    expect(result.report).toContain('features')
+    expect(result.report).not.toContain('🔇 no action needed')
+  })
+})
+
 describe('ENUM_NOISE', () => {
   it('has no duplicate specPath+method+field entries', () => {
     const keys = ENUM_NOISE.map((e) => `${e.specPath}|${e.method}|${e.field}`)
