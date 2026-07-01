@@ -208,53 +208,53 @@ importers:
   .:
     dependencies:
       '@hono/node-server':
-        specifier: ^2.0.4
+        specifier: 2.0.4
         version: 2.0.4(hono@4.12.23)
       better-sqlite3:
-        specifier: ^12.10.0
+        specifier: 12.10.0
         version: 12.10.0
       discord-api-types:
-        specifier: ^0.38.48
+        specifier: 0.38.48
         version: 0.38.48
       hono:
-        specifier: ^4.12.23
+        specifier: 4.12.23
         version: 4.12.23
     devDependencies:
       '@book000/eslint-config':
-        specifier: ^1.14.53
+        specifier: 1.14.53
         version: 1.14.53(eslint@10.6.0)(typescript@6.0.3)
       '@types/better-sqlite3':
-        specifier: ^7.6.13
+        specifier: 7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^25.9.2
+        specifier: 25.9.2
         version: 25.9.2
       '@vitest/coverage-v8':
-        specifier: ^4.1.8
+        specifier: 4.1.8
         version: 4.1.8(vitest@4.1.8)
       ajv:
-        specifier: ^8.20.0
+        specifier: 8.20.0
         version: 8.20.0
       ajv-formats:
-        specifier: ^3.0.1
+        specifier: 3.0.1
         version: 3.0.1(ajv@8.20.0)
       eslint:
-        specifier: ^10.6.0
+        specifier: 10.6.0
         version: 10.6.0
       npm-run-all2:
-        specifier: ^9.0.1
+        specifier: 9.0.1
         version: 9.0.1
       prettier:
-        specifier: ^3.8.3
+        specifier: 3.8.3
         version: 3.8.3
       tsx:
-        specifier: ^4.22.4
+        specifier: 4.22.4
         version: 4.22.4
       typescript:
-        specifier: ^6.0.3
+        specifier: 6.0.3
         version: 6.0.3
       vitest:
-        specifier: ^4.1.8
+        specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/coverage-v8@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.28.0)(tsx@4.22.4))
 
 packages:
