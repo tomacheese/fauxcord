@@ -209,7 +209,7 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 2.0.6
-        version: 2.0.6(hono@4.12.23)
+        version: 2.0.6(hono@4.12.27)
       better-sqlite3:
         specifier: 12.10.0
         version: 12.10.0
@@ -217,8 +217,8 @@ importers:
         specifier: 0.38.49
         version: 0.38.49
       hono:
-        specifier: 4.12.23
-        version: 4.12.23
+        specifier: 4.12.27
+        version: 4.12.27
     devDependencies:
       '@book000/eslint-config':
         specifier: 1.14.53
@@ -1281,8 +1281,8 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
-  hono@4.12.23:
-    resolution: {integrity: sha512-eIaZ9qDgu7XV0pxOCrg7/WhnQ6Ivm22UcxhXx/A3dcbqbbYgBEkc6e/J/s7j2tS96zoB0S9VBdLwQNCWwUo4LA==}
+  hono@4.12.27:
+    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
@@ -2330,9 +2330,9 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@hono/node-server@2.0.6(hono@4.12.23)':
+  '@hono/node-server@2.0.6(hono@4.12.27)':
     dependencies:
-      hono: 4.12.23
+      hono: 4.12.27
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -3291,7 +3291,7 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
-  hono@4.12.23: {}
+  hono@4.12.27: {}
 
   html-escaper@2.0.2: {}
 
