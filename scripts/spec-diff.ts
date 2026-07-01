@@ -20,16 +20,24 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { resolve as resolvePath } from 'node:path'
+import path from 'node:path'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+/**
+ * A string-keyed lookup table whose values may be absent.
+ * Mirrors real-world JSON, where `Record<string, T>` alone would let
+ * TypeScript assume every key is present (it isn't — this is not-yet-fetched
+ * upstream data, not data we control).
+ */
+type Lookup<T> = Record<string, T | undefined>
 
 /** Minimal OpenAPI 3.1 document shape we care about for diffing. */
 interface OpenApiSpec {
   info: { version: string; title: string }
-  paths: Record<string, Record<string, unknown>>
+  paths: Lookup<Record<string, unknown>>
   components: {
-    schemas: Record<string, SchemaObject>
+    schemas: Lookup<SchemaObject>
   }
 }
 
@@ -52,14 +60,11 @@ interface SchemaObject {
 /** Operation object shape */
 interface OperationObject {
   requestBody?: {
-    content?: Record<string, { schema?: SchemaObject }>
+    content?: Lookup<{ schema?: SchemaObject }>
   }
-  responses?: Record<
-    string,
-    {
-      content?: Record<string, { schema?: SchemaObject }>
-    }
-  >
+  responses?: Lookup<{
+    content?: Lookup<{ schema?: SchemaObject }>
+  }>
 }
 
 /** Field-level diff result */
@@ -91,14 +96,14 @@ function loadSpec(filePath: string): OpenApiSpec {
 function resolveRef(
   ref: string,
   spec: OpenApiSpec,
-  visited: Set<string> = new Set()
+  visited = new Set<string>()
 ): SchemaObject | undefined {
   if (visited.has(ref)) return undefined
   visited.add(ref)
 
   if (!ref.startsWith('#/components/schemas/')) return undefined
   const name = ref.slice('#/components/schemas/'.length)
-  const schema = spec.components?.schemas?.[name]
+  const schema = spec.components.schemas[name]
   if (!schema) return undefined
   if (schema.$ref) return resolveRef(schema.$ref, spec, visited)
   return schema
@@ -114,33 +119,12 @@ function resolveRef(
 function resolve(
   schema: SchemaObject,
   spec: OpenApiSpec,
-  visited: Set<string> = new Set()
+  visited = new Set<string>()
 ): SchemaObject {
   if (schema.$ref) {
     return resolveRef(schema.$ref, spec, visited) ?? schema
   }
   return schema
-}
-
-/**
- * Extracts a flat map of `{ field -> type-string }` from a schema's properties.
- * @param schema - Schema to extract from.
- * @param spec - Full spec document for $ref resolution.
- * @returns Map of field name to type description.
- */
-function extractFields(
-  schema: SchemaObject,
-  spec: OpenApiSpec
-): Map<string, string> {
-  const result = new Map<string, string>()
-  const resolved = resolve(schema, spec)
-  const props = resolved.properties ?? {}
-  for (const [key, val] of Object.entries(props)) {
-    const resolvedVal = resolve(val, spec)
-    const typeStr = describeType(resolvedVal, spec)
-    result.set(key, typeStr)
-  }
-  return result
 }
 
 /**
@@ -170,6 +154,27 @@ function describeType(schema: SchemaObject, spec: OpenApiSpec): string {
 }
 
 /**
+ * Extracts a flat map of `{ field -> type-string }` from a schema's properties.
+ * @param schema - Schema to extract from.
+ * @param spec - Full spec document for $ref resolution.
+ * @returns Map of field name to type description.
+ */
+function extractFields(
+  schema: SchemaObject,
+  spec: OpenApiSpec
+): Map<string, string> {
+  const result = new Map<string, string>()
+  const resolved = resolve(schema, spec)
+  const props = resolved.properties ?? {}
+  for (const [key, val] of Object.entries(props)) {
+    const resolvedVal = resolve(val, spec)
+    const typeStr = describeType(resolvedVal, spec)
+    result.set(key, typeStr)
+  }
+  return result
+}
+
+/**
  * Diffs two field maps and returns added/removed/changed fields.
  * @param oldFields - Fields from the old spec.
  * @param newFields - Fields from the new spec.
@@ -184,10 +189,11 @@ function diffFields(
   const typeChanged: { field: string; oldType: string; newType: string }[] = []
 
   for (const [key, newType] of newFields) {
-    if (!oldFields.has(key)) {
+    const oldType = oldFields.get(key)
+    if (oldType === undefined) {
       added.push(`${key}: ${newType}`)
-    } else if (oldFields.get(key) !== newType) {
-      typeChanged.push({ field: key, oldType: oldFields.get(key)!, newType })
+    } else if (oldType !== newType) {
+      typeChanged.push({ field: key, oldType, newType })
     }
   }
   for (const [key, oldType] of oldFields) {
@@ -272,10 +278,11 @@ function diffOperation(
  */
 function getPathMethodSet(spec: OpenApiSpec): Set<string> {
   const result = new Set<string>()
-  for (const [path, ops] of Object.entries(spec.paths ?? {})) {
+  for (const [specPath, ops] of Object.entries(spec.paths)) {
+    if (!ops) continue
     for (const method of Object.keys(ops)) {
       if (['get', 'post', 'put', 'patch', 'delete'].includes(method)) {
-        result.add(`${path}|${method}`)
+        result.add(`${specPath}|${method}`)
       }
     }
   }
@@ -284,10 +291,11 @@ function getPathMethodSet(spec: OpenApiSpec): Set<string> {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
-const [, , oldArg, newArg] = process.argv
+const oldArg = process.argv.at(2)
+const newArg = process.argv.at(3)
 const cwd = process.cwd()
-const oldPath = resolvePath(cwd, oldArg ?? 'spec/openapi.json')
-const newPath = resolvePath(cwd, newArg ?? 'spec/openapi.upstream.json')
+const oldPath = path.resolve(cwd, oldArg ?? 'spec/openapi.json')
+const newPath = path.resolve(cwd, newArg ?? 'spec/openapi.upstream.json')
 
 let oldSpec: OpenApiSpec
 let newSpec: OpenApiSpec
@@ -305,7 +313,7 @@ try {
 // complexity (the manifest contains function values that make JSON serialization
 // impractical, and dynamic import behaves differently across CJS/ESM modes).
 const manifestSource = readFileSync(
-  resolvePath(cwd, 'spec/manifest.ts'),
+  path.resolve(cwd, 'spec/manifest.ts'),
   'utf8'
 )
 
@@ -342,8 +350,7 @@ const removed = [...oldPaths].filter((k) => !newPaths.has(k))
 const common = [...oldPaths].filter((k) => newPaths.has(k))
 
 // Check for version change
-const versionChanged =
-  oldSpec.info?.version !== newSpec.info?.version
+const versionChanged = oldSpec.info.version !== newSpec.info.version
 
 // Collect implemented endpoint diffs
 const implementedDiffs: string[] = []
@@ -362,8 +369,12 @@ const nonImplementedChanged = common.filter((k) => {
   const newOp = (newSpec.paths[specPath]?.[method] ?? {}) as OperationObject
   const oldSchema = getSuccessSchema(oldOp)
   const newSchema = getSuccessSchema(newOp)
-  const oldFields = oldSchema ? extractFields(oldSchema, oldSpec) : new Map<string, string>()
-  const newFields = newSchema ? extractFields(newSchema, newSpec) : new Map<string, string>()
+  const oldFields = oldSchema
+    ? extractFields(oldSchema, oldSpec)
+    : new Map<string, string>()
+  const newFields = newSchema
+    ? extractFields(newSchema, newSpec)
+    : new Map<string, string>()
   const diff = diffFields(oldFields, newFields)
   return (
     diff.added.length > 0 ||
@@ -398,9 +409,9 @@ if (versionChanged) {
   lines.push(
     `### 🔖 API Version Changed`,
     '',
-    `- **Old**: \`${oldSpec.info?.version ?? 'unknown'}\``,
-    `- **New**: \`${newSpec.info?.version ?? 'unknown'}\``,
-    '',
+    `- **Old**: \`${oldSpec.info.version}\``,
+    `- **New**: \`${newSpec.info.version}\``,
+    ''
   )
 }
 
@@ -436,9 +447,9 @@ if (implementedDiffs.length > 0) {
     '',
     '_Detailed field-level diff for Fauxcord-implemented endpoints:_',
     '',
+    ...implementedDiffs,
+    ''
   )
-  lines.push(...implementedDiffs)
-  lines.push('')
 }
 
 if (nonImplementedChanged.length > 0) {
@@ -446,7 +457,7 @@ if (nonImplementedChanged.length > 0) {
     '### 📊 Other Changed Endpoints (not implemented in Fauxcord)',
     '',
     `${nonImplementedChanged.length} non-implemented endpoint(s) have schema changes:`,
-    '',
+    ''
   )
   for (const k of nonImplementedChanged.toSorted()) {
     const [specPath, method] = k.split('|') as [string, string]
@@ -463,7 +474,7 @@ lines.push(
   '2. Run `pnpm spec:update` on a new branch to update the committed snapshot.',
   '3. Open a PR — the contract tests in `src/spec-contract.test.ts` will show which',
   '   mock responses need to be updated to match the new spec.',
-  '',
+  ''
 )
 
 console.log(lines.join('\n'))
