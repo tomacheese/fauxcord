@@ -208,8 +208,8 @@ importers:
   .:
     dependencies:
       '@hono/node-server':
-        specifier: 2.0.4
-        version: 2.0.4(hono@4.12.23)
+        specifier: 2.0.6
+        version: 2.0.6(hono@4.12.23)
       better-sqlite3:
         specifier: 12.10.0
         version: 12.10.0
@@ -480,8 +480,8 @@ packages:
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@hono/node-server@2.0.4':
-    resolution: {integrity: sha512-Ut3y0dMMPWy6bZ2kVfx25EOVbZlm15dhF4mOsezMlhpNHy+4MkU1qN9Y6lnruYi4wPmFzimGX2X7LF/FwHli4A==}
+  '@hono/node-server@2.0.6':
+    resolution: {integrity: sha512-7DeRlKG57JDBNZ5Qj2jwVdgwQy4b0tLubRLl3zCf91/rCf9i7p1V5FtW/yWibm1uUHE493ts9ZXH/7g/LQWl+g==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
@@ -2330,7 +2330,7 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@hono/node-server@2.0.4(hono@4.12.23)':
+  '@hono/node-server@2.0.6(hono@4.12.23)':
     dependencies:
       hono: 4.12.23
 
