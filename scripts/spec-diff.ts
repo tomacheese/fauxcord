@@ -369,8 +369,12 @@ const nonImplementedChanged = common.filter((k) => {
   const newOp = (newSpec.paths[specPath]?.[method] ?? {}) as OperationObject
   const oldSchema = getSuccessSchema(oldOp)
   const newSchema = getSuccessSchema(newOp)
-  const oldFields = oldSchema ? extractFields(oldSchema, oldSpec) : new Map<string, string>()
-  const newFields = newSchema ? extractFields(newSchema, newSpec) : new Map<string, string>()
+  const oldFields = oldSchema
+    ? extractFields(oldSchema, oldSpec)
+    : new Map<string, string>()
+  const newFields = newSchema
+    ? extractFields(newSchema, newSpec)
+    : new Map<string, string>()
   const diff = diffFields(oldFields, newFields)
   return (
     diff.added.length > 0 ||
@@ -407,7 +411,7 @@ if (versionChanged) {
     '',
     `- **Old**: \`${oldSpec.info.version}\``,
     `- **New**: \`${newSpec.info.version}\``,
-    '',
+    ''
   )
 }
 
@@ -442,8 +446,10 @@ if (implementedDiffs.length > 0) {
     '### 🔍 Implemented Endpoint Schema Changes',
     '',
     '_Detailed field-level diff for Fauxcord-implemented endpoints:_',
-    '', ...implementedDiffs
-  , '')
+    '',
+    ...implementedDiffs,
+    ''
+  )
 }
 
 if (nonImplementedChanged.length > 0) {
@@ -451,7 +457,7 @@ if (nonImplementedChanged.length > 0) {
     '### 📊 Other Changed Endpoints (not implemented in Fauxcord)',
     '',
     `${nonImplementedChanged.length} non-implemented endpoint(s) have schema changes:`,
-    '',
+    ''
   )
   for (const k of nonImplementedChanged.toSorted()) {
     const [specPath, method] = k.split('|') as [string, string]
@@ -468,7 +474,7 @@ lines.push(
   '2. Run `pnpm spec:update` on a new branch to update the committed snapshot.',
   '3. Open a PR — the contract tests in `src/spec-contract.test.ts` will show which',
   '   mock responses need to be updated to match the new spec.',
-  '',
+  ''
 )
 
 console.log(lines.join('\n'))
