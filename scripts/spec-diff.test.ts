@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { OpenApiSpec } from './spec-diff.js'
 import { runSpecDiff } from './spec-diff.js'
+import { ENUM_NOISE } from '../spec/enum-noise.js'
 
 describe('scripts/spec-diff.test.ts wiring', () => {
   it('runs under the scripts/ test glob', () => {
@@ -45,7 +46,10 @@ describe('runSpecDiff (characterization)', () => {
               '200': {
                 content: {
                   'application/json': {
-                    schema: { type: 'object', properties: { id: { type: 'string' } } },
+                    schema: {
+                      type: 'object',
+                      properties: { id: { type: 'string' } },
+                    },
                   },
                 },
               },
@@ -54,7 +58,13 @@ describe('runSpecDiff (characterization)', () => {
         },
       },
     })
-    const result = runSpecDiff(spec, spec, MANIFEST_SOURCE, 'old.json', 'new.json')
+    const result = runSpecDiff(
+      spec,
+      spec,
+      MANIFEST_SOURCE,
+      'old.json',
+      'new.json'
+    )
     expect(result.hasDiff).toBe(false)
     expect(result.report).toBe(
       'No differences detected between the two spec files.'
@@ -71,7 +81,10 @@ describe('runSpecDiff (characterization)', () => {
               '200': {
                 content: {
                   'application/json': {
-                    schema: { type: 'object', properties: { id: { type: 'string' } } },
+                    schema: {
+                      type: 'object',
+                      properties: { id: { type: 'string' } },
+                    },
                   },
                 },
               },
@@ -115,5 +128,31 @@ describe('runSpecDiff (characterization)', () => {
     expect(result.report).toContain('🔖 API Version Changed')
     expect(result.report).toContain('name: string')
     expect(result.report).toContain('GET /widgets/{id}')
+  })
+})
+
+describe('ENUM_NOISE', () => {
+  it('has no duplicate specPath+method+field entries', () => {
+    const keys = ENUM_NOISE.map((e) => `${e.specPath}|${e.method}|${e.field}`)
+    expect(keys.length).toBe(new Set(keys).size)
+  })
+
+  it('gives every entry a non-empty reason', () => {
+    for (const entry of ENUM_NOISE) {
+      expect(entry.reason.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('includes the guild features/afk_timeout/mfa_level exemptions', () => {
+    const keys = new Set(
+      ENUM_NOISE.map((e) => `${e.specPath}|${e.method}|${e.field}`)
+    )
+    expect(keys.has('/guilds/{guild_id}|get|features')).toBe(true)
+    expect(keys.has('/guilds/{guild_id}|patch|features')).toBe(true)
+    expect(keys.has('/guilds/{guild_id}|get|afk_timeout')).toBe(true)
+    expect(keys.has('/guilds/{guild_id}|patch|afk_timeout')).toBe(true)
+    expect(keys.has('/guilds/{guild_id}|get|mfa_level')).toBe(true)
+    expect(keys.has('/guilds/{guild_id}|patch|mfa_level')).toBe(true)
+    expect(keys.has('/users/@me/guilds|get|features')).toBe(true)
   })
 })
