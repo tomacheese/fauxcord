@@ -91,6 +91,29 @@ export interface SpecDiffResult {
   hasDiff: boolean
 }
 
+/**
+ * Determines whether a type-string change represents a pure enum-choice
+ * addition: both sides are `oneOf(N)`/`anyOf(N)` (optionally wrapped in
+ * `array<...>`), the wrapping and union kind match, and the new count is
+ * strictly greater than the old count.
+ * @param oldType - Old type description string.
+ * @param newType - New type description string.
+ * @returns true if this is a pure choice-count increase.
+ */
+export function isEnumAdditionOnly(
+  oldType: string,
+  newType: string
+): boolean {
+  const pattern = /^(array<)?(oneOf|anyOf)\((\d+)\)>?$/
+  const oldMatch = pattern.exec(oldType)
+  const newMatch = pattern.exec(newType)
+  if (!oldMatch || !newMatch) return false
+  const [, oldWrap, oldKind, oldCount] = oldMatch
+  const [, newWrap, newKind, newCount] = newMatch
+  if (oldWrap !== newWrap || oldKind !== newKind) return false
+  return Number(newCount) > Number(oldCount)
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /**

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { OpenApiSpec } from './spec-diff.js'
-import { runSpecDiff } from './spec-diff.js'
+import { runSpecDiff, isEnumAdditionOnly } from './spec-diff.js'
 import { ENUM_NOISE } from '../spec/enum-noise.js'
 
 describe('scripts/spec-diff.test.ts wiring', () => {
@@ -128,6 +128,34 @@ describe('runSpecDiff (characterization)', () => {
     expect(result.report).toContain('🔖 API Version Changed')
     expect(result.report).toContain('name: string')
     expect(result.report).toContain('GET /widgets/{id}')
+  })
+})
+
+describe('isEnumAdditionOnly', () => {
+  it('returns true when a oneOf choice count increases', () => {
+    expect(isEnumAdditionOnly('oneOf(28)', 'oneOf(29)')).toBe(true)
+  })
+
+  it('returns false when a oneOf choice count decreases', () => {
+    expect(isEnumAdditionOnly('oneOf(29)', 'oneOf(28)')).toBe(false)
+  })
+
+  it('returns true when an array-wrapped oneOf choice count increases', () => {
+    expect(isEnumAdditionOnly('array<oneOf(28)>', 'array<oneOf(29)>')).toBe(
+      true
+    )
+  })
+
+  it('returns false when array-wrapping differs between old and new', () => {
+    expect(isEnumAdditionOnly('oneOf(28)', 'array<oneOf(29)>')).toBe(false)
+  })
+
+  it('returns false when the union kind differs (oneOf vs anyOf)', () => {
+    expect(isEnumAdditionOnly('oneOf(2)', 'anyOf(3)')).toBe(false)
+  })
+
+  it('returns false for a change to a non-union type', () => {
+    expect(isEnumAdditionOnly('oneOf(2)', 'string')).toBe(false)
   })
 })
 
