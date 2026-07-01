@@ -91,6 +91,7 @@ jobs:
         if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.count == '0'
         env:
           GH_TOKEN: ${{ github.token }}
+          REPORT: ${{ steps.diff.outputs.report }}
         run: |
           DATE=$(date +%Y-%m-%d)
           cat > /tmp/issue-body.md << 'ISSUE_EOF'
@@ -113,11 +114,15 @@ jobs:
           ---
 
           ISSUE_EOF
-          echo "${{ steps.diff.outputs.report }}" >> /tmp/issue-body.md
+          # REPORT is passed via env (not interpolated into the script text) so that
+          # backticks/`$()`/etc. in the Markdown report are treated as inert data,
+          # not re-parsed as shell syntax.
+          printf '%s\n' "$REPORT" >> /tmp/issue-body.md
 
           gh issue create \
             --title "Discord API spec drift detected ($DATE)" \
             --label spec-drift \
+            --assignee book000 \
             --body-file /tmp/issue-body.md
 
       - name: Log skipped (open issue exists)
