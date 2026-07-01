@@ -12111,6 +12111,20 @@
             "schema": {
               "$ref": "#/components/schemas/SnowflakeType"
             }
+          },
+          {
+            "name": "target_channel_id",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SnowflakeType"
+            }
+          },
+          {
+            "name": "target_message_id",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SnowflakeType"
+            }
           }
         ],
         "responses": {
@@ -21571,7 +21585,7 @@
           }
         }
       },
-      "BasicApplicationResponse": {
+      "BasicApplicationResponseWithBot": {
         "type": "object",
         "properties": {
           "id": {
@@ -21835,7 +21849,7 @@
             "$ref": "#/components/schemas/MessageActivityResponse"
           },
           "application": {
-            "$ref": "#/components/schemas/BasicApplicationResponse"
+            "$ref": "#/components/schemas/BasicApplicationResponseWithBot"
           },
           "application_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -23487,7 +23501,8 @@
               "null"
             ],
             "minimum": 0,
-            "maximum": 21600
+            "maximum": 21600,
+            "format": "int32"
           },
           "applied_tags": {
             "type": [
@@ -23786,6 +23801,24 @@
                 "format": "int32"
               }
             ]
+          },
+          "role_ids": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SnowflakeType"
+                },
+                "maxItems": 250,
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -24008,7 +24041,8 @@
               "null"
             ],
             "minimum": 0,
-            "maximum": 21600
+            "maximum": 21600,
+            "format": "int32"
           }
         },
         "required": [
@@ -24039,7 +24073,8 @@
               "null"
             ],
             "minimum": 0,
-            "maximum": 21600
+            "maximum": 21600,
+            "format": "int32"
           },
           "type": {
             "oneOf": [
@@ -26845,6 +26880,11 @@
             "const": "RAID_ALERTS_DISABLED"
           },
           {
+            "title": "PRUNE_REQUIRES_ADMIN",
+            "description": "guild has restricted member prune to administrators and the guild owner",
+            "const": "PRUNE_REQUIRES_ADMIN"
+          },
+          {
             "title": "ROLE_ICONS",
             "description": "guild is able to set role icons",
             "const": "ROLE_ICONS"
@@ -27109,6 +27149,12 @@
           },
           "guild_scheduled_event": {
             "$ref": "#/components/schemas/ScheduledEventResponse"
+          },
+          "target_channel_id": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "target_message_id": {
+            "$ref": "#/components/schemas/SnowflakeType"
           },
           "uses": {
             "type": "integer",
@@ -30296,12 +30342,23 @@
       "InviteChannelRecipientResponse": {
         "type": "object",
         "properties": {
+          "id": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
           "username": {
             "type": "string"
+          },
+          "avatar": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
-          "username"
+          "id",
+          "username",
+          "avatar"
         ]
       },
       "InviteChannelResponse": {
@@ -32189,6 +32246,12 @@
             ],
             "maxLength": 1024
           },
+          "is_spoiler": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "is_remix": {
             "type": [
               "boolean",
@@ -33242,7 +33305,7 @@
             "$ref": "#/components/schemas/MessageActivityResponse"
           },
           "application": {
-            "$ref": "#/components/schemas/BasicApplicationResponse"
+            "$ref": "#/components/schemas/BasicApplicationResponseWithBot"
           },
           "application_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -37446,7 +37509,7 @@
             "$ref": "#/components/schemas/MessageActivityResponse"
           },
           "application": {
-            "$ref": "#/components/schemas/BasicApplicationResponse"
+            "$ref": "#/components/schemas/BasicApplicationResponseWithBot"
           },
           "application_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -40600,7 +40663,8 @@
               "null"
             ],
             "minimum": 0,
-            "maximum": 21600
+            "maximum": 21600,
+            "format": "int32"
           },
           "flags": {
             "type": [
