@@ -14,6 +14,6 @@ export default defineConfig({
       exclude: ["src/**/*.test.ts", "src/index.ts"],
     },
     // Test file pattern
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
   },
 });

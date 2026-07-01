@@ -236,6 +236,7 @@ to detect when the real API diverges from the mock.
 | `spec/openapi.json` | Committed snapshot of the upstream spec (raw, byte-identical) |
 | `spec/manifest.ts` | Single source of truth: maps every implemented endpoint to its spec path/method. Drives both drift detection and contract tests. |
 | `spec/skip.ts` | Endpoints/assertions skipped due to confirmed spec-side bugs (reason required). |
+| `spec/enum-noise.ts` | Response fields where the spec is correct but Fauxcord always returns a fixed value, so a pure `oneOf`/`anyOf` enum-choice-count *increase* on that field is not treated as drift (reason required). Choice removals and type-shape changes are still detected as drift even for listed fields. |
 | `scripts/spec-fetch.ts` | Downloads the latest upstream spec. |
 | `scripts/spec-diff.ts` | Diffs snapshot vs upstream; emits Markdown, exits 1 when drift exists. |
 | `src/spec-contract.test.ts` | Ajv-based contract tests against the committed snapshot. |
@@ -253,6 +254,10 @@ to detect when the real API diverges from the mock.
 ### Skip list policy
 
 Only add to `spec/skip.ts` when the spec itself is provably wrong (e.g., a field is declared `required` but the real Discord API never returns it). Always include a clear `reason`. Do **not** add entries simply because fixing the mock is inconvenient.
+
+### Enum-noise list policy
+
+Only add to `spec/enum-noise.ts` when the mock genuinely returns a fixed value for that field regardless of input (e.g. `features` is hardcoded to `[]` in `src/services/guilds.ts`). Do **not** add a field just because a diff is annoying — fields backed by real DB values (e.g. `verification_level`) must never be listed here, since a future meaningful change to them should still be caught as drift. Only a pure enum-choice-count *increase* of the same union kind is ever suppressed for a listed field; removals and type-shape changes are always reported as drift.
 
 ### Type drift detection
 
