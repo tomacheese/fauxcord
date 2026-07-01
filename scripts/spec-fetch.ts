@@ -9,7 +9,7 @@
  */
 
 import { writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import path from 'node:path'
 
 const UPSTREAM_URL =
   'https://raw.githubusercontent.com/discord/discord-api-spec/main/specs/openapi.json'
@@ -33,7 +33,7 @@ async function fetchSpec(outputPath: string): Promise<void> {
   console.log(`Spec written to ${outputPath} (${body.length} bytes)`)
 }
 
-const outputPath = process.argv[2] ?? 'spec/openapi.upstream.json'
-const resolvedPath = resolve(process.cwd(), outputPath)
+const outputPath = process.argv.at(2) ?? 'spec/openapi.upstream.json'
+const resolvedPath = path.resolve(process.cwd(), outputPath)
 
 await fetchSpec(resolvedPath)

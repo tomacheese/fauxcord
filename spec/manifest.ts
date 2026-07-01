@@ -504,7 +504,7 @@ export const MANIFEST: SpecEndpoint[] = [
     contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'UserPIIResponse',
-    request: (f) => ({ path: '/api/v10/users/@me' }),
+    request: () => ({ path: '/api/v10/users/@me' }),
   },
   {
     specPath: '/users/{user_id}',
@@ -521,7 +521,7 @@ export const MANIFEST: SpecEndpoint[] = [
     successStatus: 200,
     responseSchemaOverride: 'MyGuildResponse',
     // Returns an array; each item validated against MyGuildResponse
-    request: (f) => ({ path: '/api/v10/users/@me/guilds' }),
+    request: () => ({ path: '/api/v10/users/@me/guilds' }),
   },
 
   // ─── OAuth2 ─────────────────────────────────────────────────────────────────
@@ -533,7 +533,7 @@ export const MANIFEST: SpecEndpoint[] = [
     method: 'get',
     contractTested: false,
     successStatus: 200,
-    request: (f) => ({ path: '/api/v10/oauth2/applications/@me' }),
+    request: () => ({ path: '/api/v10/oauth2/applications/@me' }),
   },
   {
     specPath: '/oauth2/@me',
@@ -541,7 +541,7 @@ export const MANIFEST: SpecEndpoint[] = [
     contractTested: false,
     // Requires a full OAuth2 Authorization Code flow to obtain a Bearer token.
     successStatus: 200,
-    request: (f) => ({ path: '/api/v10/oauth2/@me' }),
+    request: () => ({ path: '/api/v10/oauth2/@me' }),
   },
 
   // ─── Webhooks ───────────────────────────────────────────────────────────────
