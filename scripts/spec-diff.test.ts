@@ -3,6 +3,10 @@ import type { OpenApiSpec } from './spec-diff.js'
 import { runSpecDiff, isEnumAdditionOnly } from './spec-diff.js'
 import { ENUM_NOISE } from '../spec/enum-noise.js'
 
+// Guards against vitest.config.ts regressing the `scripts/**/*.test.ts`
+// include glob (see Task 1 of the enum-noise plan) — if this file stops
+// being picked up by vitest, `pnpm test` would silently report 0 tests
+// here instead of failing.
 describe('scripts/spec-diff.test.ts wiring', () => {
   it('runs under the scripts/ test glob', () => {
     expect(true).toBe(true)
@@ -156,6 +160,14 @@ describe('isEnumAdditionOnly', () => {
 
   it('returns false for a change to a non-union type', () => {
     expect(isEnumAdditionOnly('oneOf(2)', 'string')).toBe(false)
+  })
+
+  it('returns false for a half-open array wrapping (no closing bracket)', () => {
+    expect(isEnumAdditionOnly('array<oneOf(28)', 'array<oneOf(29)')).toBe(false)
+  })
+
+  it('returns false for a stray closing bracket with no array wrapping', () => {
+    expect(isEnumAdditionOnly('oneOf(28)>', 'oneOf(29)>')).toBe(false)
   })
 })
 
@@ -350,6 +362,72 @@ export const MANIFEST = [
                             type: 'string',
                           })),
                         },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    const result = runSpecDiff(
+      oldSpec,
+      newSpec,
+      GUILD_MANIFEST_SOURCE,
+      'old.json',
+      'new.json'
+    )
+
+    expect(result.hasDiff).toBe(true)
+    expect(result.report).toContain('— response schema')
+    expect(result.report).toContain('features')
+    expect(result.report).not.toContain('🔇 no action needed')
+  })
+
+  it('does NOT suppress a type-shape change (not a removal) on an allow-listed field', () => {
+    const oldSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        features: {
+                          oneOf: Array.from({ length: 28 }, () => ({
+                            type: 'string',
+                          })),
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    })
+    const newSpec = buildSpec({
+      paths: {
+        '/guilds/{guild_id}': {
+          get: {
+            responses: {
+              '200': {
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        // Type shape changed from a `oneOf` union to a plain
+                        // string — not an enum-choice-count change at all.
+                        features: { type: 'string' },
                       },
                     },
                   },

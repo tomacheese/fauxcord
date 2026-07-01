@@ -100,6 +100,26 @@ const enumNoiseSet = new Set(
 )
 
 /**
+ * Parses a `describeType` output string into its union-kind and choice
+ * count, if it is a `oneOf(N)`/`anyOf(N)` union (optionally wrapped in
+ * `array<...>`). The `array<` prefix and `>` suffix are checked together —
+ * a half-open string like `"array<oneOf(5)"` is rejected rather than
+ * treated as wrapped.
+ * @param type - Type description string to parse.
+ * @returns The parsed union kind/count/wrapping, or undefined if `type` is
+ * not a `oneOf`/`anyOf` union string.
+ */
+function parseUnionType(
+  type: string
+): { wrapped: boolean; kind: string; count: number } | undefined {
+  const wrapped = type.startsWith('array<') && type.endsWith('>')
+  const inner = wrapped ? type.slice('array<'.length, -1) : type
+  const match = /^(oneOf|anyOf)\((\d+)\)$/.exec(inner)
+  if (!match) return undefined
+  return { wrapped, kind: match[1], count: Number(match[2]) }
+}
+
+/**
  * Determines whether a type-string change represents a pure enum-choice
  * addition: both sides are `oneOf(N)`/`anyOf(N)` (optionally wrapped in
  * `array<...>`), the wrapping and union kind match, and the new count is
@@ -108,18 +128,13 @@ const enumNoiseSet = new Set(
  * @param newType - New type description string.
  * @returns true if this is a pure choice-count increase.
  */
-export function isEnumAdditionOnly(
-  oldType: string,
-  newType: string
-): boolean {
-  const pattern = /^(array<)?(oneOf|anyOf)\((\d+)\)>?$/
-  const oldMatch = pattern.exec(oldType)
-  const newMatch = pattern.exec(newType)
-  if (!oldMatch || !newMatch) return false
-  const [, oldWrap, oldKind, oldCount] = oldMatch
-  const [, newWrap, newKind, newCount] = newMatch
-  if (oldWrap !== newWrap || oldKind !== newKind) return false
-  return Number(newCount) > Number(oldCount)
+export function isEnumAdditionOnly(oldType: string, newType: string): boolean {
+  const oldParsed = parseUnionType(oldType)
+  const newParsed = parseUnionType(newType)
+  if (!oldParsed || !newParsed) return false
+  if (oldParsed.wrapped !== newParsed.wrapped) return false
+  if (oldParsed.kind !== newParsed.kind) return false
+  return newParsed.count > oldParsed.count
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -276,7 +291,9 @@ export function diffFields(
  * @param op - Operation object.
  * @returns Schema object, or undefined.
  */
-export function getSuccessSchema(op: OperationObject): SchemaObject | undefined {
+export function getSuccessSchema(
+  op: OperationObject
+): SchemaObject | undefined {
   const responses = op.responses ?? {}
   for (const status of ['200', '201', '204']) {
     const content = responses[status]?.content
