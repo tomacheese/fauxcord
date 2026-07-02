@@ -488,6 +488,30 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
+    // contractTested: false — 204 response, nothing to validate against the schema
+    // (consistent with the other 204 role endpoint above).
+    specPath: '/guilds/{guild_id}/members/{user_id}/roles/{role_id}',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    // contractTested: false — 204 response, nothing to validate against the schema
+    // (consistent with the other 204 role endpoint above).
+    specPath: '/guilds/{guild_id}/members/{user_id}/roles/{role_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
     specPath: '/guilds/{guild_id}/webhooks',
     method: 'get',
     contractTested: false,
