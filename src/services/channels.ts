@@ -8,6 +8,7 @@ import type { Database } from '../db.js'
 // Used for compile-time type drift detection.
 import type { APIGuildTextChannel } from 'discord-api-types/v10'
 import type { ChannelType } from 'discord-api-types/v10'
+import { generateSnowflake } from '../snowflake.js'
 
 /**
  * Compile-time guard: ensures the safe-field subset of ChannelObject is
@@ -178,4 +179,46 @@ export function getGuildChannels(
     .prepare('SELECT * FROM channels WHERE guild_id = ? ORDER BY position, id')
     .all(guildId) as ChannelRow[]
   return rows.map((row) => toChannelObject(row))
+}
+
+/** Guild channel creation parameters */
+export interface GuildChannelCreateParams {
+  guildId: string
+  name: string
+  type?: number
+  topic?: string | null
+  nsfw?: boolean
+  parentId?: string | null
+  position: number
+}
+
+/**
+ * Creates a channel within a guild.
+ * @param db - Database
+ * @param params - Channel creation parameters
+ * @returns Created channel object
+ */
+export function createGuildChannel(
+  db: Database,
+  params: GuildChannelCreateParams
+): ChannelObject {
+  const channelId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channels (id, guild_id, name, type, topic, nsfw, position, parent_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    channelId,
+    params.guildId,
+    params.name,
+    params.type ?? 0,
+    params.topic ?? null,
+    params.nsfw ? 1 : 0,
+    params.position,
+    params.parentId ?? null
+  )
+
+  const row = db
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow
+  return toChannelObject(row)
 }
