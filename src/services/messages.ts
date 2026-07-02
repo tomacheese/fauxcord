@@ -62,7 +62,7 @@ interface MessageRow {
 }
 
 /** User record type retrieved from the DB */
-interface UserRow {
+export interface UserRow {
   id: string
   username: string
   discriminator: string
