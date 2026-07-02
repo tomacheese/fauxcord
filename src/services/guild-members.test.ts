@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { initializeDatabase, closeDatabase } from '../db.js'
 import type { Database } from '../db.js'
-import { addMemberRole, removeMemberRole } from './guilds.js'
+import { addMemberRole, removeMemberRole } from './guild-members.js'
 
 describe('Guilds Service', () => {
   let db: Database
