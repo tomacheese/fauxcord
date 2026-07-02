@@ -21,6 +21,8 @@ import {
   getGuildMembers,
   updateGuildMember,
   removeGuildMember,
+  addMemberRole,
+  removeMemberRole,
 } from '../services/guilds.js'
 import { getGuildChannels } from '../services/channels.js'
 import { getGuildWebhooks } from '../services/webhooks.js'
@@ -364,6 +366,96 @@ export function createGuildRoutes(db: Database): Hono {
       return c.json(err.body, 404)
     }
     return c.json(updated)
+  })
+
+  // PUT /guilds/:guildId/members/:userId/roles/:roleId — Add a role to a member
+  app.put('/guilds/:guildId/members/:userId/roles/:roleId', (c) => {
+    const { guildId, userId, roleId } = c.req.param()
+
+    const guild = getGuild(db, guildId)
+    if (!guild) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_GUILD,
+        'Unknown Guild',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    // The @everyone role (id == guild_id) is implicit and cannot be assigned explicitly
+    if (roleId === guildId) {
+      const err = discordError(
+        DiscordErrorCode.INVALID_ROLE,
+        'Invalid role',
+        400
+      )
+      return c.json(err.body, 400)
+    }
+
+    if (!getRole(db, guildId, roleId)) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_ROLE,
+        'Unknown Role',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    const ok = addMemberRole(db, guildId, userId, roleId)
+    if (!ok) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MEMBER,
+        'Unknown Member',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.body(null, 204)
+  })
+
+  // DELETE /guilds/:guildId/members/:userId/roles/:roleId — Remove a role from a member
+  app.delete('/guilds/:guildId/members/:userId/roles/:roleId', (c) => {
+    const { guildId, userId, roleId } = c.req.param()
+
+    const guild = getGuild(db, guildId)
+    if (!guild) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_GUILD,
+        'Unknown Guild',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    // The @everyone role (id == guild_id) is implicit and cannot be revoked explicitly
+    if (roleId === guildId) {
+      const err = discordError(
+        DiscordErrorCode.INVALID_ROLE,
+        'Invalid role',
+        400
+      )
+      return c.json(err.body, 400)
+    }
+
+    if (!getRole(db, guildId, roleId)) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_ROLE,
+        'Unknown Role',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    const ok = removeMemberRole(db, guildId, userId, roleId)
+    if (!ok) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MEMBER,
+        'Unknown Member',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.body(null, 204)
   })
 
   // DELETE /guilds/:guildId/members/:userId — Kick a member
