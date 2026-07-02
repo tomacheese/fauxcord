@@ -401,6 +401,8 @@ describe('Guilds API', () => {
         { method: 'PUT', headers: { Authorization: token } }
       )
       expect(res.status).toBe(400)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(50_028)
     })
   })
 
@@ -479,6 +481,8 @@ describe('Guilds API', () => {
         { method: 'DELETE', headers: { Authorization: token } }
       )
       expect(res.status).toBe(400)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(50_028)
     })
   })
 
