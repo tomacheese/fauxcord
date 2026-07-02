@@ -1,37 +1,27 @@
 /**
  * Guilds API routing
  *
- * Implements the /guilds/* endpoints.
+ * Implements the /guilds/* endpoints (guild CRUD, channels, webhooks) and
+ * composes the role/member sub-routers.
  */
 
 import { Hono } from 'hono'
 import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError } from '../errors.js'
-import { generateSnowflake } from '../snowflake.js'
-import {
-  getGuild,
-  updateGuild,
-  deleteGuild,
-  getGuildRoles,
-  createRole,
-  getRole,
-  updateRole,
-  deleteRole,
-  getGuildMember,
-  getGuildMembers,
-  updateGuildMember,
-  removeGuildMember,
-  addMemberRole,
-  removeMemberRole,
-} from '../services/guilds.js'
-import { getGuildChannels } from '../services/channels.js'
+import { DiscordErrorCode, discordError, validationError } from '../errors.js'
+import { getGuild, updateGuild, deleteGuild } from '../services/guilds.js'
+import { getGuildChannels, createGuildChannel } from '../services/channels.js'
 import { getGuildWebhooks } from '../services/webhooks.js'
-import { validateChannelCreate } from '../validators/guild.js'
-import { validationError as createValidationError } from '../errors.js'
-import { GUILD_LIMITS } from '../validators/guild.js'
+import {
+  validateChannelCreate,
+  validateGuildName,
+  GUILD_LIMITS,
+} from '../validators/guild.js'
+import { requireEntity } from '../lib/route-helpers.js'
+import { createGuildRoleRoutes } from './guild-roles.js'
+import { createGuildMemberRoutes } from './guild-members.js'
 
 /**
- * Creates the Guilds API routes.
+ * Creates the guilds API routes.
  * @param db - Database
  * @returns Hono router instance
  */
@@ -43,15 +33,13 @@ export function createGuildRoutes(db: Database): Hono {
     const { guildId } = c.req.param()
     const withCounts = c.req.query('with_counts') === 'true'
 
-    const guild = getGuild(db, guildId, withCounts)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId, withCounts),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
     return c.json(guild)
   })
 
@@ -60,15 +48,20 @@ export function createGuildRoutes(db: Database): Hono {
     const { guildId } = c.req.param()
     const payload = await c.req.json<{ name?: string }>()
 
-    const updated = updateGuild(db, guildId, { name: payload.name })
-    if (!updated) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
+    if (payload.name !== undefined) {
+      const errors = validateGuildName(payload.name)
+      if (Object.keys(errors).length > 0) {
+        return c.json(validationError(errors).body, 400)
+      }
     }
+
+    const updated = requireEntity(
+      c,
+      updateGuild(db, guildId, { name: payload.name }),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (updated instanceof Response) return updated
     return c.json(updated)
   })
 
@@ -92,15 +85,13 @@ export function createGuildRoutes(db: Database): Hono {
   app.get('/guilds/:guildId/channels', (c) => {
     const { guildId } = c.req.param()
 
-    const guild = getGuild(db, guildId)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
 
     const channels = getGuildChannels(db, guildId)
     return c.json(channels)
@@ -110,17 +101,14 @@ export function createGuildRoutes(db: Database): Hono {
   app.post('/guilds/:guildId/channels', async (c) => {
     const { guildId } = c.req.param()
 
-    const guild = getGuild(db, guildId)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
 
-    // Channel count limit check
     const channels = getGuildChannels(db, guildId)
     if (channels.length >= GUILD_LIMITS.CHANNELS_MAX) {
       const err = discordError(
@@ -140,338 +128,22 @@ export function createGuildRoutes(db: Database): Hono {
       position?: number | null
     }>()
 
-    // Validation
     const errors = validateChannelCreate(payload)
     if (Object.keys(errors).length > 0) {
-      return c.json(createValidationError(errors).body, 400)
+      return c.json(validationError(errors).body, 400)
     }
 
-    const channelId = generateSnowflake()
-    const position = payload.position ?? channels.length
-
-    db.prepare(
-      `INSERT INTO channels (id, guild_id, name, type, topic, nsfw, position, parent_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      channelId,
+    const newChannel = createGuildChannel(db, {
       guildId,
-      payload.name,
-      payload.type ?? 0,
-      payload.topic ?? null,
-      payload.nsfw ? 1 : 0,
-      position,
-      payload.parent_id ?? null
-    )
-
-    const newChannel = db
-      .prepare('SELECT * FROM channels WHERE id = ?')
-      .get(channelId) as {
-      id: string
-      guild_id: string | null
-      type: number
-      name: string | null
-      topic: string | null
-      nsfw: number
-      position: number
-      rate_limit_per_user: number
-      parent_id: string | null
-      last_message_id: string | null
-    }
-
-    return c.json(
-      {
-        id: newChannel.id,
-        type: newChannel.type,
-        flags: 0,
-        guild_id: newChannel.guild_id,
-        position: newChannel.position,
-        name: newChannel.name,
-        topic: newChannel.topic,
-        nsfw: newChannel.nsfw === 1,
-        last_message_id: newChannel.last_message_id,
-        rate_limit_per_user: newChannel.rate_limit_per_user,
-        parent_id: newChannel.parent_id,
-        permission_overwrites: [],
-      },
-      201
-    )
-  })
-
-  // GET /guilds/:guildId/members — List a guild's members
-  app.get('/guilds/:guildId/members', (c) => {
-    const { guildId } = c.req.param()
-    const limit = Number.parseInt(c.req.query('limit') ?? '1', 10)
-    const after = c.req.query('after') ?? '0'
-
-    const members = getGuildMembers(db, guildId, limit, after)
-    return c.json(members)
-  })
-
-  // GET /guilds/:guildId/members/:userId — Retrieve a specific guild member
-  app.get('/guilds/:guildId/members/:userId', (c) => {
-    const { guildId, userId } = c.req.param()
-
-    const member = getGuildMember(db, guildId, userId)
-    if (!member) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_MEMBER,
-        'Unknown Member',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.json(member)
-  })
-
-  // GET /guilds/:guildId/roles — List a guild's roles
-  app.get('/guilds/:guildId/roles', (c) => {
-    const { guildId } = c.req.param()
-    const roles = getGuildRoles(db, guildId)
-    return c.json(roles)
-  })
-
-  // POST /guilds/:guildId/roles — Create a role in a guild
-  app.post('/guilds/:guildId/roles', async (c) => {
-    const { guildId } = c.req.param()
-
-    const guild = getGuild(db, guildId)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    // Role count limit check
-    const roles = getGuildRoles(db, guildId)
-    if (roles.length >= GUILD_LIMITS.ROLES_MAX) {
-      const err = discordError(
-        DiscordErrorCode.MAX_ROLES_REACHED,
-        'Maximum number of guild roles reached (250)',
-        400
-      )
-      return c.json(err.body, 400)
-    }
-
-    const payload = await c.req.json<{
-      name?: string
-      permissions?: string
-      color?: number
-      hoist?: boolean
-      mentionable?: boolean
-    }>()
-
-    const roleId = generateSnowflake()
-    const role = createRole(db, {
-      roleId,
-      guildId,
-      ...payload,
+      name: payload.name,
+      type: payload.type,
+      topic: payload.topic,
+      nsfw: payload.nsfw,
+      parentId: payload.parent_id,
+      position: payload.position ?? channels.length,
     })
 
-    return c.json(role)
-  })
-
-  // PATCH /guilds/:guildId/roles/:roleId — Update role information
-  app.patch('/guilds/:guildId/roles/:roleId', async (c) => {
-    const { guildId, roleId } = c.req.param()
-
-    const guild = getGuild(db, guildId)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    const payload = await c.req.json<{
-      name?: string
-      color?: number
-      hoist?: boolean
-      mentionable?: boolean
-      permissions?: string
-    }>()
-
-    const updated = updateRole(db, guildId, roleId, payload)
-    if (!updated) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_ROLE,
-        'Unknown Role',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.json(updated)
-  })
-
-  // DELETE /guilds/:guildId/roles/:roleId — Delete a role
-  app.delete('/guilds/:guildId/roles/:roleId', (c) => {
-    const { guildId, roleId } = c.req.param()
-
-    // The @everyone role (id == guild_id) cannot be deleted
-    if (roleId === guildId) {
-      const err = discordError(
-        DiscordErrorCode.INVALID_ROLE,
-        'Invalid role',
-        400
-      )
-      return c.json(err.body, 400)
-    }
-
-    const deleted = deleteRole(db, guildId, roleId)
-    if (!deleted) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_ROLE,
-        'Unknown Role',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.body(null, 204)
-  })
-
-  // PATCH /guilds/:guildId/members/:userId — Update member information
-  app.patch('/guilds/:guildId/members/:userId', async (c) => {
-    const { guildId, userId } = c.req.param()
-
-    const payload = await c.req.json<{
-      nick?: string | null
-      roles?: string[]
-    }>()
-
-    // Verify that all specified roles exist in the guild
-    if (payload.roles !== undefined) {
-      for (const roleId of payload.roles) {
-        if (!getRole(db, guildId, roleId)) {
-          const err = discordError(
-            DiscordErrorCode.UNKNOWN_ROLE,
-            'Unknown Role',
-            404
-          )
-          return c.json(err.body, 404)
-        }
-      }
-    }
-
-    const updated = updateGuildMember(db, guildId, userId, payload)
-    if (!updated) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_MEMBER,
-        'Unknown Member',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.json(updated)
-  })
-
-  // PUT /guilds/:guildId/members/:userId/roles/:roleId — Add a role to a member
-  app.put('/guilds/:guildId/members/:userId/roles/:roleId', (c) => {
-    const { guildId, userId, roleId } = c.req.param()
-
-    const guild = getGuild(db, guildId)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    // The @everyone role (id == guild_id) is implicit and cannot be assigned explicitly
-    if (roleId === guildId) {
-      const err = discordError(
-        DiscordErrorCode.INVALID_ROLE,
-        'Invalid role',
-        400
-      )
-      return c.json(err.body, 400)
-    }
-
-    if (!getRole(db, guildId, roleId)) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_ROLE,
-        'Unknown Role',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    const ok = addMemberRole(db, guildId, userId, roleId)
-    if (!ok) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_MEMBER,
-        'Unknown Member',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.body(null, 204)
-  })
-
-  // DELETE /guilds/:guildId/members/:userId/roles/:roleId — Remove a role from a member
-  app.delete('/guilds/:guildId/members/:userId/roles/:roleId', (c) => {
-    const { guildId, userId, roleId } = c.req.param()
-
-    const guild = getGuild(db, guildId)
-    if (!guild) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_GUILD,
-        'Unknown Guild',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    // The @everyone role (id == guild_id) is implicit and cannot be revoked explicitly
-    if (roleId === guildId) {
-      const err = discordError(
-        DiscordErrorCode.INVALID_ROLE,
-        'Invalid role',
-        400
-      )
-      return c.json(err.body, 400)
-    }
-
-    if (!getRole(db, guildId, roleId)) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_ROLE,
-        'Unknown Role',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    const ok = removeMemberRole(db, guildId, userId, roleId)
-    if (!ok) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_MEMBER,
-        'Unknown Member',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.body(null, 204)
-  })
-
-  // DELETE /guilds/:guildId/members/:userId — Kick a member
-  app.delete('/guilds/:guildId/members/:userId', (c) => {
-    const { guildId, userId } = c.req.param()
-
-    const removed = removeGuildMember(db, guildId, userId)
-    if (!removed) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_MEMBER,
-        'Unknown Member',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-    return c.body(null, 204)
+    return c.json(newChannel, 201)
   })
 
   // GET /guilds/:guildId/webhooks — List a guild's webhooks
@@ -480,6 +152,9 @@ export function createGuildRoutes(db: Database): Hono {
     const webhooks = getGuildWebhooks(db, guildId)
     return c.json(webhooks)
   })
+
+  app.route('/', createGuildRoleRoutes(db))
+  app.route('/', createGuildMemberRoutes(db))
 
   return app
 }
