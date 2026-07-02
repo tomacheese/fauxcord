@@ -29,39 +29,26 @@ export interface GuildObject {
   name: string
   icon: string | null
   owner_id: string
-  region: string
-  afk_channel_id: null
   afk_timeout: number
   verification_level: number
   default_message_notifications: number
   explicit_content_filter: number
   roles: RoleObject[]
-  emojis: unknown[]
-  features: string[]
+  emojis: never[]
+  features: never[]
   mfa_level: number
-  application_id: null
   system_channel_id: null
-  system_channel_flags: number
-  rules_channel_id: null
-  vanity_url_code: null
-  description: null
-  banner: null
   premium_tier: number
   premium_subscription_count: number
   preferred_locale: string
-  public_updates_channel_id: null
-  nsfw_level: number
-  stickers: unknown[]
-  premium_progress_bar_enabled: boolean
-  safety_alerts_channel_id: null
+  channels?: unknown[]
   approximate_member_count?: number
-  approximate_presence_count?: number
 }
 
 /**
  * Converts a DB guild record into the API response format.
  * @param row - DB record
- * @param roles - Guild's role list
+ * @param roles - Array of role objects
  * @returns Object for API responses
  */
 function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
@@ -70,8 +57,6 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
     name: row.name,
     icon: row.icon,
     owner_id: row.owner_id,
-    region: 'us-east',
-    afk_channel_id: null,
     afk_timeout: 300,
     verification_level: row.verification_level,
     default_message_notifications: row.default_message_notifications,
@@ -80,29 +65,18 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
     emojis: [],
     features: [],
     mfa_level: 0,
-    application_id: null,
     system_channel_id: null,
-    system_channel_flags: 0,
-    rules_channel_id: null,
-    vanity_url_code: null,
-    description: null,
-    banner: null,
     premium_tier: row.premium_tier,
     premium_subscription_count: 0,
     preferred_locale: row.preferred_locale,
-    public_updates_channel_id: null,
-    nsfw_level: 0,
-    stickers: [],
-    premium_progress_bar_enabled: false,
-    safety_alerts_channel_id: null,
   }
 }
 
 /**
- * Retrieves a guild.
+ * Retrieves a guild by ID.
  * @param db - Database
  * @param guildId - Guild ID
- * @param withCounts - Whether to include approximate member/presence counts
+ * @param withCounts - Whether to include approximate_member_count
  * @returns Guild object, or null
  */
 export function getGuild(
@@ -110,9 +84,9 @@ export function getGuild(
   guildId: string,
   withCounts = false
 ): GuildObject | null {
-  const row = db
-    .prepare('SELECT * FROM guilds WHERE id = ?')
-    .get(guildId) as GuildRow | undefined
+  const row = db.prepare('SELECT * FROM guilds WHERE id = ?').get(guildId) as
+    | GuildRow
+    | undefined
   if (!row) return null
 
   const guild = toGuildObject(row, getGuildRoles(db, guildId))
@@ -120,13 +94,10 @@ export function getGuild(
   if (withCounts) {
     const memberCount = (
       db
-        .prepare(
-          'SELECT COUNT(*) as cnt FROM guild_members WHERE guild_id = ?'
-        )
+        .prepare('SELECT COUNT(*) as cnt FROM guild_members WHERE guild_id = ?')
         .get(guildId) as { cnt: number }
     ).cnt
     guild.approximate_member_count = memberCount
-    guild.approximate_presence_count = memberCount
   }
 
   return guild
