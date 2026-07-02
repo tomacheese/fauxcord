@@ -189,6 +189,8 @@ export function getBotGuilds(
   id: string
   name: string
   icon: string | null
+  /** Guild banner hash (always null in the mock) */
+  banner: string | null
   owner: boolean
   permissions: string
   features: string[]
@@ -201,6 +203,7 @@ export function getBotGuilds(
     id: row.id,
     name: row.name,
     icon: row.icon,
+    banner: null,
     owner: false,
     permissions: '0',
     features: [],
