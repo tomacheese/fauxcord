@@ -708,3 +708,53 @@ export function removeGuildMember(
   )
   return true
 }
+
+/**
+ * Adds a role to a guild member (idempotent).
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param userId - User ID
+ * @param roleId - Role ID to add
+ * @returns true if the member exists (regardless of whether the role was already assigned), false if the member does not exist
+ */
+export function addMemberRole(
+  db: Database,
+  guildId: string,
+  userId: string,
+  roleId: string
+): boolean {
+  const member = db
+    .prepare('SELECT 1 FROM guild_members WHERE guild_id = ? AND user_id = ?')
+    .get(guildId, userId)
+  if (!member) return false
+
+  db.prepare(
+    'INSERT OR IGNORE INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+  ).run(guildId, userId, roleId)
+  return true
+}
+
+/**
+ * Removes a role from a guild member (idempotent).
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param userId - User ID
+ * @param roleId - Role ID to remove
+ * @returns true if the member exists (regardless of whether the role was assigned), false if the member does not exist
+ */
+export function removeMemberRole(
+  db: Database,
+  guildId: string,
+  userId: string,
+  roleId: string
+): boolean {
+  const member = db
+    .prepare('SELECT 1 FROM guild_members WHERE guild_id = ? AND user_id = ?')
+    .get(guildId, userId)
+  if (!member) return false
+
+  db.prepare(
+    'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
+  ).run(guildId, userId, roleId)
+  return true
+}
