@@ -51,6 +51,7 @@ interface MemberRow {
   joined_at: string
   deaf: number
   mute: number
+  flags: number
 }
 
 /** User subset embedded in a guild member object */
@@ -60,20 +61,35 @@ export interface MemberUserObject {
   discriminator: string
   avatar: string | null
   bot: boolean
+  /** User account flags (always 0 in the mock) */
+  flags: number
+  /** User public flags bitset (always 0 in the mock) */
+  public_flags: number
+  /** Display name (always null in the mock) */
+  global_name: string | null
+  /** Primary guild info (always null in the mock) */
+  primary_guild: string | null
 }
 
 /** Guild member object for API responses */
 export interface GuildMemberObject {
-  user: MemberUserObject
-  nick: string | null
-  avatar: null
-  roles: string[]
-  joined_at: string
-  premium_since: null
-  deaf: boolean
-  mute: boolean
+  /** Member's guild-specific avatar hash (always null in the mock) */
+  avatar: string | null
+  /** Member's guild-specific banner hash (always null in the mock) */
+  banner: string | null
+  /** Timestamp when the member's timeout expires (always null in the mock) */
+  communication_disabled_until: string | null
   flags: number
+  joined_at: string
+  nick: string | null
+  /** Whether the member has not yet passed the guild's membership screening (always false in the mock) */
   pending: boolean
+  /** Timestamp when the member started boosting the guild (always null in the mock) */
+  premium_since: string | null
+  roles: string[]
+  user: MemberUserObject
+  mute: boolean
+  deaf: boolean
   permissions?: string
 }
 
@@ -127,22 +143,28 @@ export function getGuildMember(
   if (!userRow) return null
 
   return {
+    avatar: null,
+    banner: null,
+    communication_disabled_until: null,
+    flags: memberRow.flags,
+    joined_at: new Date(memberRow.joined_at).toISOString(),
+    nick: memberRow.nick,
+    pending: false,
+    premium_since: null,
+    roles: getMemberRoleIds(db, guildId, userId),
     user: {
       id: userRow.id,
       username: userRow.username,
       discriminator: userRow.discriminator,
       avatar: userRow.avatar,
       bot: userRow.bot === 1,
+      flags: 0,
+      public_flags: 0,
+      global_name: null,
+      primary_guild: null,
     },
-    nick: memberRow.nick,
-    avatar: null,
-    roles: getMemberRoleIds(db, guildId, userId),
-    joined_at: memberRow.joined_at,
-    premium_since: null,
-    deaf: memberRow.deaf === 1,
     mute: memberRow.mute === 1,
-    flags: 0,
-    pending: false,
+    deaf: memberRow.deaf === 1,
   }
 }
 
@@ -170,7 +192,7 @@ export function getGuildMembers(
     .all(guildId, after, clampedLimit) as MemberRow[]
 
   return memberRows
-    .map((memberRow) => {
+    .map((memberRow): GuildMemberObject | null => {
       const userRow = db
         .prepare('SELECT * FROM users WHERE id = ?')
         .get(memberRow.user_id) as
@@ -185,22 +207,28 @@ export function getGuildMembers(
       if (!userRow) return null
 
       return {
+        avatar: null,
+        banner: null,
+        communication_disabled_until: null,
+        flags: memberRow.flags,
+        joined_at: new Date(memberRow.joined_at).toISOString(),
+        nick: memberRow.nick,
+        pending: false,
+        premium_since: null,
+        roles: getMemberRoleIds(db, guildId, memberRow.user_id),
         user: {
           id: userRow.id,
           username: userRow.username,
           discriminator: userRow.discriminator,
           avatar: userRow.avatar,
           bot: userRow.bot === 1,
+          flags: 0,
+          public_flags: 0,
+          global_name: null,
+          primary_guild: null,
         },
-        nick: memberRow.nick,
-        avatar: null,
-        roles: getMemberRoleIds(db, guildId, memberRow.user_id),
-        joined_at: memberRow.joined_at,
-        premium_since: null,
-        deaf: memberRow.deaf === 1,
         mute: memberRow.mute === 1,
-        flags: 0,
-        pending: false,
+        deaf: memberRow.deaf === 1,
       }
     })
     .filter((m): m is GuildMemberObject => m !== null)
