@@ -69,6 +69,18 @@ describe('Guilds Service', () => {
       const result = addMemberRole(db, guildId, '999999999999999999', roleId)
       expect(result).toBe(false)
     })
+
+    it('returns false when the role does not exist', () => {
+      const result = addMemberRole(db, guildId, userId, '999999999999999999')
+      expect(result).toBe(false)
+
+      const row = db
+        .prepare(
+          'SELECT 1 FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
+        )
+        .get(guildId, userId, '999999999999999999')
+      expect(row).toBeUndefined()
+    })
   })
 
   describe('removeMemberRole', () => {
