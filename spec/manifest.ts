@@ -488,6 +488,26 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
+    specPath: '/guilds/{guild_id}/members/{user_id}/roles/{role_id}',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/members/{user_id}/roles/{role_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
     specPath: '/guilds/{guild_id}/webhooks',
     method: 'get',
     contractTested: false,
