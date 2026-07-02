@@ -335,9 +335,12 @@ describe('Guilds API', () => {
       )
       expect(res.status).toBe(204)
 
-      const memberRes = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        headers: { Authorization: token },
-      })
+      const memberRes = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          headers: { Authorization: token },
+        }
+      )
       const member = (await memberRes.json()) as { roles: string[] }
       expect(member.roles).toContain(roleId)
     })
@@ -345,10 +348,13 @@ describe('Guilds API', () => {
     it('is idempotent when the role is already assigned', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
-      await app.request(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
-        method: 'PUT',
-        headers: { Authorization: token },
-      })
+      await app.request(
+        `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
+        {
+          method: 'PUT',
+          headers: { Authorization: token },
+        }
+      )
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
         { method: 'PUT', headers: { Authorization: token } }
@@ -414,9 +420,12 @@ describe('Guilds API', () => {
       )
       expect(res.status).toBe(204)
 
-      const memberRes = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        headers: { Authorization: token },
-      })
+      const memberRes = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          headers: { Authorization: token },
+        }
+      )
       const member = (await memberRes.json()) as { roles: string[] }
       expect(member.roles).not.toContain(roleId)
     })

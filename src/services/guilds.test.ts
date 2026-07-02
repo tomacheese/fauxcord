@@ -119,12 +119,7 @@ describe('Guilds Service', () => {
     })
 
     it('returns false when the member does not exist', () => {
-      const result = removeMemberRole(
-        db,
-        guildId,
-        '999999999999999999',
-        roleId
-      )
+      const result = removeMemberRole(db, guildId, '999999999999999999', roleId)
       expect(result).toBe(false)
     })
   })
