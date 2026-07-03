@@ -36,8 +36,7 @@ curl http://localhost:3000/_mock/health
 # Install dependencies
 pnpm install
 
-# Build and start the server
-pnpm build
+# Start the server
 pnpm start
 
 # Dev mode (auto-restarts on file changes)
