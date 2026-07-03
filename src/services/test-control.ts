@@ -170,10 +170,18 @@ export function resetTestData(db: Database, token?: string): void {
          WHERE g.bot_token = ?
        )`
     ).run(token)
+    db.prepare(
+      `DELETE FROM invites WHERE channel_id IN (
+         SELECT c.id FROM channels c
+         JOIN guilds g ON g.id = c.guild_id
+         WHERE g.bot_token = ?
+       )`
+    ).run(token)
   } else {
     // Reset all data (the tables themselves are kept)
     db.exec('DELETE FROM messages')
     db.exec('DELETE FROM webhooks')
+    db.exec('DELETE FROM invites')
     db.exec('DELETE FROM reactions')
     db.exec('DELETE FROM pins')
     db.exec('DELETE FROM embeds')

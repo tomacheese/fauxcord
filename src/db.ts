@@ -217,6 +217,20 @@ export function initializeDatabase(dbPath: string): Database {
       expires_at    TEXT NOT NULL,
       refresh_token TEXT UNIQUE
     );
+
+    CREATE TABLE IF NOT EXISTS invites (
+      code        TEXT PRIMARY KEY,
+      channel_id  TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      guild_id    TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+      inviter_id  TEXT,
+      max_age     INTEGER NOT NULL DEFAULT 86400,
+      max_uses    INTEGER NOT NULL DEFAULT 0,
+      temporary   INTEGER NOT NULL DEFAULT 0,
+      uses        INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_invites_channel ON invites(channel_id);
   `)
 
   return db

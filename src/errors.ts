@@ -13,6 +13,7 @@ export const DiscordErrorCode = {
   UNKNOWN_GUILD: 10_004,
   UNKNOWN_MEMBER: 10_007,
   UNKNOWN_MESSAGE: 10_008,
+  UNKNOWN_INVITE: 10_006,
   UNKNOWN_ROLE: 10_011,
   UNKNOWN_TOKEN: 10_012,
   UNKNOWN_USER: 10_013,
@@ -35,6 +36,7 @@ export const DiscordErrorCode = {
   MISSING_PERMISSIONS: 50_013,
   INVALID_BULK_DELETE: 50_016,
   WRONG_PIN_CHANNEL: 50_019,
+  CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE: 50_024,
   INVALID_ROLE: 50_028,
   MESSAGE_TOO_OLD: 50_034,
   INVALID_FORM_BODY: 50_035,
@@ -96,6 +98,7 @@ export const ERROR_MESSAGES = {
   [DiscordErrorCode.UNKNOWN_GUILD]: 'Unknown Guild',
   [DiscordErrorCode.UNKNOWN_MEMBER]: 'Unknown Member',
   [DiscordErrorCode.UNKNOWN_MESSAGE]: 'Unknown Message',
+  [DiscordErrorCode.UNKNOWN_INVITE]: 'Unknown Invite',
   [DiscordErrorCode.UNKNOWN_ROLE]: 'Unknown Role',
   [DiscordErrorCode.UNKNOWN_TOKEN]: 'Unknown Token',
   [DiscordErrorCode.UNKNOWN_USER]: 'Unknown User',
@@ -124,6 +127,8 @@ export const ERROR_MESSAGES = {
     'Provided too many messages to delete',
   [DiscordErrorCode.WRONG_PIN_CHANNEL]:
     'A message can only be pinned to the channel it was sent in',
+  [DiscordErrorCode.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE]:
+    'Cannot execute action on this channel type',
   [DiscordErrorCode.INVALID_ROLE]: 'Invalid role',
   [DiscordErrorCode.MESSAGE_TOO_OLD]:
     'A message provided was too old to bulk delete',

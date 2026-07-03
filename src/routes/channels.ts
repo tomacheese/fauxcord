@@ -20,6 +20,7 @@ import { createChannelMessageRoutes } from './channel-messages.js'
 import { createChannelReactionRoutes } from './channel-reactions.js'
 import { createChannelWebhookRoutes } from './channel-webhooks.js'
 import { createChannelTypingRoutes } from './channel-typing.js'
+import { createChannelInviteRoutes } from './channel-invites.js'
 
 /**
  * Creates the channels API routes.
@@ -92,6 +93,7 @@ export function createChannelRoutes(
   app.route('/', createChannelReactionRoutes(db, baseUrl))
   app.route('/', createChannelWebhookRoutes(db))
   app.route('/', createChannelTypingRoutes(db))
+  app.route('/', createChannelInviteRoutes(db))
 
   return app
 }

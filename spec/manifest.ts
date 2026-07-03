@@ -79,6 +79,8 @@ export interface ContractFixture {
   memberId: string
   /** Seeded emoji ID */
   emojiId: string
+  /** Seeded invite code */
+  inviteCode: string
 }
 
 /** A single entry in the endpoint manifest. */
@@ -362,6 +364,58 @@ export const MANIFEST: SpecEndpoint[] = [
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Test Webhook' }),
       },
+    }),
+  },
+  {
+    // Response is an array of oneOf invite types. Following the
+    // GET /channels/{channel_id}/webhooks precedent, this is drift-detection
+    // only (contractTested: false) rather than validated per-item.
+    specPath: '/channels/{channel_id}/invites',
+    method: 'get',
+    contractTested: false,
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/channels/${f.channelId}/invites` }),
+  },
+  {
+    specPath: '/channels/{channel_id}/invites',
+    method: 'post',
+    contractTested: true,
+    successStatus: 200,
+    // The spec response is a oneOf; the mock always returns the guild-invite
+    // branch, so pin the schema to GuildInviteResponse.
+    responseSchemaOverride: 'GuildInviteResponse',
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/invites`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ max_age: 3600 }),
+      },
+    }),
+  },
+
+  // ─── Invites ──────────────────────────────────────────────────────────────
+
+  {
+    specPath: '/invites/{code}',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    responseSchemaOverride: 'GuildInviteResponse',
+    request: (f) => ({ path: `/api/v10/invites/${f.inviteCode}` }),
+  },
+  {
+    // DELETE returns the deleted invite (200), but is excluded from contract
+    // tests because it is destructive: deleting the fixture invite would break
+    // the GET /invites/{code} contract test in the same run.
+    specPath: '/invites/{code}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 200,
+    responseSchemaOverride: 'GuildInviteResponse',
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}`,
+      init: { method: 'DELETE' },
     }),
   },
 
