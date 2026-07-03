@@ -101,9 +101,9 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     if (!bot) {
       const authHeader = c.req.header('Authorization')
       if (authHeader) {
-        bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(authHeader) as
-          | BotRow
-          | undefined
+        bot = db
+          .prepare('SELECT * FROM bots WHERE token = ?')
+          .get(authHeader) as BotRow | undefined
       }
     }
 
