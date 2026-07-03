@@ -88,9 +88,7 @@ export function createChannelPinRoutes(db: Database, baseUrl: string): Hono {
       )
       .all(channelId) as { message_id: string; pinned_at: string }[]
 
-    const pinnedAtMap = new Map(
-      pinRows.map((r) => [r.message_id, r.pinned_at])
-    )
+    const pinnedAtMap = new Map(pinRows.map((r) => [r.message_id, r.pinned_at]))
     return c.json({
       items: pins.map((msg) => ({
         pinned_at: new Date(

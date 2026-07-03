@@ -319,12 +319,9 @@ describe('Guild Members API', () => {
       expect(res.status).toBe(204)
 
       // The kicked member should not be retrievable
-      const getRes = await app.request(
-        `/guilds/${guildId}/members/${userId}`,
-        {
-          headers: { Authorization: token },
-        }
-      )
+      const getRes = await app.request(`/guilds/${guildId}/members/${userId}`, {
+        headers: { Authorization: token },
+      })
       expect(getRes.status).toBe(404)
     })
 

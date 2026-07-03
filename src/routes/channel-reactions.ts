@@ -65,26 +65,23 @@ export function createChannelReactionRoutes(db: Database): Hono<AppEnv> {
   )
 
   // GET /channels/:channelId/messages/:messageId/reactions/:emoji — List users who reacted
-  app.get(
-    '/channels/:channelId/messages/:messageId/reactions/:emoji',
-    (c) => {
-      const { messageId, emoji } = c.req.param()
-      const decodedEmoji = decodeURIComponent(emoji)
-      const limit = parseLimitQuery(c, 25, 100)
-      const after = c.req.query('after')
+  app.get('/channels/:channelId/messages/:messageId/reactions/:emoji', (c) => {
+    const { messageId, emoji } = c.req.param()
+    const decodedEmoji = decodeURIComponent(emoji)
+    const limit = parseLimitQuery(c, 25, 100)
+    const after = c.req.query('after')
 
-      const users = getReactionUsers(db, messageId, decodedEmoji, limit, after)
-      return c.json(
-        users.map((u) => ({
-          id: u.id,
-          username: u.username,
-          discriminator: u.discriminator,
-          avatar: u.avatar,
-          bot: u.bot === 1,
-        }))
-      )
-    }
-  )
+    const users = getReactionUsers(db, messageId, decodedEmoji, limit, after)
+    return c.json(
+      users.map((u) => ({
+        id: u.id,
+        username: u.username,
+        discriminator: u.discriminator,
+        avatar: u.avatar,
+        bot: u.bot === 1,
+      }))
+    )
+  })
 
   // DELETE /channels/:channelId/messages/:messageId/reactions/:emoji — Remove all reactions for an emoji
   app.delete(
