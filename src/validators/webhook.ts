@@ -92,3 +92,12 @@ export function validateWebhookExecute(
 
   return errors
 }
+
+/**
+ * Checks whether a channel has reached its webhook count limit.
+ * @param currentCount - Current number of webhooks in the channel
+ * @returns true if the limit has been reached
+ */
+export function isChannelWebhookLimitReached(currentCount: number): boolean {
+  return currentCount >= WEBHOOK_LIMITS.CHANNEL_WEBHOOKS_MAX
+}

@@ -87,3 +87,102 @@ export function validateChannelCreate(
 
   return errors
 }
+
+/** Role update request type */
+export interface RoleUpdatePayload {
+  name?: string
+  permissions?: string
+  color?: number
+  hoist?: boolean
+  mentionable?: boolean
+}
+
+/**
+ * Validates a role creation payload: `name` length, `color` range, and
+ * `permissions` numeric format.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateRoleCreate(
+  payload: RoleCreatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (payload.name !== undefined) {
+    if (typeof payload.name !== 'string') {
+      errors.name = { _errors: [typeError('string')] }
+    } else if (payload.name.length > GUILD_LIMITS.NAME_MAX) {
+      errors.name = { _errors: [maxLengthError(GUILD_LIMITS.NAME_MAX)] }
+    }
+  }
+
+  if (
+    payload.color !== undefined &&
+    (!Number.isInteger(payload.color) ||
+      payload.color < 0 ||
+      payload.color > 0xff_ff_ff)
+  ) {
+    errors.color = {
+      _errors: [
+        {
+          code: 'NUMBER_TYPE_MAX',
+          message: 'Must be an integer between 0 and 16777215.',
+        },
+      ],
+    }
+  }
+
+  if (payload.permissions !== undefined && !/^\d+$/.test(payload.permissions)) {
+    errors.permissions = {
+      _errors: [
+        {
+          code: 'BASE_TYPE_BAD_TYPE',
+          message: 'Value must be a numeric string.',
+        },
+      ],
+    }
+  }
+
+  return errors
+}
+
+/**
+ * Validates a role update payload. Uses the same rules as role creation.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateRoleUpdate(
+  payload: RoleUpdatePayload
+): ValidationErrors {
+  return validateRoleCreate(payload)
+}
+
+/** Maximum guild member nickname length (Discord's limit) */
+const NICK_MAX = 32
+
+/** Guild member update request type */
+export interface GuildMemberUpdatePayload {
+  nick?: string | null
+  roles?: string[]
+}
+
+/**
+ * Validates a guild member update payload: `nick` length.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateGuildMemberUpdate(
+  payload: GuildMemberUpdatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (
+    payload.nick !== undefined &&
+    payload.nick !== null &&
+    payload.nick.length > NICK_MAX
+  ) {
+    errors.nick = { _errors: [maxLengthError(NICK_MAX)] }
+  }
+
+  return errors
+}

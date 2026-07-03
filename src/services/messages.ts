@@ -1,7 +1,8 @@
 /**
  * Message operations service
  *
- * Provides message CRUD operations, reactions, and pinning features.
+ * Provides CRUD operations for messages, and a shared row-hydration helper
+ * reused by the message-list, single-message, and pin-list queries.
  */
 
 import type { Database } from '../db.js'
@@ -45,7 +46,7 @@ type _MessageCompatGuard =
     : never
 
 /** Message record type retrieved from the DB */
-interface MessageRow {
+export interface MessageRow {
   id: string
   channel_id: string
   author_id: string
@@ -62,7 +63,7 @@ interface MessageRow {
 }
 
 /** User record type retrieved from the DB */
-interface UserRow {
+export interface UserRow {
   id: string
   username: string
   discriminator: string
@@ -242,6 +243,43 @@ export function toMessageObject(
 }
 
 /**
+ * Loads a message row's related author/embeds/attachments/reactions and
+ * converts it into the API response format. Returns null if the author no
+ * longer exists (e.g. a deleted user), matching the filtering behavior the
+ * call sites relied on before this helper existed.
+ * @param db - Database
+ * @param row - Message DB record
+ * @param baseUrl - Base URL
+ * @returns Message object, or null if the author record is missing
+ */
+export function hydrateMessageRow(
+  db: Database,
+  row: MessageRow,
+  baseUrl: string
+): MessageObject | null {
+  const author = db
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .get(row.author_id) as UserRow | undefined
+  if (!author) return null
+
+  const embeds = db
+    .prepare('SELECT * FROM embeds WHERE message_id = ? ORDER BY position')
+    .all(row.id) as EmbedRow[]
+
+  const attachments = db
+    .prepare('SELECT * FROM attachments WHERE message_id = ?')
+    .all(row.id) as AttachmentRow[]
+
+  const reactions = db
+    .prepare(
+      'SELECT emoji, COUNT(*) as count FROM reactions WHERE message_id = ? GROUP BY emoji'
+    )
+    .all(row.id) as ReactionAggRow[]
+
+  return toMessageObject(row, author, embeds, attachments, reactions, baseUrl)
+}
+
+/**
  * Retrieves a message from the DB and converts it into the API response format.
  * @param db - Database
  * @param messageId - Message ID
@@ -258,26 +296,7 @@ export function getMessage(
     .get(messageId) as MessageRow | undefined
   if (!row) return null
 
-  const author = db
-    .prepare('SELECT * FROM users WHERE id = ?')
-    .get(row.author_id) as UserRow | undefined
-  if (!author) return null
-
-  const embeds = db
-    .prepare('SELECT * FROM embeds WHERE message_id = ? ORDER BY position')
-    .all(messageId) as EmbedRow[]
-
-  const attachments = db
-    .prepare('SELECT * FROM attachments WHERE message_id = ?')
-    .all(messageId) as AttachmentRow[]
-
-  const reactions = db
-    .prepare(
-      'SELECT emoji, COUNT(*) as count FROM reactions WHERE message_id = ? GROUP BY emoji'
-    )
-    .all(messageId) as ReactionAggRow[]
-
-  return toMessageObject(row, author, embeds, attachments, reactions, baseUrl)
+  return hydrateMessageRow(db, row, baseUrl)
 }
 
 /** Query parameters for listing messages */
@@ -335,26 +354,7 @@ export function getMessages(
     const rows = [...afterRows.toReversed(), ...beforeRows]
 
     return rows
-      .map((r) => {
-        const author = db
-          .prepare('SELECT * FROM users WHERE id = ?')
-          .get(r.author_id) as UserRow | undefined
-        if (!author) return null
-        const embeds = db
-          .prepare(
-            'SELECT * FROM embeds WHERE message_id = ? ORDER BY position'
-          )
-          .all(r.id) as EmbedRow[]
-        const attachments = db
-          .prepare('SELECT * FROM attachments WHERE message_id = ?')
-          .all(r.id) as AttachmentRow[]
-        const rxns = db
-          .prepare(
-            'SELECT emoji, COUNT(*) as count FROM reactions WHERE message_id = ? GROUP BY emoji'
-          )
-          .all(r.id) as ReactionAggRow[]
-        return toMessageObject(r, author, embeds, attachments, rxns, baseUrl)
-      })
+      .map((r) => hydrateMessageRow(db, r, baseUrl))
       .filter((m): m is MessageObject => m !== null)
   } else {
     query =
@@ -369,24 +369,7 @@ export function getMessages(
   const orderedRows = params.after ? rows.toReversed() : rows
 
   return orderedRows
-    .map((r) => {
-      const author = db
-        .prepare('SELECT * FROM users WHERE id = ?')
-        .get(r.author_id) as UserRow | undefined
-      if (!author) return null
-      const embeds = db
-        .prepare('SELECT * FROM embeds WHERE message_id = ? ORDER BY position')
-        .all(r.id) as EmbedRow[]
-      const attachments = db
-        .prepare('SELECT * FROM attachments WHERE message_id = ?')
-        .all(r.id) as AttachmentRow[]
-      const rxns = db
-        .prepare(
-          'SELECT emoji, COUNT(*) as count FROM reactions WHERE message_id = ? GROUP BY emoji'
-        )
-        .all(r.id) as ReactionAggRow[]
-      return toMessageObject(r, author, embeds, attachments, rxns, baseUrl)
-    })
+    .map((r) => hydrateMessageRow(db, r, baseUrl))
     .filter((m): m is MessageObject => m !== null)
 }
 
@@ -528,220 +511,5 @@ export function isTooOldForBulkDelete(
 
     const createdAt = new Date(row.created_at).getTime()
     return Date.now() - createdAt > TWO_WEEKS_MS
-  }
-}
-
-/**
- * Adds a reaction.
- * @param db - Database
- * @param messageId - Message ID
- * @param userId - User ID
- * @param emoji - Emoji
- * @returns true on successful addition
- */
-export function addReaction(
-  db: Database,
-  messageId: string,
-  userId: string,
-  emoji: string
-): boolean {
-  try {
-    db.prepare(
-      'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
-    ).run(messageId, userId, emoji)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
- * Removes a reaction (the user's own reaction).
- * @param db - Database
- * @param messageId - Message ID
- * @param userId - User ID
- * @param emoji - Emoji
- */
-export function removeReaction(
-  db: Database,
-  messageId: string,
-  userId: string,
-  emoji: string
-): void {
-  db.prepare(
-    'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
-  ).run(messageId, userId, emoji)
-}
-
-/**
- * Removes all reactions for the specified emoji.
- * @param db - Database
- * @param messageId - Message ID
- * @param emoji - Emoji
- */
-export function removeEmojiReactions(
-  db: Database,
-  messageId: string,
-  emoji: string
-): void {
-  db.prepare('DELETE FROM reactions WHERE message_id = ? AND emoji = ?').run(
-    messageId,
-    emoji
-  )
-}
-
-/**
- * Removes all reactions from a message.
- * @param db - Database
- * @param messageId - Message ID
- */
-export function removeAllReactions(db: Database, messageId: string): void {
-  db.prepare('DELETE FROM reactions WHERE message_id = ?').run(messageId)
-}
-
-/**
- * Retrieves the list of users who reacted.
- * @param db - Database
- * @param messageId - Message ID
- * @param emoji - Emoji
- * @param limit - Number of items to retrieve (default 25)
- * @param after - Pagination cursor
- * @returns Array of user objects
- */
-export function getReactionUsers(
-  db: Database,
-  messageId: string,
-  emoji: string,
-  limit = 25,
-  after?: string
-): UserRow[] {
-  const clampedLimit = Math.min(limit, 100)
-  if (after) {
-    return db
-      .prepare(
-        `SELECT u.* FROM users u
-         JOIN reactions r ON r.user_id = u.id
-         WHERE r.message_id = ? AND r.emoji = ? AND u.id > ?
-         ORDER BY u.id ASC LIMIT ?`
-      )
-      .all(messageId, emoji, after, clampedLimit) as UserRow[]
-  }
-  return db
-    .prepare(
-      `SELECT u.* FROM users u
-       JOIN reactions r ON r.user_id = u.id
-       WHERE r.message_id = ? AND r.emoji = ?
-       ORDER BY u.id ASC LIMIT ?`
-    )
-    .all(messageId, emoji, clampedLimit) as UserRow[]
-}
-
-/**
- * Retrieves the list of pinned messages.
- * @param db - Database
- * @param channelId - Channel ID
- * @param baseUrl - Base URL
- * @returns Array of message objects
- */
-export function getPinnedMessages(
-  db: Database,
-  channelId: string,
-  baseUrl: string
-): MessageObject[] {
-  const rows = db
-    .prepare(
-      `SELECT m.* FROM messages m
-       JOIN pins p ON p.message_id = m.id
-       WHERE p.channel_id = ?
-       ORDER BY p.pinned_at ASC`
-    )
-    .all(channelId) as MessageRow[]
-
-  return rows
-    .map((r) => {
-      const author = db
-        .prepare('SELECT * FROM users WHERE id = ?')
-        .get(r.author_id) as UserRow | undefined
-      if (!author) return null
-      const embeds = db
-        .prepare('SELECT * FROM embeds WHERE message_id = ? ORDER BY position')
-        .all(r.id) as EmbedRow[]
-      const attachments = db
-        .prepare('SELECT * FROM attachments WHERE message_id = ?')
-        .all(r.id) as AttachmentRow[]
-      const rxns = db
-        .prepare(
-          'SELECT emoji, COUNT(*) as count FROM reactions WHERE message_id = ? GROUP BY emoji'
-        )
-        .all(r.id) as ReactionAggRow[]
-      return toMessageObject(r, author, embeds, attachments, rxns, baseUrl)
-    })
-    .filter((m): m is MessageObject => m !== null)
-}
-
-/**
- * Pins a message.
- * @param db - Database
- * @param channelId - Channel ID
- * @param messageId - Message ID
- * @returns Error code (0 = success, 10008 = message not found, 40041 = already pinned, 30003 = limit reached, 50019 = different channel)
- */
-export function pinMessage(
-  db: Database,
-  channelId: string,
-  messageId: string
-): 0 | 10_008 | 40_041 | 30_003 | 50_019 {
-  // Verify the message is in the same channel
-  const msg = db
-    .prepare('SELECT channel_id FROM messages WHERE id = ?')
-    .get(messageId) as { channel_id: string } | undefined
-
-  // Like real Discord, a nonexistent message returns 404 Unknown Message
-  if (!msg) return 10_008
-  if (msg.channel_id !== channelId) return 50_019
-
-  // Already-pinned check
-  const existing = db
-    .prepare('SELECT 1 FROM pins WHERE channel_id = ? AND message_id = ?')
-    .get(channelId, messageId)
-  if (existing) return 40_041
-
-  // Limit check
-  const count = (
-    db
-      .prepare('SELECT COUNT(*) as cnt FROM pins WHERE channel_id = ?')
-      .get(channelId) as { cnt: number }
-  ).cnt
-  if (count >= 50) return 30_003
-
-  db.prepare('INSERT INTO pins (channel_id, message_id) VALUES (?, ?)').run(
-    channelId,
-    messageId
-  )
-  db.prepare('UPDATE messages SET pinned = 1 WHERE id = ?').run(messageId)
-  return 0
-}
-
-/**
- * Unpins a message.
- * @param db - Database
- * @param channelId - Channel ID
- * @param messageId - Message ID
- */
-export function unpinMessage(
-  db: Database,
-  channelId: string,
-  messageId: string
-): void {
-  db.prepare('DELETE FROM pins WHERE channel_id = ? AND message_id = ?').run(
-    channelId,
-    messageId
-  )
-  // Set pinned=0 unless still pinned in another channel
-  const stillPinned = db
-    .prepare('SELECT 1 FROM pins WHERE message_id = ?')
-    .get(messageId)
-  if (!stillPinned) {
-    db.prepare('UPDATE messages SET pinned = 0 WHERE id = ?').run(messageId)
   }
 }

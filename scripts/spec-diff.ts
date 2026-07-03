@@ -27,6 +27,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ENUM_NOISE } from '../spec/enum-noise.js'
+import { MANIFEST } from '../spec/manifest.js'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -98,6 +99,12 @@ export interface SpecDiffResult {
 const enumNoiseSet = new Set(
   ENUM_NOISE.map((e) => `${e.specPath}|${e.method}|${e.field}`)
 )
+
+/** Minimal shape of a manifest entry needed to build the implemented-endpoint set */
+interface ManifestEntry {
+  specPath: string
+  method: string
+}
 
 /**
  * Parses a `describeType` output string into its union-kind and choice
@@ -388,14 +395,22 @@ export function getPathMethodSet(spec: OpenApiSpec): Set<string> {
 }
 
 /**
+ * Builds the set of "specPath|method" keys the mock has implemented, per
+ * the manifest.
+ * @param manifest - Manifest entries
+ * @returns Set of "specPath|method" keys
+ */
+function buildImplementedSet(manifest: ManifestEntry[]): Set<string> {
+  return new Set(manifest.map((e) => `${e.specPath}|${e.method}`))
+}
+
+/**
  * Runs the full old-vs-new spec diff and produces a Markdown report.
  * Pure with respect to the process: does not read `process.argv`, does not
  * print, does not call `process.exit`.
  * @param oldSpec - Old spec document.
  * @param newSpec - New spec document.
- * @param manifestSource - Raw source text of spec/manifest.ts (parsed with a
- *   regex rather than imported, since the manifest contains function values
- *   that are impractical to load outside the app's own module graph).
+ * @param manifest - Manifest entries defining implemented endpoints.
  * @param oldPath - Display path for the old spec, used in the report header.
  * @param newPath - Display path for the new spec, used in the report header.
  * @returns The Markdown report text and whether real (non-suppressed) drift exists.
@@ -403,27 +418,11 @@ export function getPathMethodSet(spec: OpenApiSpec): Set<string> {
 export function runSpecDiff(
   oldSpec: OpenApiSpec,
   newSpec: OpenApiSpec,
-  manifestSource: string,
+  manifest: ManifestEntry[],
   oldPath: string,
   newPath: string
 ): SpecDiffResult {
-  // Extract specPath/method pairs by matching each MANIFEST entry block.
-  // A trailing comma is required after the method value to distinguish the
-  // concrete entry assignments (method: 'get',) from the TypeScript interface
-  // union definition (method: 'get' | 'post' | ...) which lacks a trailing comma.
-  const specPathRe = /specPath:\s*'([^']+)'/g
-  const methodRe = /method:\s*'(get|post|put|patch|delete)',/g
-  const spMatches = [...manifestSource.matchAll(specPathRe)]
-  const mMatches = [...manifestSource.matchAll(methodRe)]
-
-  const implementedSet = new Set<string>()
-  for (let i = 0; i < Math.min(spMatches.length, mMatches.length); i++) {
-    const specPath = spMatches[i][1]
-    const method = mMatches[i][1]
-    if (specPath && method) {
-      implementedSet.add(`${specPath}|${method}`)
-    }
-  }
+  const implementedSet = buildImplementedSet(manifest)
 
   const oldPaths = getPathMethodSet(oldSpec)
   const newPaths = getPathMethodSet(newSpec)
@@ -592,12 +591,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(2)
   }
 
-  const manifestSource = readFileSync(
-    path.resolve(cwd, 'spec/manifest.ts'),
-    'utf8'
-  )
-
-  const result = runSpecDiff(oldSpec, newSpec, manifestSource, oldPath, newPath)
+  const result = runSpecDiff(oldSpec, newSpec, MANIFEST, oldPath, newPath)
   console.log(result.report)
   process.exit(result.hasDiff ? 1 : 0)
 }

@@ -30,15 +30,10 @@ function buildSpec(opts: {
   }
 }
 
-/** A minimal manifest.ts source registering GET /widgets/{id}. */
-const MANIFEST_SOURCE = `
-export const MANIFEST = [
-  {
-    specPath: '/widgets/{id}',
-    method: 'get',
-  },
+/** A minimal manifest registering GET /widgets/{id}. */
+const MANIFEST: { specPath: string; method: string }[] = [
+  { specPath: '/widgets/{id}', method: 'get' },
 ]
-`
 
 describe('runSpecDiff (characterization)', () => {
   it('reports no diff for two identical specs', () => {
@@ -62,13 +57,7 @@ describe('runSpecDiff (characterization)', () => {
         },
       },
     })
-    const result = runSpecDiff(
-      spec,
-      spec,
-      MANIFEST_SOURCE,
-      'old.json',
-      'new.json'
-    )
+    const result = runSpecDiff(spec, spec, MANIFEST, 'old.json', 'new.json')
     expect(result.hasDiff).toBe(false)
     expect(result.report).toBe(
       'No differences detected between the two spec files.'
@@ -124,7 +113,7 @@ describe('runSpecDiff (characterization)', () => {
     const result = runSpecDiff(
       oldSpec,
       newSpec,
-      MANIFEST_SOURCE,
+      MANIFEST,
       'old.json',
       'new.json'
     )
@@ -172,15 +161,10 @@ describe('isEnumAdditionOnly', () => {
 })
 
 describe('runSpecDiff — enum-noise suppression', () => {
-  /** A minimal manifest.ts source registering GET /guilds/{guild_id}. */
-  const GUILD_MANIFEST_SOURCE = `
-export const MANIFEST = [
-  {
-    specPath: '/guilds/{guild_id}',
-    method: 'get',
-  },
-]
-`
+  /** A minimal manifest registering GET /guilds/{guild_id}. */
+  const GUILD_MANIFEST: { specPath: string; method: string }[] = [
+    { specPath: '/guilds/{guild_id}', method: 'get' },
+  ]
 
   it('suppresses an enum-addition-only change on an allow-listed field: exit 0, but still shown in the report', () => {
     const oldSpec = buildSpec({
@@ -239,7 +223,7 @@ export const MANIFEST = [
     const result = runSpecDiff(
       oldSpec,
       newSpec,
-      GUILD_MANIFEST_SOURCE,
+      GUILD_MANIFEST,
       'old.json',
       'new.json'
     )
@@ -308,7 +292,7 @@ export const MANIFEST = [
     const result = runSpecDiff(
       oldSpec,
       newSpec,
-      GUILD_MANIFEST_SOURCE,
+      GUILD_MANIFEST,
       'old.json',
       'new.json'
     )
@@ -376,7 +360,7 @@ export const MANIFEST = [
     const result = runSpecDiff(
       oldSpec,
       newSpec,
-      GUILD_MANIFEST_SOURCE,
+      GUILD_MANIFEST,
       'old.json',
       'new.json'
     )
@@ -442,7 +426,7 @@ export const MANIFEST = [
     const result = runSpecDiff(
       oldSpec,
       newSpec,
-      GUILD_MANIFEST_SOURCE,
+      GUILD_MANIFEST,
       'old.json',
       'new.json'
     )
