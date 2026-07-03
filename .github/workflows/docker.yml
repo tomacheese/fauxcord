@@ -32,7 +32,7 @@ concurrency:
 jobs:
   docker:
     name: Docker
-    uses: book000/templates/.github/workflows/reusable-docker.yml@13569b86d442904bbc30a3b330e6a8f88b2d7191 # master
+    uses: book000/templates/.github/workflows/reusable-docker.yml@master
     with:
       targets: >-
         [
