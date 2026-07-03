@@ -530,6 +530,23 @@ export const MANIFEST: SpecEndpoint[] = [
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/webhooks` }),
   },
 
+  // ─── Gateway ────────────────────────────────────────────────────────────────
+
+  {
+    specPath: '/gateway',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: () => ({ path: '/api/v10/gateway' }),
+  },
+  {
+    specPath: '/gateway/bot',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: () => ({ path: '/api/v10/gateway/bot' }),
+  },
+
   // ─── Users ──────────────────────────────────────────────────────────────────
 
   {

@@ -15,6 +15,7 @@ import { versionMiddleware } from './middleware/version.js'
 import { createChannelRoutes } from './routes/channels.js'
 import { createGuildRoutes } from './routes/guilds.js'
 import { createUserRoutes } from './routes/users.js'
+import { createGatewayRoutes } from './routes/gateway.js'
 import { createWebhookRoutes } from './routes/webhooks.js'
 import { createOAuth2Routes } from './routes/oauth2.js'
 import { createTestRoutes } from './routes/test.js'
@@ -89,6 +90,7 @@ export function createFullTestApp(): FullTestContext {
     app.route(prefix, createChannelRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH))
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
+    app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
   }
 
