@@ -5,6 +5,7 @@
  */
 
 import type { Database } from '../db.js'
+import type { CurrentUserUpdatePayload } from '../validators/user.js'
 // Used for compile-time type drift detection.
 import type { APIUser } from 'discord-api-types/v10'
 
@@ -92,6 +93,59 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
     mfa_enabled: false,
     locale: 'en-US',
   }
+}
+
+/**
+ * Updates the authenticated bot's (@me) profile.
+ *
+ * Applies a partial update: only fields present in `payload` are changed.
+ * `username` and `avatar` each update both the `users` and `bots` tables to
+ * keep them in sync (the `users` row backs the user response; the `bots` row
+ * backs `getApplication`). `avatar` may be set to null to clear it. `banner`
+ * has no backing column and is accepted but not persisted (mock limitation).
+ * @param db - Database
+ * @param botToken - Bot token
+ * @param payload - Validated update payload
+ * @returns Updated user object, or null when the bot/user is unknown
+ */
+export function updateBotUser(
+  db: Database,
+  botToken: string,
+  payload: CurrentUserUpdatePayload
+): UserObject | null {
+  const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
+    | BotRow
+    | undefined
+  if (!bot) return null
+
+  // Wrap the users/bots updates in a single transaction so the two tables
+  // never end up partially synced if a statement fails mid-way.
+  const applyUpdate = db.transaction(() => {
+    if (payload.username !== undefined) {
+      db.prepare('UPDATE users SET username = ? WHERE id = ?').run(
+        payload.username,
+        bot.user_id
+      )
+      db.prepare('UPDATE bots SET username = ? WHERE token = ?').run(
+        payload.username,
+        botToken
+      )
+    }
+
+    if (payload.avatar !== undefined) {
+      db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(
+        payload.avatar,
+        bot.user_id
+      )
+      db.prepare('UPDATE bots SET avatar = ? WHERE token = ?').run(
+        payload.avatar,
+        botToken
+      )
+    }
+  })
+  applyUpdate()
+
+  return getBotUser(db, botToken)
 }
 
 /**
