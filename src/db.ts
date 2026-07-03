@@ -99,6 +99,17 @@ export function initializeDatabase(dbPath: string): Database {
 
     CREATE INDEX IF NOT EXISTS idx_roles_guild ON roles(guild_id);
 
+    CREATE TABLE IF NOT EXISTS emojis (
+      id          TEXT PRIMARY KEY,
+      guild_id    TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      user_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+      roles       TEXT NOT NULL DEFAULT '[]',
+      created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_emojis_guild ON emojis(guild_id);
+
     CREATE TABLE IF NOT EXISTS member_roles (
       guild_id TEXT NOT NULL,
       user_id  TEXT NOT NULL,
