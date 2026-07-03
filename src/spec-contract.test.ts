@@ -258,6 +258,19 @@ beforeAll(() => {
   const emojiId = seedEmoji(db, guildId, BOT_USER_ID)
   const inviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)
 
+  // Seed an archived public thread (type 11) with the bot as a member so the
+  // thread-member and archived-list contract tests have data to validate.
+  const threadId = '888888888888888888'
+  db.prepare(
+    `INSERT INTO channels
+       (id, guild_id, type, name, parent_id, owner_id, archived,
+        auto_archive_duration, archive_timestamp)
+     VALUES (?, ?, 11, 'contract-thread', ?, ?, 1, 1440, datetime('now'))`
+  ).run(threadId, guildId, channelId, BOT_USER_ID)
+  db.prepare(
+    'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
+  ).run(threadId, BOT_USER_ID)
+
   fixture = {
     token,
     userId: BOT_USER_ID,
@@ -271,6 +284,7 @@ beforeAll(() => {
     memberId,
     emojiId,
     inviteCode,
+    threadId,
   }
 })
 

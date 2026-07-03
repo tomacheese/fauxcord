@@ -56,17 +56,23 @@ export function initializeDatabase(dbPath: string): Database {
     );
 
     CREATE TABLE IF NOT EXISTS channels (
-      id                  TEXT PRIMARY KEY,
-      guild_id            TEXT REFERENCES guilds(id) ON DELETE CASCADE,
-      type                INTEGER NOT NULL DEFAULT 0,
-      name                TEXT,
-      topic               TEXT,
-      nsfw                INTEGER NOT NULL DEFAULT 0,
-      position            INTEGER NOT NULL DEFAULT 0,
-      rate_limit_per_user INTEGER NOT NULL DEFAULT 0,
-      parent_id           TEXT,
-      last_message_id     TEXT,
-      created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+      id                    TEXT PRIMARY KEY,
+      guild_id              TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+      type                  INTEGER NOT NULL DEFAULT 0,
+      name                  TEXT,
+      topic                 TEXT,
+      nsfw                  INTEGER NOT NULL DEFAULT 0,
+      position              INTEGER NOT NULL DEFAULT 0,
+      rate_limit_per_user   INTEGER NOT NULL DEFAULT 0,
+      parent_id             TEXT,
+      last_message_id       TEXT,
+      owner_id              TEXT,
+      archived              INTEGER NOT NULL DEFAULT 0,
+      auto_archive_duration INTEGER NOT NULL DEFAULT 1440,
+      locked                INTEGER NOT NULL DEFAULT 0,
+      invitable             INTEGER NOT NULL DEFAULT 1,
+      archive_timestamp     TEXT,
+      created_at            TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels(guild_id);
@@ -82,6 +88,16 @@ export function initializeDatabase(dbPath: string): Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_channel_overwrites_channel ON channel_overwrites(channel_id);
+
+    CREATE TABLE IF NOT EXISTS thread_members (
+      thread_id      TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      user_id        TEXT NOT NULL,
+      join_timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+      flags          INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (thread_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_thread_members_thread ON thread_members(thread_id);
 
     CREATE TABLE IF NOT EXISTS guild_members (
       guild_id   TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,

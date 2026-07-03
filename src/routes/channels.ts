@@ -22,6 +22,7 @@ import { createChannelWebhookRoutes } from './channel-webhooks.js'
 import { createChannelTypingRoutes } from './channel-typing.js'
 import { createChannelInviteRoutes } from './channel-invites.js'
 import { createChannelPermissionRoutes } from './channel-permissions.js'
+import { createChannelThreadRoutes } from './channel-threads.js'
 
 /**
  * Creates the channels API routes.
@@ -85,6 +86,11 @@ export function createChannelRoutes(
     }
     return c.json(deleted)
   })
+
+  // channel-threads is mounted before channel-messages so its literal
+  // "/messages/:messageId/threads" and "/threads/*" routes are registered
+  // ahead of channel-messages' parameterized routes (Hono is first-match-wins).
+  app.route('/', createChannelThreadRoutes(db))
 
   // channel-pins MUST be mounted before channel-messages: its literal
   // "/messages/pins" route must win over channel-messages' parameterized

@@ -81,6 +81,8 @@ export interface ContractFixture {
   emojiId: string
   /** Seeded invite code */
   inviteCode: string
+  /** Seeded thread (channel type 11) ID, archived, with the bot as a member */
+  threadId: string
 }
 
 /** A single entry in the endpoint manifest. */
@@ -854,6 +856,130 @@ export const MANIFEST: SpecEndpoint[] = [
     request: (f) => ({
       path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/messages/${f.webhookMessageId}`,
       init: { method: 'DELETE' },
+    }),
+  },
+
+  // ─── Threads ─────────────────────────────────────────────────────────────
+  {
+    specPath: '/channels/{channel_id}/threads',
+    method: 'post',
+    contractTested: true,
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/threads`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'new-thread', type: 11 }),
+      },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/messages/{message_id}/threads',
+    method: 'post',
+    contractTested: true,
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/threads`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'msg-thread' }),
+      },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/thread-members',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.threadId}/thread-members`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/thread-members/{user_id}',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.threadId}/thread-members/${f.userId}`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/thread-members/@me',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.threadId}/thread-members/@me`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/thread-members/@me',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.threadId}/thread-members/@me`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/thread-members/{user_id}',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.threadId}/thread-members/${f.memberId}`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/thread-members/{user_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.threadId}/thread-members/${f.memberId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/threads/archived/public',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/threads/archived/public`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/threads/archived/private',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/threads/archived/private`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/users/@me/threads/archived/private',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/users/@me/threads/archived/private`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/threads/search',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/threads/search`,
     }),
   },
 ]
