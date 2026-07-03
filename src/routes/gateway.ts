@@ -34,7 +34,9 @@ export function createGatewayRoutes(
     // (e.g. in unit tests that mount this router in isolation).
     if (!bot) {
       const authHeader = c.req.header('Authorization')
-      if (authHeader) {
+      // Only treat "Bot <token>" as a Bot credential, matching the auth
+      // middleware's behavior, so other schemes never authorize here.
+      if (authHeader?.startsWith('Bot ')) {
         bot = db
           .prepare('SELECT * FROM bots WHERE token = ?')
           .get(authHeader) as BotRecord | undefined

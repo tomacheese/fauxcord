@@ -15,7 +15,10 @@ import type {
 
 /** Gateway info returned by GET /gateway */
 export interface GatewayInfo {
-  /** The WSS URL that can be used for connecting to the gateway */
+  /**
+   * The WS(S) URL that can be used for connecting to the gateway. Uses
+   * "wss://" when BASE_URL is "https://", otherwise "ws://".
+   */
   url: string
 }
 
