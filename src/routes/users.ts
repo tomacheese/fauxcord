@@ -6,9 +6,15 @@
 
 import { Hono } from 'hono'
 import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError } from '../errors.js'
-import { getBotUser, getUser, getApplication } from '../services/users.js'
+import { DiscordErrorCode, discordError, validationError } from '../errors.js'
+import {
+  getBotUser,
+  getUser,
+  getApplication,
+  updateBotUser,
+} from '../services/users.js'
 import { getBotGuilds } from '../services/guilds.js'
+import { validateCurrentUserUpdate } from '../validators/user.js'
 import type { AppEnv } from '../middleware/auth.js'
 
 /**
@@ -27,6 +33,34 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     }
 
     const user = getBotUser(db, bot.token)
+    if (!user) {
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    }
+    return c.json(user)
+  })
+
+  // PATCH /users/@me — Update the authenticated bot user's profile
+  app.patch('/users/@me', async (c) => {
+    const bot = c.get('bot')
+    if (!bot) {
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    }
+
+    // Tolerate an empty/invalid/non-object JSON body (including a literal
+    // `null` or an array, both of which parse without error): treat it as an
+    // empty (no-op) update rather than dereferencing a non-object.
+    const parsed: unknown = await c.req.json().catch(() => ({}))
+    const body: Record<string, unknown> =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {}
+
+    const errors = validateCurrentUserUpdate(body)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
+
+    const user = updateBotUser(db, bot.token, body)
     if (!user) {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }

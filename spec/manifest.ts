@@ -531,6 +531,21 @@ export const MANIFEST: SpecEndpoint[] = [
     request: () => ({ path: '/api/v10/users/@me' }),
   },
   {
+    specPath: '/users/@me',
+    method: 'patch',
+    contractTested: true,
+    successStatus: 200,
+    responseSchemaOverride: 'UserPIIResponse',
+    request: () => ({
+      path: '/api/v10/users/@me',
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'UpdatedBot' }),
+      },
+    }),
+  },
+  {
     specPath: '/users/{user_id}',
     method: 'get',
     contractTested: true,
