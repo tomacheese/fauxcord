@@ -71,6 +71,18 @@ export function initializeDatabase(dbPath: string): Database {
 
     CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels(guild_id);
 
+    CREATE TABLE IF NOT EXISTS channel_overwrites (
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      id         TEXT NOT NULL,
+      type       INTEGER NOT NULL,
+      allow      TEXT NOT NULL DEFAULT '0',
+      deny       TEXT NOT NULL DEFAULT '0',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (channel_id, id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_channel_overwrites_channel ON channel_overwrites(channel_id);
+
     CREATE TABLE IF NOT EXISTS guild_members (
       guild_id   TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
       user_id    TEXT NOT NULL REFERENCES users(id),

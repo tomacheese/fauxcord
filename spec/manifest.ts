@@ -367,6 +367,32 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
+    // 204 response, nothing to validate against the schema.
+    specPath: '/channels/{channel_id}/permissions/{overwrite_id}',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/permissions/${f.roleId}`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 0, allow: '0', deny: '0' }),
+      },
+    }),
+  },
+  {
+    // 204 response, nothing to validate against the schema.
+    specPath: '/channels/{channel_id}/permissions/{overwrite_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/permissions/${f.roleId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
     // Response is an array of oneOf invite types. Following the
     // GET /channels/{channel_id}/webhooks precedent, this is drift-detection
     // only (contractTested: false) rather than validated per-item.
