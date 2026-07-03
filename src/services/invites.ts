@@ -184,11 +184,12 @@ const INVITE_CODE_LENGTH = 8
 function generateInviteCode(db: Database): string {
   const stmt = db.prepare('SELECT 1 FROM invites WHERE code = ?')
   for (;;) {
+    // Invite codes act as credentials, so Math.random (predictable) is not
+    // used; crypto.getRandomValues provides cryptographically strong bytes.
+    const bytes = crypto.getRandomValues(new Uint8Array(INVITE_CODE_LENGTH))
     let code = ''
-    for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
-      code += INVITE_CODE_CHARS.charAt(
-        Math.floor(Math.random() * INVITE_CODE_CHARS.length)
-      )
+    for (const byte of bytes) {
+      code += INVITE_CODE_CHARS.charAt(byte % INVITE_CODE_CHARS.length)
     }
     if (!stmt.get(code)) return code
   }

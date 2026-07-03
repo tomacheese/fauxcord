@@ -275,8 +275,12 @@ export function seedInvite(
   inviterId: string | null,
   code = 'testcode'
 ): string {
+  // Uses INSERT OR REPLACE (not plain INSERT) so calling this more than once
+  // with the default code in the same in-memory DB replaces the row instead
+  // of throwing a UNIQUE constraint error, matching the other seed helpers'
+  // idempotent style.
   db.prepare(
-    'INSERT INTO invites (code, channel_id, guild_id, inviter_id) VALUES (?, ?, ?, ?)'
+    'INSERT OR REPLACE INTO invites (code, channel_id, guild_id, inviter_id) VALUES (?, ?, ?, ?)'
   ).run(code, channelId, guildId, inviterId)
   return code
 }

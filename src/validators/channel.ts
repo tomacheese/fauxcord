@@ -45,7 +45,7 @@ function validateOptionalIntBound(
       _errors: [
         {
           code: 'NUMBER_TYPE_MAX',
-          message: `int value should be between 0 and ${max}.`,
+          message: `Must be an integer between 0 and ${max}.`,
         },
       ],
     }

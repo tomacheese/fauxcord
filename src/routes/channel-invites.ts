@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono'
 import type { Database } from '../db.js'
-import { DiscordErrorCode, validationError } from '../errors.js'
+import { DiscordErrorCode, discordError, validationError } from '../errors.js'
 import { getChannel } from '../services/channels.js'
 import { getChannelInvites, createInvite } from '../services/invites.js'
 import {
@@ -49,9 +49,39 @@ export function createChannelInviteRoutes(db: Database): Hono<AppEnv> {
     )
     if (channel instanceof Response) return channel
 
-    const payload = await c.req
-      .json<InviteCreatePayload>()
-      .catch((): InviteCreatePayload => ({}))
+    // DM channels have no guild_id, and invites only make sense for guild
+    // channels; reject before touching createInvite (which assumes a guild).
+    if (!channel.guild_id) {
+      return c.json(
+        discordError(
+          DiscordErrorCode.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE,
+          'Cannot execute action on this channel type',
+          400
+        ).body,
+        400
+      )
+    }
+
+    // An empty body means "use all defaults"; malformed or non-object JSON
+    // must be rejected with 400 rather than silently falling back to
+    // defaults, which could otherwise mask a caller's mistake as success.
+    // Parsed as `unknown` (not the request's declared type) so the
+    // object/null/array checks below are meaningful at compile time too.
+    let parsed: unknown
+    try {
+      const text = await c.req.text()
+      parsed = text.length === 0 ? {} : JSON.parse(text)
+    } catch {
+      return c.json(validationError({}).body, 400)
+    }
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      Array.isArray(parsed)
+    ) {
+      return c.json(validationError({}).body, 400)
+    }
+    const payload = parsed as InviteCreatePayload
 
     const errors = validateInviteCreate(payload)
     if (Object.keys(errors).length > 0) {
