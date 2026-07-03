@@ -134,6 +134,19 @@ export function validatePermissionOverwrite(
 }
 
 /**
+ * Converts a validated bitfield value (a non-negative integer, a numeric
+ * string, or null/undefined) into its stored string form (default "0").
+ * @param value - Validated bitfield value
+ * @returns Numeric string representation
+ */
+function bitfieldToString(value: unknown): string {
+  if (value === undefined || value === null) return '0'
+  if (typeof value === 'number') return String(value)
+  // Guaranteed to be a numeric string once validatePermissionOverwrite passes.
+  return value as string
+}
+
+/**
  * Normalizes a validated permission overwrite payload into stored form:
  * `type` as a number and `allow`/`deny` as numeric strings (default "0").
  * Call only after validatePermissionOverwrite reports no errors.
@@ -145,7 +158,7 @@ export function normalizePermissionOverwrite(
 ): { type: number; allow: string; deny: string } {
   return {
     type: payload.type as number,
-    allow: payload.allow == null ? '0' : String(payload.allow),
-    deny: payload.deny == null ? '0' : String(payload.deny),
+    allow: bitfieldToString(payload.allow),
+    deny: bitfieldToString(payload.deny),
   }
 }

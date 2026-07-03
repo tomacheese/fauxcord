@@ -11,7 +11,9 @@ describe('validatePermissionOverwrite', () => {
         validatePermissionOverwrite({ type: 0, allow: '1024', deny: '0' })
       )
     ).toHaveLength(0)
-    expect(Object.keys(validatePermissionOverwrite({ type: 1 }))).toHaveLength(0)
+    expect(Object.keys(validatePermissionOverwrite({ type: 1 }))).toHaveLength(
+      0
+    )
   })
 
   it('rejects a missing type', () => {
