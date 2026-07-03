@@ -265,24 +265,29 @@ export function createThread(
   const type = params.type ?? DEFAULT_THREAD_TYPE
   const autoArchive = normalizeAutoArchiveDuration(params.autoArchiveDuration)
 
-  db.prepare(
-    `INSERT INTO channels
-       (id, guild_id, type, name, parent_id, owner_id, rate_limit_per_user,
-        archived, auto_archive_duration, locked, invitable)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)`
-  ).run(
-    threadId,
-    parent?.guild_id ?? null,
-    type,
-    params.name,
-    params.parentId,
-    params.ownerId,
-    params.rateLimitPerUser ?? 0,
-    autoArchive,
-    params.invitable === false ? 0 : 1
-  )
+  // Wrap the channel insert and owner membership insert in a transaction so a
+  // failure mid-way cannot leave a thread row without its owner member.
+  const insertThread = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO channels
+         (id, guild_id, type, name, parent_id, owner_id, rate_limit_per_user,
+          archived, auto_archive_duration, locked, invitable)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)`
+    ).run(
+      threadId,
+      parent?.guild_id ?? null,
+      type,
+      params.name,
+      params.parentId,
+      params.ownerId,
+      params.rateLimitPerUser ?? 0,
+      autoArchive,
+      params.invitable === false ? 0 : 1
+    )
 
-  addThreadMember(db, threadId, params.ownerId)
+    addThreadMember(db, threadId, params.ownerId)
+  })
+  insertThread()
 
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
@@ -294,8 +299,13 @@ export function createThread(
 export interface ArchivedThreadOptions {
   /** When true, list private threads (type 12); otherwise public (10, 11). */
   private: boolean
-  /** When set, restrict to threads the given user has joined. */
+  /** When set, restrict the listing to threads the given user has joined. */
   joinedUserId?: string
+  /**
+   * When set, populate `members` with this user's ThreadMember record for each
+   * returned thread they belong to, without filtering the listing itself.
+   */
+  memberUserId?: string
 }
 
 /** Response shape for archived-thread listings (ThreadsResponse). */
@@ -328,12 +338,13 @@ export function getArchivedThreads(
   const threads = rows.map((r) => toThreadObject(db, r))
 
   // "members" holds the calling user's ThreadMember for each returned thread
-  // (Discord returns the requester's membership records). When no user context
-  // is available, return an empty array.
+  // (Discord returns the requester's membership records). The listing itself is
+  // filtered only by `joinedUserId`; `memberUserId` just drives member lookup.
   const members: ThreadMemberObject[] = []
-  if (options.joinedUserId) {
+  const memberUserId = options.memberUserId ?? options.joinedUserId
+  if (memberUserId) {
     for (const t of threads) {
-      const m = getThreadMember(db, t.id, options.joinedUserId)
+      const m = getThreadMember(db, t.id, memberUserId)
       if (m) members.push(m)
     }
   }

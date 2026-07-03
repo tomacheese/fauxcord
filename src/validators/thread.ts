@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 thread limits.
  */
 
-import { maxLengthError, type ValidationErrors } from './common.js'
+import { maxLengthError, typeError, type ValidationErrors } from './common.js'
 
 /** Thread limit values */
 export const THREAD_LIMITS = {
@@ -48,10 +48,9 @@ export function validateThreadCreate(
         { code: 'BASE_TYPE_REQUIRED', message: 'This field is required.' },
       ],
     }
-  } else if (
-    typeof payload.name !== 'string' ||
-    payload.name.length > THREAD_LIMITS.NAME_MAX
-  ) {
+  } else if (typeof payload.name !== 'string') {
+    errors.name = { _errors: [typeError('string')] }
+  } else if (payload.name.length > THREAD_LIMITS.NAME_MAX) {
     errors.name = { _errors: [maxLengthError(THREAD_LIMITS.NAME_MAX)] }
   }
 

@@ -165,7 +165,12 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
-    return c.json(getArchivedThreads(db, channelId, { private: false }))
+    return c.json(
+      getArchivedThreads(db, channelId, {
+        private: false,
+        memberUserId: resolveUserId(c, db),
+      })
+    )
   })
 
   // GET /channels/:channelId/threads/archived/private — Archived private threads
@@ -178,7 +183,12 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
-    return c.json(getArchivedThreads(db, channelId, { private: true }))
+    return c.json(
+      getArchivedThreads(db, channelId, {
+        private: true,
+        memberUserId: resolveUserId(c, db),
+      })
+    )
   })
 
   // GET /channels/:channelId/users/@me/threads/archived/private — Joined private
