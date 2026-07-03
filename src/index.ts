@@ -16,6 +16,7 @@ import { createLatencyMiddleware } from './middleware/latency.js'
 import { createChannelRoutes } from './routes/channels.js'
 import { createGuildRoutes } from './routes/guilds.js'
 import { createUserRoutes } from './routes/users.js'
+import { createGatewayRoutes } from './routes/gateway.js'
 import { createWebhookRoutes } from './routes/webhooks.js'
 import { createOAuth2Routes } from './routes/oauth2.js'
 import { createTestRoutes } from './routes/test.js'
@@ -64,6 +65,7 @@ for (const prefix of routePrefix) {
   app.route(prefix, createChannelRoutes(db, config.baseUrl, config.uploadPath))
   app.route(prefix, createGuildRoutes(db))
   app.route(prefix, createUserRoutes(db))
+  app.route(prefix, createGatewayRoutes(db, config.baseUrl))
   // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
   app.route(prefix, createWebhookRoutes(db, config.baseUrl))
 }

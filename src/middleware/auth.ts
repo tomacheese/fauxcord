@@ -29,6 +29,15 @@ const AUTH_EXEMPT_PREFIXES = ['/_mock/health', '/_mock/attachments', '/_test/']
 const WEBHOOK_WITH_TOKEN_PATTERN =
   /^\/(?:api\/(?:v10\/)?)?webhooks\/[^/]+\/[^/]+(?:\/messages\/[^/]+)?$/
 
+/**
+ * Public gateway endpoint pattern (no authentication required)
+ *
+ * `GET /gateway` is a public endpoint in the real Discord API. Matched by exact
+ * path (with an optional version prefix) so `/gateway/bot`, which DOES require a
+ * Bot token, is not exempted.
+ */
+const GATEWAY_PUBLIC_PATTERN = /^\/(?:api\/(?:v10\/)?)?gateway$/
+
 /** Type of a Bot record fetched from the DB */
 export interface BotRecord {
   token: string
@@ -70,7 +79,8 @@ export const createAuthMiddleware =
     // Check for auth-exempt paths
     const isExempt =
       AUTH_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
-      WEBHOOK_WITH_TOKEN_PATTERN.test(path)
+      WEBHOOK_WITH_TOKEN_PATTERN.test(path) ||
+      GATEWAY_PUBLIC_PATTERN.test(path)
 
     if (isExempt) {
       await next()
