@@ -14,7 +14,10 @@ import {
   createGuildBan,
   removeGuildBan,
 } from '../services/guild-bans.js'
-import { validateBanCreate } from '../validators/guild.js'
+import {
+  validateBanCreate,
+  type BanCreatePayload,
+} from '../validators/guild.js'
 import { requireEntity, parseLimitQuery } from '../lib/route-helpers.js'
 
 /**
@@ -80,13 +83,15 @@ export function createGuildBanRoutes(db: Database): Hono {
     )
     if (guild instanceof Response) return guild
 
-    // The request body is optional; default to an empty object when absent.
-    const payload = await c.req
-      .json<{
-        delete_message_seconds?: number | null
-        delete_message_days?: number | null
-      }>()
-      .catch(() => ({}))
+    // Tolerate an empty/invalid/non-object JSON body (including a literal
+    // `null` or an array, both of which parse without error): treat it as an
+    // empty (no-op) payload rather than dereferencing a non-object below
+    // (same idiom as PATCH /users/@me).
+    const parsed: unknown = await c.req.json().catch(() => ({}))
+    const payload: BanCreatePayload =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? parsed
+        : {}
 
     const errors = validateBanCreate(payload)
     if (Object.keys(errors).length > 0) {

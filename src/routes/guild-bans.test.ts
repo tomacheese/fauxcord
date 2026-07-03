@@ -86,6 +86,30 @@ describe('Guild Bans API', () => {
       expect(res.status).toBe(204)
     })
 
+    it('succeeds with a JSON null body (non-object payload)', async () => {
+      const res = await app.request(
+        `/guilds/${guildId}/bans/444444444444444444`,
+        {
+          method: 'PUT',
+          headers: { Authorization: token, 'Content-Type': 'application/json' },
+          body: 'null',
+        }
+      )
+      expect(res.status).toBe(204)
+    })
+
+    it('succeeds with a JSON array body (non-object payload)', async () => {
+      const res = await app.request(
+        `/guilds/${guildId}/bans/444444444444444444`,
+        {
+          method: 'PUT',
+          headers: { Authorization: token, 'Content-Type': 'application/json' },
+          body: '[]',
+        }
+      )
+      expect(res.status).toBe(204)
+    })
+
     it('returns 400 when delete_message_days is out of range', async () => {
       const res = await app.request(
         `/guilds/${guildId}/bans/444444444444444444`,
