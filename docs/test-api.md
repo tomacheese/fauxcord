@@ -80,7 +80,7 @@ curl -X POST http://localhost:3000/_test/reset \
   -d '{}'
 ```
 
-What gets deleted: messages, webhooks, reactions, pins, embeds, attachments
+What gets deleted: messages, webhooks, invites, reactions, pins, embeds, attachments
 
 ### Reset only a specific Bot's data
 

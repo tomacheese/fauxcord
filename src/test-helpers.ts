@@ -17,6 +17,7 @@ import { createGuildRoutes } from './routes/guilds.js'
 import { createUserRoutes } from './routes/users.js'
 import { createGatewayRoutes } from './routes/gateway.js'
 import { createWebhookRoutes } from './routes/webhooks.js'
+import { createInviteRoutes } from './routes/invites.js'
 import { createOAuth2Routes } from './routes/oauth2.js'
 import { createTestRoutes } from './routes/test.js'
 import { createMockRoutes } from './routes/mock.js'
@@ -92,6 +93,7 @@ export function createFullTestApp(): FullTestContext {
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
+    app.route(prefix, createInviteRoutes(db))
   }
 
   return {
@@ -255,6 +257,28 @@ export function seedEmoji(
     "INSERT INTO emojis (id, guild_id, name, user_id, roles) VALUES (?, ?, ?, ?, '[]')"
   ).run(emojiId, guildId, name, userId)
   return emojiId
+}
+
+/**
+ * Inserts an invite into the DB for testing.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param guildId - Guild ID (nullable)
+ * @param inviterId - Inviter user ID (nullable)
+ * @param code - Invite code (default: "testcode")
+ * @returns The invite code
+ */
+export function seedInvite(
+  db: Database,
+  channelId: string,
+  guildId: string | null,
+  inviterId: string | null,
+  code = 'testcode'
+): string {
+  db.prepare(
+    'INSERT INTO invites (code, channel_id, guild_id, inviter_id) VALUES (?, ?, ?, ?)'
+  ).run(code, channelId, guildId, inviterId)
+  return code
 }
 
 /**

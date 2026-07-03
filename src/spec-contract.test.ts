@@ -51,6 +51,7 @@ import {
   seedRole,
   seedMember,
   seedEmoji,
+  seedInvite,
 } from './test-helpers.js'
 import { getContractTestedEntries } from '../spec/manifest.js'
 import type { ContractFixture, SpecEndpoint } from '../spec/manifest.js'
@@ -255,6 +256,7 @@ beforeAll(() => {
   const roleId = seedRole(db, guildId)
   const memberId = seedMember(db, guildId)
   const emojiId = seedEmoji(db, guildId, BOT_USER_ID)
+  const inviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)
 
   fixture = {
     token,
@@ -268,6 +270,7 @@ beforeAll(() => {
     roleId,
     memberId,
     emojiId,
+    inviteCode,
   }
 })
 

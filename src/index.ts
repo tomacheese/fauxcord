@@ -18,6 +18,7 @@ import { createGuildRoutes } from './routes/guilds.js'
 import { createUserRoutes } from './routes/users.js'
 import { createGatewayRoutes } from './routes/gateway.js'
 import { createWebhookRoutes } from './routes/webhooks.js'
+import { createInviteRoutes } from './routes/invites.js'
 import { createOAuth2Routes } from './routes/oauth2.js'
 import { createTestRoutes } from './routes/test.js'
 import { createMockRoutes } from './routes/mock.js'
@@ -68,6 +69,7 @@ for (const prefix of routePrefix) {
   app.route(prefix, createGatewayRoutes(db, config.baseUrl))
   // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
   app.route(prefix, createWebhookRoutes(db, config.baseUrl))
+  app.route(prefix, createInviteRoutes(db))
 }
 
 // Global error handler
