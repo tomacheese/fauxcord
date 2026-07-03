@@ -6,7 +6,7 @@
 
 import type { Database } from '../db.js'
 // Used for compile-time type drift detection.
-import type { APIGuildTextChannel } from 'discord-api-types/v10'
+import type { APIGuildTextChannel, APIOverwrite } from 'discord-api-types/v10'
 import type { ChannelType } from 'discord-api-types/v10'
 import { generateSnowflake } from '../snowflake.js'
 
@@ -27,6 +27,20 @@ type _ChannelCompatGuard =
     ? true
     : never
 
+/**
+ * Compile-time guard: ensures ChannelOverwriteObject stays structurally
+ * compatible with APIOverwrite. Fails to compile when discord-api-types
+ * renames or retypes these fields.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _OverwriteCompatGuard =
+  Pick<APIOverwrite, 'id' | 'type' | 'allow' | 'deny'> extends Record<
+    'id' | 'type' | 'allow' | 'deny',
+    string | number
+  >
+    ? true
+    : never
+
 /** Channel record type retrieved from the DB */
 interface ChannelRow {
   id: string
@@ -39,6 +53,18 @@ interface ChannelRow {
   rate_limit_per_user: number
   parent_id: string | null
   last_message_id: string | null
+}
+
+/** Channel permission overwrite object for API responses */
+export interface ChannelOverwriteObject {
+  /** Role or user ID (the overwrite_id) */
+  id: string
+  /** Overwrite target type: 0 = role, 1 = member */
+  type: number
+  /** Allowed permission bitfield, as a string */
+  allow: string
+  /** Denied permission bitfield, as a string */
+  deny: string
 }
 
 /** Channel object for API responses */
@@ -55,15 +81,86 @@ export interface ChannelObject {
   last_message_id: string | null
   rate_limit_per_user: number
   parent_id: string | null
-  permission_overwrites: never[]
+  permission_overwrites: ChannelOverwriteObject[]
+}
+
+/** DB record type for a channel permission overwrite */
+interface ChannelOverwriteRow {
+  id: string
+  type: number
+  allow: string
+  deny: string
+}
+
+/**
+ * Retrieves all permission overwrites for a channel.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Array of overwrite objects (empty if none)
+ */
+export function getChannelOverwrites(
+  db: Database,
+  channelId: string
+): ChannelOverwriteObject[] {
+  const rows = db
+    .prepare(
+      'SELECT id, type, allow, deny FROM channel_overwrites WHERE channel_id = ? ORDER BY id'
+    )
+    .all(channelId) as ChannelOverwriteRow[]
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    allow: row.allow,
+    deny: row.deny,
+  }))
+}
+
+/**
+ * Creates or updates a permission overwrite for a channel (upsert).
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param overwriteId - Role or user ID
+ * @param params - Overwrite type and permission bitfields
+ */
+export function putChannelOverwrite(
+  db: Database,
+  channelId: string,
+  overwriteId: string,
+  params: { type: number; allow: string; deny: string }
+): void {
+  db.prepare(
+    `INSERT INTO channel_overwrites (channel_id, id, type, allow, deny)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(channel_id, id) DO UPDATE SET
+       type = excluded.type,
+       allow = excluded.allow,
+       deny = excluded.deny`
+  ).run(channelId, overwriteId, params.type, params.allow, params.deny)
+}
+
+/**
+ * Deletes a permission overwrite from a channel. No-op if it does not exist.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param overwriteId - Role or user ID
+ */
+export function deleteChannelOverwrite(
+  db: Database,
+  channelId: string,
+  overwriteId: string
+): void {
+  db.prepare(
+    'DELETE FROM channel_overwrites WHERE channel_id = ? AND id = ?'
+  ).run(channelId, overwriteId)
 }
 
 /**
  * Converts a DB channel record into the API response format.
+ * @param db - Database, used to load the channel's permission overwrites
  * @param row - DB record
  * @returns Object for API responses
  */
-function toChannelObject(row: ChannelRow): ChannelObject {
+function toChannelObject(db: Database, row: ChannelRow): ChannelObject {
   return {
     id: row.id,
     type: row.type,
@@ -76,7 +173,7 @@ function toChannelObject(row: ChannelRow): ChannelObject {
     last_message_id: row.last_message_id,
     rate_limit_per_user: row.rate_limit_per_user,
     parent_id: row.parent_id,
-    permission_overwrites: [],
+    permission_overwrites: getChannelOverwrites(db, row.id),
   }
 }
 
@@ -93,7 +190,7 @@ export function getChannel(
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
-  return row ? toChannelObject(row) : null
+  return row ? toChannelObject(db, row) : null
 }
 
 /** Channel update request type */
@@ -143,7 +240,7 @@ export function updateChannel(
   const updated = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
-  return toChannelObject(updated)
+  return toChannelObject(db, updated)
 }
 
 /**
@@ -161,8 +258,11 @@ export function deleteChannel(
     .get(channelId) as ChannelRow | undefined
   if (!row) return null
 
+  // Build the response before deleting: the DELETE cascades to
+  // channel_overwrites, so overwrites must be read first.
+  const result = toChannelObject(db, row)
   db.prepare('DELETE FROM channels WHERE id = ?').run(channelId)
-  return toChannelObject(row)
+  return result
 }
 
 /**
@@ -178,7 +278,7 @@ export function getGuildChannels(
   const rows = db
     .prepare('SELECT * FROM channels WHERE guild_id = ? ORDER BY position, id')
     .all(guildId) as ChannelRow[]
-  return rows.map((row) => toChannelObject(row))
+  return rows.map((row) => toChannelObject(db, row))
 }
 
 /** Guild channel creation parameters */
@@ -220,5 +320,5 @@ export function createGuildChannel(
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
-  return toChannelObject(row)
+  return toChannelObject(db, row)
 }

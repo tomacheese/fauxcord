@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild } from '../test-helpers.js'
-import { createGuildChannel } from './channels.js'
+import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
+import {
+  createGuildChannel,
+  getChannel,
+  putChannelOverwrite,
+  getChannelOverwrites,
+  deleteChannelOverwrite,
+} from './channels.js'
 import type { Database } from '../db.js'
 
 describe('createGuildChannel', () => {
@@ -45,5 +51,47 @@ describe('createGuildChannel', () => {
     expect(channel.type).toBe(5)
     expect(channel.topic).toBe('Server news')
     expect(channel.nsfw).toBe(true)
+  })
+})
+
+describe('channel permission overwrites service', () => {
+  let db: Database
+  let channelId: string
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    const token = seedBot(db)
+    const guildId = seedGuild(db, token)
+    channelId = seedChannel(db, guildId)
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('upserts and reflects an overwrite in getChannel', () => {
+    putChannelOverwrite(db, channelId, '444444444444444444', {
+      type: 0,
+      allow: '1024',
+      deny: '2048',
+    })
+
+    const channel = getChannel(db, channelId)
+    expect(channel?.permission_overwrites).toEqual([
+      { id: '444444444444444444', type: 0, allow: '1024', deny: '2048' },
+    ])
+
+    // upsert: same id updates in place, no duplicate
+    putChannelOverwrite(db, channelId, '444444444444444444', {
+      type: 0,
+      allow: '8',
+      deny: '0',
+    })
+    expect(getChannelOverwrites(db, channelId)).toEqual([
+      { id: '444444444444444444', type: 0, allow: '8', deny: '0' },
+    ])
+
+    deleteChannelOverwrite(db, channelId, '444444444444444444')
+    expect(getChannelOverwrites(db, channelId)).toEqual([])
   })
 })
