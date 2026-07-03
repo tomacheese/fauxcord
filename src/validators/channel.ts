@@ -89,13 +89,17 @@ export interface PermissionOverwritePayload {
 
 /**
  * Checks whether a value is an acceptable permission bitfield input:
- * a non-negative integer, a numeric string, null, or undefined.
+ * a non-negative safe integer, a numeric string, null, or undefined.
+ * Numbers above Number.MAX_SAFE_INTEGER are rejected because they lose
+ * precision and stringify to exponential notation (e.g. "1e+21"), which
+ * would violate the digit-string form the string path enforces.
  * @param value - Value to check
  * @returns True if the value is an acceptable bitfield input
  */
 function isValidBitfield(value: unknown): boolean {
   if (value === undefined || value === null) return true
-  if (typeof value === 'number') return Number.isInteger(value) && value >= 0
+  if (typeof value === 'number')
+    return Number.isSafeInteger(value) && value >= 0
   if (typeof value === 'string') return /^\d+$/.test(value)
   return false
 }

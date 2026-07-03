@@ -34,9 +34,9 @@ type _ChannelCompatGuard =
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _OverwriteCompatGuard =
-  Pick<APIOverwrite, 'id' | 'type' | 'allow' | 'deny'> extends Record<
-    'id' | 'type' | 'allow' | 'deny',
-    string | number
+  Pick<APIOverwrite, 'id' | 'type' | 'allow' | 'deny'> extends Pick<
+    ChannelOverwriteObject,
+    'id' | 'type' | 'allow' | 'deny'
   >
     ? true
     : never

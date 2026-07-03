@@ -30,6 +30,13 @@ describe('validatePermissionOverwrite', () => {
     ).toBeDefined()
   })
 
+  it('rejects a numeric allow above the safe-integer range', () => {
+    // 1e21 loses precision and would stringify to exponential notation.
+    expect(
+      validatePermissionOverwrite({ type: 0, allow: 1e21 }).allow
+    ).toBeDefined()
+  })
+
   it('normalizes numbers and null to strings with "0" defaults', () => {
     expect(
       normalizePermissionOverwrite({ type: 0, allow: 1024, deny: null })
