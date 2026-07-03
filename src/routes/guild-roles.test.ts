@@ -68,6 +68,15 @@ describe('Guild Roles API', () => {
       })
       expect(res.status).toBe(400)
     })
+
+    it('returns 400 (not a 500 crash) when name is null', async () => {
+      const res = await app.request(`/guilds/${guildId}/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: null }),
+      })
+      expect(res.status).toBe(400)
+    })
   })
 
   describe('PATCH /guilds/:guildId/roles/:roleId', () => {

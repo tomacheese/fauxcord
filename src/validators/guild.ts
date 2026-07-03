@@ -108,11 +108,12 @@ export function validateRoleCreate(
 ): ValidationErrors {
   const errors: ValidationErrors = {}
 
-  if (
-    payload.name !== undefined &&
-    payload.name.length > GUILD_LIMITS.NAME_MAX
-  ) {
-    errors.name = { _errors: [maxLengthError(GUILD_LIMITS.NAME_MAX)] }
+  if (payload.name !== undefined) {
+    if (typeof payload.name !== 'string') {
+      errors.name = { _errors: [typeError('string')] }
+    } else if (payload.name.length > GUILD_LIMITS.NAME_MAX) {
+      errors.name = { _errors: [maxLengthError(GUILD_LIMITS.NAME_MAX)] }
+    }
   }
 
   if (
