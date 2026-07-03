@@ -5,16 +5,16 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { generateSnowflake } from '../snowflake.js'
-import { getChannel } from '../services/channels.js'
-import { getChannelWebhooks, createWebhook } from '../services/webhooks.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { generateSnowflake } from '../snowflake'
+import { getChannel } from '../services/channels'
+import { getChannelWebhooks, createWebhook } from '../services/webhooks'
 import {
   validateWebhookCreate,
   isChannelWebhookLimitReached,
-} from '../validators/webhook.js'
-import { requireEntity } from '../lib/route-helpers.js'
+} from '../validators/webhook'
+import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the channel webhooks API routes.

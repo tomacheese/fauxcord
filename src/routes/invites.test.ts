@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createInviteRoutes } from './invites.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedChannel, seedInvite } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createInviteRoutes } from './invites'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel, seedInvite } from '../test-helpers'
+import type { Database } from '../db'
 
 describe('Invites API', () => {
   let db: Database

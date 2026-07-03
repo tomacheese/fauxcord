@@ -26,8 +26,8 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { ENUM_NOISE } from '../spec/enum-noise.js'
-import { MANIFEST } from '../spec/manifest.js'
+import { ENUM_NOISE } from '../spec/enum-noise'
+import { MANIFEST } from '../spec/manifest'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 

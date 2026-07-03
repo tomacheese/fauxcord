@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateSnowflake, snowflakeToTimestamp } from './snowflake.js'
+import { generateSnowflake, snowflakeToTimestamp } from './snowflake'
 
 describe('generateSnowflake', () => {
   it('returns a string', () => {

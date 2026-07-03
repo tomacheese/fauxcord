@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createGuildBanRoutes } from './guild-bans.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedMember, seedBan } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createGuildBanRoutes } from './guild-bans'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedMember, seedBan } from '../test-helpers'
+import type { Database } from '../db'
 
 describe('Guild Bans API', () => {
   let db: Database

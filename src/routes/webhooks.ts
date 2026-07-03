@@ -5,23 +5,19 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { generateSnowflake } from '../snowflake.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { generateSnowflake } from '../snowflake'
 import {
   getWebhook,
   getWebhookByToken,
   updateWebhook,
   deleteWebhook,
   executeWebhook,
-} from '../services/webhooks.js'
-import {
-  getMessage,
-  updateMessage,
-  deleteMessage,
-} from '../services/messages.js'
-import { validateWebhookExecute } from '../validators/webhook.js'
-import { isEmptyMessage } from '../validators/message.js'
+} from '../services/webhooks'
+import { getMessage, updateMessage, deleteMessage } from '../services/messages'
+import { validateWebhookExecute } from '../validators/webhook'
+import { isEmptyMessage } from '../validators/message'
 
 /**
  * Creates the Webhooks API routes.

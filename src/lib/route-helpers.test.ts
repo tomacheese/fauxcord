@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
-import { requireEntity, parseLimitQuery } from './route-helpers.js'
-import { DiscordErrorCode } from '../errors.js'
+import { requireEntity, parseLimitQuery } from './route-helpers'
+import { DiscordErrorCode } from '../errors'
 
 describe('requireEntity', () => {
   it('returns the entity when found', async () => {

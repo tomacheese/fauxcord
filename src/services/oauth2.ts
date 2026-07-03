@@ -4,7 +4,7 @@
  * Implements the Authorization Code Flow and the Client Credentials Flow.
  */
 
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 
 /** OAuth2 token response type */
 export interface TokenResponse {

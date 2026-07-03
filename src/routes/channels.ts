@@ -6,23 +6,19 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError } from '../errors.js'
-import {
-  getChannel,
-  updateChannel,
-  deleteChannel,
-} from '../services/channels.js'
-import type { AppEnv } from '../middleware/auth.js'
-import { requireEntity } from '../lib/route-helpers.js'
-import { createChannelPinRoutes } from './channel-pins.js'
-import { createChannelMessageRoutes } from './channel-messages.js'
-import { createChannelReactionRoutes } from './channel-reactions.js'
-import { createChannelWebhookRoutes } from './channel-webhooks.js'
-import { createChannelTypingRoutes } from './channel-typing.js'
-import { createChannelInviteRoutes } from './channel-invites.js'
-import { createChannelPermissionRoutes } from './channel-permissions.js'
-import { createChannelThreadRoutes } from './channel-threads.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError } from '../errors'
+import { getChannel, updateChannel, deleteChannel } from '../services/channels'
+import type { AppEnv } from '../middleware/auth'
+import { requireEntity } from '../lib/route-helpers'
+import { createChannelPinRoutes } from './channel-pins'
+import { createChannelMessageRoutes } from './channel-messages'
+import { createChannelReactionRoutes } from './channel-reactions'
+import { createChannelWebhookRoutes } from './channel-webhooks'
+import { createChannelTypingRoutes } from './channel-typing'
+import { createChannelInviteRoutes } from './channel-invites'
+import { createChannelPermissionRoutes } from './channel-permissions'
+import { createChannelThreadRoutes } from './channel-threads'
 
 /**
  * Creates the channels API routes.

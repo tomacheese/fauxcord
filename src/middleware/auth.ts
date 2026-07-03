@@ -6,7 +6,7 @@
  */
 
 import type { Context, Next } from 'hono'
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 
 /**
  * Path prefixes that do not require authentication

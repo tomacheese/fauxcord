@@ -4,8 +4,8 @@
  * Retrieves user information and provides application information.
  */
 
-import type { Database } from '../db.js'
-import type { CurrentUserUpdatePayload } from '../validators/user.js'
+import type { Database } from '../db'
+import type { CurrentUserUpdatePayload } from '../validators/user'
 // Used for compile-time type drift detection.
 import type { APIUser } from 'discord-api-types/v10'
 

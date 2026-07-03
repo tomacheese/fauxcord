@@ -4,8 +4,8 @@
  * Provides CRUD operations for guild custom emojis.
  */
 
-import type { Database } from '../db.js'
-import { getUser, type UserObject } from './users.js'
+import type { Database } from '../db'
+import { getUser, type UserObject } from './users'
 // Used for compile-time type drift detection.
 import type { APIEmoji } from 'discord-api-types/v10'
 

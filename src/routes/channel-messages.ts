@@ -6,10 +6,10 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { generateSnowflake } from '../snowflake.js'
-import { getChannel } from '../services/channels.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { generateSnowflake } from '../snowflake'
+import { getChannel } from '../services/channels'
 import {
   getMessage,
   getMessages,
@@ -17,14 +17,14 @@ import {
   updateMessage,
   deleteMessage,
   isTooOldForBulkDelete,
-} from '../services/messages.js'
+} from '../services/messages'
 import {
   validateMessageCreate,
   isEmptyMessage,
   type MessageCreatePayload,
-} from '../validators/message.js'
-import type { AppEnv, BotRecord } from '../middleware/auth.js'
-import { requireEntity, parseLimitQuery } from '../lib/route-helpers.js'
+} from '../validators/message'
+import type { AppEnv, BotRecord } from '../middleware/auth'
+import { requireEntity, parseLimitQuery } from '../lib/route-helpers'
 
 /**
  * Creates the channel messages API routes.
@@ -178,7 +178,7 @@ export function createChannelMessageRoutes(
 
     if (attachmentFiles.length > 0) {
       try {
-        const { saveAttachment } = await import('../services/attachments.js')
+        const { saveAttachment } = await import('../services/attachments')
         for (const f of attachmentFiles) {
           // Each attachment gets its own Snowflake so concurrent uploads to
           // the same message don't collide on a shared PRIMARY KEY.

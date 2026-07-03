@@ -5,22 +5,22 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { generateSnowflake } from '../snowflake.js'
-import { getGuild } from '../services/guilds.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { generateSnowflake } from '../snowflake'
+import { getGuild } from '../services/guilds'
 import {
   getGuildRoles,
   createRole,
   updateRole,
   deleteRole,
-} from '../services/guild-roles.js'
+} from '../services/guild-roles'
 import {
   validateRoleCreate,
   validateRoleUpdate,
   GUILD_LIMITS,
-} from '../validators/guild.js'
-import { requireEntity } from '../lib/route-helpers.js'
+} from '../validators/guild'
+import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the guild roles API routes.

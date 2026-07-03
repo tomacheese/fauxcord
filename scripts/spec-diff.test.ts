@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import type { OpenApiSpec } from './spec-diff.js'
-import { runSpecDiff, isEnumAdditionOnly } from './spec-diff.js'
-import { ENUM_NOISE } from '../spec/enum-noise.js'
+import type { OpenApiSpec } from './spec-diff'
+import { runSpecDiff, isEnumAdditionOnly } from './spec-diff'
+import { ENUM_NOISE } from '../spec/enum-noise'
 
 // Guards against vitest.config.ts regressing the `scripts/**/*.test.ts`
 // include glob (see Task 1 of the enum-noise plan) — if this file stops

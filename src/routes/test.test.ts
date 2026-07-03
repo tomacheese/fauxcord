@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createTestRoutes } from './test.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import type { Database } from '../db.js'
+import { createTestRoutes } from './test'
+import { initializeDatabase, closeDatabase } from '../db'
+import type { Database } from '../db'
 
 describe('Test Control API', () => {
   let db: Database

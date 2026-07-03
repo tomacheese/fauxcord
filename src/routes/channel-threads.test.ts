@@ -5,14 +5,14 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { createChannelThreadRoutes } from './channel-threads.js'
+import { createChannelThreadRoutes } from './channel-threads'
 import {
   createTestApp,
   seedBot,
   seedGuild,
   seedChannel,
   seedMessage,
-} from '../test-helpers.js'
+} from '../test-helpers'
 
 /**
  * Builds a test app with the thread routes mounted and a seeded bot/guild/channel.

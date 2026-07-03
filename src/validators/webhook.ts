@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 Webhook limits.
  */
 
-import { maxLengthError, type ValidationErrors } from './common.js'
+import { maxLengthError, type ValidationErrors } from './common'
 
 /** Webhook limit values */
 export const WEBHOOK_LIMITS = {

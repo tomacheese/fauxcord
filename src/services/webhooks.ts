@@ -4,9 +4,9 @@
  * Provides webhook CRUD operations and execution.
  */
 
-import type { Database } from '../db.js'
-import type { MessageObject } from './messages.js'
-import { createMessage } from './messages.js'
+import type { Database } from '../db'
+import type { MessageObject } from './messages'
+import { createMessage } from './messages'
 // Used for compile-time type drift detection.
 import type { APIWebhook } from 'discord-api-types/v10'
 

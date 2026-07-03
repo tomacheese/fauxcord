@@ -5,17 +5,17 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
 import {
   getBotUser,
   getUser,
   getApplication,
   updateBotUser,
-} from '../services/users.js'
-import { getBotGuilds } from '../services/guilds.js'
-import { validateCurrentUserUpdate } from '../validators/user.js'
-import type { AppEnv } from '../middleware/auth.js'
+} from '../services/users'
+import { getBotGuilds } from '../services/guilds'
+import { validateCurrentUserUpdate } from '../validators/user'
+import type { AppEnv } from '../middleware/auth'
 
 /**
  * Creates the Users API routes.

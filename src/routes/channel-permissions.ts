@@ -6,20 +6,20 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, validationError } from '../errors.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, validationError } from '../errors'
 import {
   getChannel,
   putChannelOverwrite,
   deleteChannelOverwrite,
-} from '../services/channels.js'
+} from '../services/channels'
 import {
   validatePermissionOverwrite,
   normalizePermissionOverwrite,
   type PermissionOverwritePayload,
-} from '../validators/channel.js'
-import { requireEntity } from '../lib/route-helpers.js'
-import type { AppEnv } from '../middleware/auth.js'
+} from '../validators/channel'
+import { requireEntity } from '../lib/route-helpers'
+import type { AppEnv } from '../middleware/auth'
 
 /**
  * Creates the channel permissions API routes.

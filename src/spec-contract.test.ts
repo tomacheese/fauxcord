@@ -41,7 +41,7 @@ const addFormats = _require('ajv-formats') as (
   ajv: InstanceType<typeof Ajv2020>
 ) => void
 
-import { createFullTestApp } from './test-helpers.js'
+import { createFullTestApp } from './test-helpers'
 import {
   seedBot,
   seedGuild,
@@ -53,13 +53,13 @@ import {
   seedEmoji,
   seedInvite,
   seedBan,
-} from './test-helpers.js'
-import { getContractTestedEntries } from '../spec/manifest.js'
-import type { ContractFixture, SpecEndpoint } from '../spec/manifest.js'
-import { SKIP_LIST } from '../spec/skip.js'
-import type { Database } from './db.js'
+} from './test-helpers'
+import { getContractTestedEntries } from '../spec/manifest'
+import type { ContractFixture, SpecEndpoint } from '../spec/manifest'
+import { SKIP_LIST } from '../spec/skip'
+import type { Database } from './db'
 import type { Hono } from 'hono'
-import type { AppEnv } from './middleware/auth.js'
+import type { AppEnv } from './middleware/auth'
 
 // ── Ajv setup ────────────────────────────────────────────────────────────────
 

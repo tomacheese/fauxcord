@@ -6,8 +6,8 @@
  * operations live in `guild-roles.ts` and `guild-members.ts`.
  */
 
-import type { Database } from '../db.js'
-import { getGuildRoles, type RoleObject } from './guild-roles.js'
+import type { Database } from '../db'
+import { getGuildRoles, type RoleObject } from './guild-roles'
 
 /** Guild record type retrieved from the DB */
 interface GuildRow {

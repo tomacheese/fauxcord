@@ -4,7 +4,7 @@
  * Validation follows the Discord API error format (code 50035).
  */
 
-import type { FieldError, ValidationErrors } from './common.js'
+import type { FieldError, ValidationErrors } from './common'
 
 /** Invite creation payload */
 export interface InviteCreatePayload {

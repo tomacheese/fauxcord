@@ -6,9 +6,9 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import type { AppEnv, BotRecord } from '../middleware/auth.js'
-import { getGatewayInfo, getGatewayBotInfo } from '../services/gateway.js'
+import type { Database } from '../db'
+import type { AppEnv, BotRecord } from '../middleware/auth'
+import { getGatewayInfo, getGatewayBotInfo } from '../services/gateway'
 
 /**
  * Creates the Gateway API routes.

@@ -7,9 +7,9 @@
 
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { getChannel } from '../services/channels.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { getChannel } from '../services/channels'
 import {
   createThread,
   getThread,
@@ -19,13 +19,13 @@ import {
   removeThreadMember,
   getArchivedThreads,
   searchThreads,
-} from '../services/threads.js'
+} from '../services/threads'
 import {
   validateThreadCreate,
   THREAD_CHANNEL_TYPES,
-} from '../validators/thread.js'
-import type { AppEnv, BotRecord } from '../middleware/auth.js'
-import { requireEntity } from '../lib/route-helpers.js'
+} from '../validators/thread'
+import type { AppEnv, BotRecord } from '../middleware/auth'
+import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Resolves the authenticated bot's user ID, falling back to a direct token

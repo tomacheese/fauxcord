@@ -4,8 +4,8 @@
  * Provides listing, retrieval, creation, and removal of guild bans.
  */
 
-import type { Database } from '../db.js'
-import { getUser, type UserObject } from './users.js'
+import type { Database } from '../db'
+import { getUser, type UserObject } from './users'
 
 /** Guild ban object for API responses (GuildBanResponse) */
 export interface GuildBanObject {

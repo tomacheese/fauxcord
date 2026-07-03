@@ -6,10 +6,10 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode } from '../errors.js'
-import { getChannel } from '../services/channels.js'
-import { requireEntity } from '../lib/route-helpers.js'
+import type { Database } from '../db'
+import { DiscordErrorCode } from '../errors'
+import { getChannel } from '../services/channels'
+import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the channel typing indicator API routes.

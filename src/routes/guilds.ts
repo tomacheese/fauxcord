@@ -6,21 +6,21 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { getGuild, updateGuild, deleteGuild } from '../services/guilds.js'
-import { getGuildChannels, createGuildChannel } from '../services/channels.js'
-import { getGuildWebhooks } from '../services/webhooks.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { getGuild, updateGuild, deleteGuild } from '../services/guilds'
+import { getGuildChannels, createGuildChannel } from '../services/channels'
+import { getGuildWebhooks } from '../services/webhooks'
 import {
   validateChannelCreate,
   validateGuildName,
   GUILD_LIMITS,
-} from '../validators/guild.js'
-import { requireEntity } from '../lib/route-helpers.js'
-import { createGuildRoleRoutes } from './guild-roles.js'
-import { createGuildMemberRoutes } from './guild-members.js'
-import { createGuildEmojiRoutes } from './guild-emojis.js'
-import { createGuildBanRoutes } from './guild-bans.js'
+} from '../validators/guild'
+import { requireEntity } from '../lib/route-helpers'
+import { createGuildRoleRoutes } from './guild-roles'
+import { createGuildMemberRoutes } from './guild-members'
+import { createGuildEmojiRoutes } from './guild-emojis'
+import { createGuildBanRoutes } from './guild-bans'
 
 /**
  * Creates the guilds API routes.

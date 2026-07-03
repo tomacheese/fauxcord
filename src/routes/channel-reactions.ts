@@ -5,18 +5,18 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 import {
   addReaction,
   removeReaction,
   removeEmojiReactions,
   removeAllReactions,
   getReactionUsers,
-} from '../services/reactions.js'
-import { getMessage } from '../services/messages.js'
-import { DiscordErrorCode, discordError } from '../errors.js'
-import type { AppEnv } from '../middleware/auth.js'
-import { parseLimitQuery } from '../lib/route-helpers.js'
+} from '../services/reactions'
+import { getMessage } from '../services/messages'
+import { DiscordErrorCode, discordError } from '../errors'
+import type { AppEnv } from '../middleware/auth'
+import { parseLimitQuery } from '../lib/route-helpers'
 
 /**
  * Creates the channel reactions API routes.

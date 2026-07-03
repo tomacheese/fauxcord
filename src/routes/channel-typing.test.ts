@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createChannelTypingRoutes } from './channel-typing.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createChannelTypingRoutes } from './channel-typing'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import type { Database } from '../db'
 
 describe('Channel Typing API', () => {
   let db: Database

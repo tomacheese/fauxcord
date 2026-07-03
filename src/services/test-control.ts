@@ -4,8 +4,8 @@
  * Handles test environment setup and reset.
  */
 
-import type { Database } from '../db.js'
-import { generateSnowflake } from '../snowflake.js'
+import type { Database } from '../db'
+import { generateSnowflake } from '../snowflake'
 
 /** Test setup request type */
 export interface SetupRequest {

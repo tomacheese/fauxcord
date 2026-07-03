@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createGuildRoleRoutes } from './guild-roles.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createGuildRoleRoutes } from './guild-roles'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild } from '../test-helpers'
+import type { Database } from '../db'
 
 describe('Guild Roles API', () => {
   let db: Database

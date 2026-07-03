@@ -7,13 +7,9 @@
 
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError } from '../errors.js'
-import {
-  getPinnedMessages,
-  pinMessage,
-  unpinMessage,
-} from '../services/pins.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError } from '../errors'
+import { getPinnedMessages, pinMessage, unpinMessage } from '../services/pins'
 
 /**
  * Builds the Hono response for a `pinMessage()` result code.

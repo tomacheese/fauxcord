@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createGatewayRoutes } from './gateway.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot } from '../test-helpers.js'
-import type { Database } from '../db.js'
-import type { AppEnv } from '../middleware/auth.js'
+import { createGatewayRoutes } from './gateway'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot } from '../test-helpers'
+import type { Database } from '../db'
+import type { AppEnv } from '../middleware/auth'
 
 const BASE_URL = 'http://localhost:3000'
 
