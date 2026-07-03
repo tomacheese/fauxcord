@@ -129,6 +129,16 @@ export function initializeDatabase(dbPath: string): Database {
 
     CREATE INDEX IF NOT EXISTS idx_thread_members_thread ON thread_members(thread_id);
 
+    CREATE TABLE IF NOT EXISTS guild_bans (
+      guild_id   TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      user_id    TEXT NOT NULL,
+      reason     TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (guild_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_bans_guild ON guild_bans(guild_id);
+
     CREATE TABLE IF NOT EXISTS guild_members (
       guild_id   TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
       user_id    TEXT NOT NULL REFERENCES users(id),
