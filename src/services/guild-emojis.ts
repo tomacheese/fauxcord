@@ -139,7 +139,7 @@ export function createEmoji(
 /** Emoji update parameters */
 export interface EmojiUpdateParams {
   name?: string
-  roles?: string[] | null
+  roles?: string[]
 }
 
 /**
@@ -164,7 +164,7 @@ export function updateEmoji(
   const updates: Record<string, unknown> = {}
   if (payload.name !== undefined) updates.name = payload.name
   if (payload.roles !== undefined) {
-    updates.roles = JSON.stringify(payload.roles ?? [])
+    updates.roles = JSON.stringify(payload.roles)
   }
 
   if (Object.keys(updates).length > 0) {

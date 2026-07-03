@@ -6,6 +6,7 @@
 
 import { Hono } from 'hono'
 import type { Database } from '../db.js'
+import type { AppEnv } from '../middleware/auth.js'
 import { DiscordErrorCode, discordError, validationError } from '../errors.js'
 import { generateSnowflake } from '../snowflake.js'
 import { getGuild } from '../services/guilds.js'
@@ -33,8 +34,8 @@ interface BotRow {
  * @param db - Database
  * @returns Hono router instance
  */
-export function createGuildEmojiRoutes(db: Database): Hono {
-  const app = new Hono()
+export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
+  const app = new Hono<AppEnv>()
 
   // GET /guilds/:guildId/emojis — List a guild's emojis
   app.get('/guilds/:guildId/emojis', (c) => {
@@ -93,14 +94,18 @@ export function createGuildEmojiRoutes(db: Database): Hono {
       return c.json(validationError(errors).body, 400)
     }
 
-    // Resolve the authenticated bot as the emoji creator via the
-    // Authorization header (works with or without the auth middleware).
-    const authHeader = c.req.header('Authorization')
-    const bot = authHeader
-      ? (db.prepare('SELECT * FROM bots WHERE token = ?').get(authHeader) as
+    // Resolve the authenticated bot as the emoji creator. Prefer the bot
+    // already resolved by the auth middleware; fall back to a direct token
+    // lookup for unit tests that mount this router in isolation.
+    let bot: BotRow | undefined = c.get('bot')
+    if (!bot) {
+      const authHeader = c.req.header('Authorization')
+      if (authHeader) {
+        bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(authHeader) as
           | BotRow
-          | undefined)
-      : undefined
+          | undefined
+      }
+    }
 
     const emoji = createEmoji(db, {
       emojiId: generateSnowflake(),
@@ -133,9 +138,14 @@ export function createGuildEmojiRoutes(db: Database): Hono {
       return c.json(validationError(errors).body, 400)
     }
 
+    // `roles: null` means "not provided" per validateEmojiUpdate, so it must
+    // not reach the service layer as an explicit roles-clearing update.
     const updated = requireEntity(
       c,
-      updateEmoji(db, guildId, emojiId, payload),
+      updateEmoji(db, guildId, emojiId, {
+        name: payload.name,
+        roles: payload.roles ?? undefined,
+      }),
       DiscordErrorCode.UNKNOWN_EMOJI,
       'Unknown Emoji'
     )
@@ -146,6 +156,13 @@ export function createGuildEmojiRoutes(db: Database): Hono {
   // DELETE /guilds/:guildId/emojis/:emojiId — Delete an emoji
   app.delete('/guilds/:guildId/emojis/:emojiId', (c) => {
     const { guildId, emojiId } = c.req.param()
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
     const deleted = deleteEmoji(db, guildId, emojiId)
     if (!deleted) {
       const err = discordError(

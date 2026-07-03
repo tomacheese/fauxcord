@@ -202,7 +202,7 @@ export const EMOJI_LIMITS = {
 /** Emoji creation request type */
 export interface EmojiCreatePayload {
   name?: string
-  image?: string
+  image?: unknown
   roles?: string[] | null
 }
 
@@ -249,8 +249,11 @@ function validateEmojiRoles(roles: unknown): FieldError[] {
   if (roles === undefined || roles === null) {
     return []
   }
-  if (!Array.isArray(roles) || roles.some((role) => typeof role !== 'string')) {
+  if (!Array.isArray(roles)) {
     return [typeError('array')]
+  }
+  if (roles.some((role) => typeof role !== 'string')) {
+    return [typeError('array[string]')]
   }
   return []
 }
@@ -269,6 +272,8 @@ export function validateEmojiCreate(
   if (nameErrors.length > 0) errors.name = { _errors: nameErrors }
   if (payload.image === undefined) {
     errors.image = { _errors: [requiredError()] }
+  } else if (typeof payload.image !== 'string' || payload.image.length === 0) {
+    errors.image = { _errors: [typeError('string')] }
   }
   const roleErrors = validateEmojiRoles(payload.roles)
   if (roleErrors.length > 0) errors.roles = { _errors: roleErrors }
