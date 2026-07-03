@@ -313,8 +313,12 @@ export function getGuildChannels(
   db: Database,
   guildId: string
 ): ChannelObject[] {
+  // Exclude thread types (10/11/12): like the real Discord API, threads are
+  // not returned by GET /guilds/{guild_id}/channels.
   const rows = db
-    .prepare('SELECT * FROM channels WHERE guild_id = ? ORDER BY position, id')
+    .prepare(
+      'SELECT * FROM channels WHERE guild_id = ? AND type NOT IN (10, 11, 12) ORDER BY position, id'
+    )
     .all(guildId) as ChannelRow[]
   // Bulk-load overwrites for all channels in one query to avoid N+1.
   const overwritesByChannel = getChannelOverwritesForChannels(

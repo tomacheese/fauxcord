@@ -22,6 +22,7 @@ import { createChannelWebhookRoutes } from './channel-webhooks.js'
 import { createChannelTypingRoutes } from './channel-typing.js'
 import { createChannelInviteRoutes } from './channel-invites.js'
 import { createChannelPermissionRoutes } from './channel-permissions.js'
+import { createChannelThreadRoutes } from './channel-threads.js'
 
 /**
  * Creates the channels API routes.
@@ -85,6 +86,12 @@ export function createChannelRoutes(
     }
     return c.json(deleted)
   })
+
+  // Thread routes. Their paths ("/threads/*", "/thread-members/*", and the
+  // 4-segment "/messages/:messageId/threads") do not overlap the message/pin
+  // routes, so mount order is not load-bearing here; they are grouped with the
+  // other channel sub-routers for readability.
+  app.route('/', createChannelThreadRoutes(db))
 
   // channel-pins MUST be mounted before channel-messages: its literal
   // "/messages/pins" route must win over channel-messages' parameterized
