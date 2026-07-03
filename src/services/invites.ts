@@ -176,6 +176,28 @@ const INVITE_CODE_CHARS =
 /** Length of a generated invite code */
 const INVITE_CODE_LENGTH = 8
 
+// 256 is not a multiple of INVITE_CODE_CHARS.length (62), so `byte % 62`
+// would be biased toward the first 256 % 62 = 8 characters. Rejecting bytes
+// at or above the largest multiple of 62 that fits in a byte removes that
+// bias (CodeQL: "biased random numbers from a cryptographically secure
+// source").
+const RANDOM_BYTE_LIMIT = 256 - (256 % INVITE_CODE_CHARS.length)
+
+/**
+ * Picks a single unbiased random character from `INVITE_CODE_CHARS` using
+ * rejection sampling over cryptographically secure random bytes.
+ * @returns A single character from `INVITE_CODE_CHARS`
+ */
+function randomInviteCodeChar(): string {
+  const buffer = new Uint8Array(1)
+  for (;;) {
+    crypto.getRandomValues(buffer)
+    const byte = buffer[0]
+    if (byte >= RANDOM_BYTE_LIMIT) continue
+    return INVITE_CODE_CHARS.charAt(byte % INVITE_CODE_CHARS.length)
+  }
+}
+
 /**
  * Generates a unique 8-character base62 invite code.
  * @param db - Database
@@ -186,10 +208,9 @@ function generateInviteCode(db: Database): string {
   for (;;) {
     // Invite codes act as credentials, so Math.random (predictable) is not
     // used; crypto.getRandomValues provides cryptographically strong bytes.
-    const bytes = crypto.getRandomValues(new Uint8Array(INVITE_CODE_LENGTH))
     let code = ''
-    for (const byte of bytes) {
-      code += INVITE_CODE_CHARS.charAt(byte % INVITE_CODE_CHARS.length)
+    for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
+      code += randomInviteCodeChar()
     }
     if (!stmt.get(code)) return code
   }
