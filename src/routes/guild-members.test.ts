@@ -146,6 +146,39 @@ describe('Guild Members API', () => {
       })
       expect(res.status).toBe(400)
     })
+
+    it('does not fail when duplicate role IDs are sent', async () => {
+      const userId = seedMember('555555555555555555')
+      const roleId = seedRole('444444444444444444')
+      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ roles: [roleId, roleId] }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.roles).toEqual([roleId])
+    })
+
+    it('returns role IDs in a stable, sorted order', async () => {
+      const userId = seedMember('555555555555555555')
+      const roleA = seedRole('444444444444444444')
+      const roleB = seedRole('333333333333333333')
+      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ roles: [roleA, roleB] }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { roles: string[] }
+      expect(body.roles).toEqual(body.roles.toSorted())
+    })
   })
 
   describe('PUT /guilds/:guildId/members/:userId/roles/:roleId', () => {
@@ -336,6 +369,27 @@ describe('Guild Members API', () => {
       expect(res.status).toBe(404)
       const body = (await res.json()) as Record<string, unknown>
       expect(body.code).toBe(10_007)
+    })
+
+    it('deletes the member role assignments so they do not orphan', async () => {
+      const userId = seedMember('555555555555555555')
+      const roleId = seedRole('444444444444444444')
+      db.prepare(
+        'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+      ).run(guildId, userId, roleId)
+
+      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
+        method: 'DELETE',
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(204)
+
+      const remaining = db
+        .prepare(
+          'SELECT COUNT(*) as count FROM member_roles WHERE guild_id = ? AND user_id = ?'
+        )
+        .get(guildId, userId) as { count: number }
+      expect(remaining.count).toBe(0)
     })
   })
 })

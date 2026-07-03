@@ -132,7 +132,14 @@ export function validateRoleCreate(
   }
 
   if (payload.permissions !== undefined && !/^\d+$/.test(payload.permissions)) {
-    errors.permissions = { _errors: [typeError('string')] }
+    errors.permissions = {
+      _errors: [
+        {
+          code: 'BASE_TYPE_BAD_TYPE',
+          message: 'Value must be a numeric string.',
+        },
+      ],
+    }
   }
 
   return errors

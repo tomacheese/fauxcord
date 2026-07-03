@@ -11,6 +11,8 @@ import {
 import type { Database } from '../db.js'
 import type { AppEnv } from '../middleware/auth.js'
 
+const BASE_URL = 'http://localhost:3000'
+
 describe('Channel Reactions API', () => {
   let db: Database
   let app: Hono<AppEnv>
@@ -20,7 +22,7 @@ describe('Channel Reactions API', () => {
   beforeEach(() => {
     db = initializeDatabase(':memory:')
     app = new Hono<AppEnv>()
-    app.route('/', createChannelReactionRoutes(db))
+    app.route('/', createChannelReactionRoutes(db, BASE_URL))
 
     token = seedBot(db)
     const guildId = seedGuild(db, token)
@@ -72,6 +74,47 @@ describe('Channel Reactions API', () => {
       )
       const users = (await listRes.json()) as { id: string }[]
       expect(users.some((u) => u.id === reactingUserId)).toBe(false)
+    })
+  })
+
+  describe('PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me', () => {
+    it('adds a reaction to an existing message', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(
+        db,
+        channelId,
+        botUserId,
+        token,
+        'React to me'
+      )
+
+      const emoji = encodeURIComponent('👍')
+      const res = await app.request(
+        `/channels/${channelId}/messages/${messageId}/reactions/${emoji}/@me`,
+        {
+          method: 'PUT',
+          headers: { Authorization: token },
+        }
+      )
+      expect(res.status).toBe(204)
+    })
+
+    it('returns 404 Unknown Message when the message does not exist', async () => {
+      const emoji = encodeURIComponent('👍')
+      const res = await app.request(
+        `/channels/${channelId}/messages/999999999999999999/reactions/${emoji}/@me`,
+        {
+          method: 'PUT',
+          headers: { Authorization: token },
+        }
+      )
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_008)
     })
   })
 })

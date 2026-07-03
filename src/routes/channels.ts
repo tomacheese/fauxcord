@@ -88,7 +88,7 @@ export function createChannelRoutes(
   // "/messages/:messageId" route (Hono is first-match-wins).
   app.route('/', createChannelPinRoutes(db, baseUrl))
   app.route('/', createChannelMessageRoutes(db, baseUrl, uploadPath))
-  app.route('/', createChannelReactionRoutes(db))
+  app.route('/', createChannelReactionRoutes(db, baseUrl))
   app.route('/', createChannelWebhookRoutes(db))
 
   return app

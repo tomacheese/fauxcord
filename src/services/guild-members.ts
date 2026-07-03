@@ -108,7 +108,8 @@ function getMemberRoleIds(
   const rows = db
     .prepare(
       `SELECT role_id FROM member_roles
-       WHERE guild_id = ? AND user_id = ?`
+       WHERE guild_id = ? AND user_id = ?
+       ORDER BY role_id`
     )
     .all(guildId, userId) as { role_id: string }[]
   return rows.map((r) => r.role_id)
@@ -272,7 +273,7 @@ export function updateGuildMember(
         'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?'
       ).run(guildId, userId)
       const insert = db.prepare(
-        'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+        'INSERT OR IGNORE INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
       )
       for (const roleId of roles) {
         insert.run(guildId, userId, roleId)
@@ -299,7 +300,15 @@ export function removeGuildMember(
   const result = db
     .prepare('DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?')
     .run(guildId, userId)
-  return result.changes > 0
+  if (result.changes === 0) return false
+
+  // Also delete the role assignments the member had (member_roles has no
+  // FK to guild_members, so these would otherwise become orphaned rows).
+  db.prepare('DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?').run(
+    guildId,
+    userId
+  )
+  return true
 }
 
 /**

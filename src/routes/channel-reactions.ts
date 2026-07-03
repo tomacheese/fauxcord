@@ -13,15 +13,21 @@ import {
   removeAllReactions,
   getReactionUsers,
 } from '../services/reactions.js'
+import { getMessage } from '../services/messages.js'
+import { DiscordErrorCode, discordError } from '../errors.js'
 import type { AppEnv } from '../middleware/auth.js'
 import { parseLimitQuery } from '../lib/route-helpers.js'
 
 /**
  * Creates the channel reactions API routes.
  * @param db - Database
+ * @param baseUrl - Base URL, used to build the message existence check
  * @returns Hono router instance
  */
-export function createChannelReactionRoutes(db: Database): Hono<AppEnv> {
+export function createChannelReactionRoutes(
+  db: Database,
+  baseUrl: string
+): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
   // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me — Add own reaction
@@ -32,6 +38,16 @@ export function createChannelReactionRoutes(db: Database): Hono<AppEnv> {
       const bot = c.get('bot')
       const userId = bot?.user_id ?? '000000000000000000'
       const decodedEmoji = decodeURIComponent(emoji)
+
+      const msg = getMessage(db, messageId, baseUrl)
+      if (!msg) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_MESSAGE,
+          'Unknown Message',
+          404
+        )
+        return c.json(err.body, 404)
+      }
 
       addReaction(db, messageId, userId, decodedEmoji)
       return c.body(null, 204)
