@@ -4,7 +4,13 @@
  * Provides validation conforming to Discord API v10 Guild limits.
  */
 
-import { maxLengthError, typeError, type ValidationErrors } from './common.js'
+import {
+  maxLengthError,
+  requiredError,
+  typeError,
+  type FieldError,
+  type ValidationErrors,
+} from './common.js'
 
 /** Guild limit values */
 export const GUILD_LIMITS = {
@@ -184,5 +190,104 @@ export function validateGuildMemberUpdate(
     errors.nick = { _errors: [maxLengthError(NICK_MAX)] }
   }
 
+  return errors
+}
+
+/** Emoji limit values */
+export const EMOJI_LIMITS = {
+  NAME_MIN: 2,
+  NAME_MAX: 32,
+} as const
+
+/** Emoji creation request type */
+export interface EmojiCreatePayload {
+  name?: string
+  image?: string
+  roles?: string[] | null
+}
+
+/** Emoji update request type */
+export interface EmojiUpdatePayload {
+  name?: string
+  roles?: string[] | null
+}
+
+/**
+ * Validates an emoji name: presence and length (2-32).
+ * @param name - Emoji name
+ * @param required - Whether the name is required (true for creation)
+ * @returns Field error array (empty when valid)
+ */
+function validateEmojiName(name: unknown, required: boolean): FieldError[] {
+  if (name === undefined) {
+    return required ? [requiredError()] : []
+  }
+  if (typeof name !== 'string') {
+    return [typeError('string')]
+  }
+  if (
+    name.length < EMOJI_LIMITS.NAME_MIN ||
+    name.length > EMOJI_LIMITS.NAME_MAX
+  ) {
+    return [
+      {
+        code: 'BASE_TYPE_BAD_LENGTH',
+        message: `Must be between ${EMOJI_LIMITS.NAME_MIN} and ${EMOJI_LIMITS.NAME_MAX} in length.`,
+      },
+    ]
+  }
+  return []
+}
+
+/**
+ * Validates an emoji `roles` field: when present, it must be an array of
+ * Snowflake strings. `null`/`undefined` are treated as "not provided".
+ * @param roles - Roles value from the payload (untrusted at runtime)
+ * @returns Field error array (empty when valid)
+ */
+function validateEmojiRoles(roles: unknown): FieldError[] {
+  if (roles === undefined || roles === null) {
+    return []
+  }
+  if (!Array.isArray(roles) || roles.some((role) => typeof role !== 'string')) {
+    return [typeError('array')]
+  }
+  return []
+}
+
+/**
+ * Validates an emoji creation payload: `name` (required, 2-32), `image`
+ * (required), and `roles` (optional array of Snowflake strings).
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateEmojiCreate(
+  payload: EmojiCreatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+  const nameErrors = validateEmojiName(payload.name, true)
+  if (nameErrors.length > 0) errors.name = { _errors: nameErrors }
+  if (payload.image === undefined) {
+    errors.image = { _errors: [requiredError()] }
+  }
+  const roleErrors = validateEmojiRoles(payload.roles)
+  if (roleErrors.length > 0) errors.roles = { _errors: roleErrors }
+  return errors
+}
+
+/**
+ * Validates an emoji update payload: `name` (optional, 2-32) and `roles`
+ * (optional array of Snowflake strings).
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateEmojiUpdate(
+  payload: EmojiUpdatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+  const nameErrors = validateEmojiName(payload.name, false)
+  if (nameErrors.length > 0) errors.name = { _errors: nameErrors }
+  const roleErrors = validateEmojiRoles(payload.roles)
+  if (roleErrors.length > 0) errors.roles = { _errors: roleErrors }
   return errors
 }

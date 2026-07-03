@@ -77,6 +77,8 @@ export interface ContractFixture {
   roleId: string
   /** Seeded member user ID (a second user who is a member of the guild) */
   memberId: string
+  /** Seeded emoji ID */
+  emojiId: string
 }
 
 /** A single entry in the endpoint manifest. */
@@ -484,6 +486,64 @@ export const MANIFEST: SpecEndpoint[] = [
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/roles/${f.roleId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/emojis',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/emojis` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/emojis',
+    method: 'post',
+    contractTested: true,
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/emojis`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'new_emoji',
+          image: 'data:image/png;base64,iVBORw0KGgo=',
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/emojis/{emoji_id}',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/emojis/{emoji_id}',
+    method: 'patch',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'renamed_emoji' }),
+      },
+    }),
+  },
+  {
+    // contractTested: false — 204 response, nothing to validate against the schema
+    specPath: '/guilds/{guild_id}/emojis/{emoji_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
       init: { method: 'DELETE' },
     }),
   },

@@ -235,6 +235,27 @@ export function seedRole(
 }
 
 /**
+ * Inserts an emoji into the DB for testing.
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param userId - Creator user ID (nullable)
+ * @param name - Emoji name
+ * @returns Generated emoji ID
+ */
+export function seedEmoji(
+  db: Database,
+  guildId: string,
+  userId: string | null,
+  name = 'test_emoji'
+): string {
+  const emojiId = generateSnowflake()
+  db.prepare(
+    "INSERT INTO emojis (id, guild_id, name, user_id, roles) VALUES (?, ?, ?, ?, '[]')"
+  ).run(emojiId, guildId, name, userId)
+  return emojiId
+}
+
+/**
  * Registers a second user and adds them as a guild member for testing.
  * @param db - Database
  * @param guildId - Guild ID

@@ -19,6 +19,7 @@ import {
 import { requireEntity } from '../lib/route-helpers.js'
 import { createGuildRoleRoutes } from './guild-roles.js'
 import { createGuildMemberRoutes } from './guild-members.js'
+import { createGuildEmojiRoutes } from './guild-emojis.js'
 
 /**
  * Creates the guilds API routes.
@@ -155,6 +156,7 @@ export function createGuildRoutes(db: Database): Hono {
 
   app.route('/', createGuildRoleRoutes(db))
   app.route('/', createGuildMemberRoutes(db))
+  app.route('/', createGuildEmojiRoutes(db))
 
   return app
 }
