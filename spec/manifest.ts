@@ -233,6 +233,16 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
+    specPath: '/channels/{channel_id}/typing',
+    method: 'post',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/typing`,
+      init: { method: 'POST' },
+    }),
+  },
+  {
     specPath: '/channels/{channel_id}/messages/pins/{message_id}',
     method: 'put',
     contractTested: false,
