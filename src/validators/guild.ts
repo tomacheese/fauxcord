@@ -296,3 +296,60 @@ export function validateEmojiUpdate(
   if (roleErrors.length > 0) errors.roles = { _errors: roleErrors }
   return errors
 }
+
+/** Ban creation request type */
+export interface BanCreatePayload {
+  delete_message_seconds?: number | null
+  delete_message_days?: number | null
+}
+
+/** Maximum value for delete_message_seconds (7 days in seconds) */
+const DELETE_MESSAGE_SECONDS_MAX = 604_800
+/** Maximum value for delete_message_days */
+const DELETE_MESSAGE_DAYS_MAX = 7
+
+/**
+ * Validates a ban creation payload: `delete_message_seconds` and
+ * `delete_message_days` ranges. Both fields are optional.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateBanCreate(payload: BanCreatePayload): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  const seconds = payload.delete_message_seconds
+  if (
+    seconds !== undefined &&
+    seconds !== null &&
+    (!Number.isInteger(seconds) ||
+      seconds < 0 ||
+      seconds > DELETE_MESSAGE_SECONDS_MAX)
+  ) {
+    errors.delete_message_seconds = {
+      _errors: [
+        {
+          code: 'NUMBER_TYPE_MAX',
+          message: `Must be an integer between 0 and ${DELETE_MESSAGE_SECONDS_MAX}.`,
+        },
+      ],
+    }
+  }
+
+  const days = payload.delete_message_days
+  if (
+    days !== undefined &&
+    days !== null &&
+    (!Number.isInteger(days) || days < 0 || days > DELETE_MESSAGE_DAYS_MAX)
+  ) {
+    errors.delete_message_days = {
+      _errors: [
+        {
+          code: 'NUMBER_TYPE_MAX',
+          message: `Must be an integer between 0 and ${DELETE_MESSAGE_DAYS_MAX}.`,
+        },
+      ],
+    }
+  }
+
+  return errors
+}

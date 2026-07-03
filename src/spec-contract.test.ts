@@ -52,6 +52,7 @@ import {
   seedMember,
   seedEmoji,
   seedInvite,
+  seedBan,
 } from './test-helpers.js'
 import { getContractTestedEntries } from '../spec/manifest.js'
 import type { ContractFixture, SpecEndpoint } from '../spec/manifest.js'
@@ -257,6 +258,7 @@ beforeAll(() => {
   const memberId = seedMember(db, guildId)
   const emojiId = seedEmoji(db, guildId, BOT_USER_ID)
   const inviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)
+  const bannedUserId = seedBan(db, guildId, undefined, 'Contract test ban')
 
   // Seed an archived public thread (type 11) with the bot as a member so the
   // thread-member and archived-list contract tests have data to validate.
@@ -284,6 +286,7 @@ beforeAll(() => {
     memberId,
     emojiId,
     inviteCode,
+    bannedUserId,
     threadId,
   }
 })

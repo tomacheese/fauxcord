@@ -306,3 +306,28 @@ export function seedMember(
   ).run(guildId, memberId)
   return memberId
 }
+
+/**
+ * Registers a banned user and inserts a guild ban for testing.
+ * Also registers the user so ban responses can resolve a full user object.
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param userId - Banned user ID (auto-generated if omitted)
+ * @param reason - Ban reason (default null)
+ * @returns User ID of the banned user
+ */
+export function seedBan(
+  db: Database,
+  guildId: string,
+  userId?: string,
+  reason: string | null = null
+): string {
+  const bannedId = userId ?? generateSnowflake()
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'BannedUser', '0', 0)"
+  ).run(bannedId)
+  db.prepare(
+    'INSERT OR IGNORE INTO guild_bans (guild_id, user_id, reason) VALUES (?, ?, ?)'
+  ).run(guildId, bannedId, reason)
+  return bannedId
+}

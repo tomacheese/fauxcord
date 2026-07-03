@@ -81,6 +81,8 @@ export interface ContractFixture {
   emojiId: string
   /** Seeded invite code */
   inviteCode: string
+  /** Seeded banned user ID (a user with a ban record in the guild) */
+  bannedUserId: string
   /** Seeded thread (channel type 11) ID, archived, with the bot as a member */
   threadId: string
 }
@@ -636,6 +638,43 @@ export const MANIFEST: SpecEndpoint[] = [
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/bans',
+    method: 'get',
+    contractTested: true,
+    // spec response is type ["array","null"] of GuildBanResponse — validated per-item
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/bans` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/bans/{user_id}',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/bans/{user_id}',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/bans/{user_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
       init: { method: 'DELETE' },
     }),
   },

@@ -19,6 +19,7 @@ export const DiscordErrorCode = {
   UNKNOWN_USER: 10_013,
   UNKNOWN_EMOJI: 10_014,
   UNKNOWN_WEBHOOK: 10_015,
+  UNKNOWN_BAN: 10_026,
   // 30xxx — Limit exceeded
   MAX_PINS_REACHED: 30_003,
   MAX_ROLES_REACHED: 30_005,
@@ -106,6 +107,7 @@ export const ERROR_MESSAGES = {
   [DiscordErrorCode.UNKNOWN_USER]: 'Unknown User',
   [DiscordErrorCode.UNKNOWN_EMOJI]: 'Unknown Emoji',
   [DiscordErrorCode.UNKNOWN_WEBHOOK]: 'Unknown Webhook',
+  [DiscordErrorCode.UNKNOWN_BAN]: 'Unknown Ban',
   [DiscordErrorCode.MAX_PINS_REACHED]:
     'Maximum number of pins reached for the channel (50)',
   [DiscordErrorCode.MAX_ROLES_REACHED]:
