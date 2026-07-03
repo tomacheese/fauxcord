@@ -28,9 +28,12 @@ type _ChannelCompatGuard =
     : never
 
 /**
- * Compile-time guard: ensures ChannelOverwriteObject stays structurally
- * compatible with APIOverwrite. Fails to compile when discord-api-types
- * renames or retypes these fields.
+ * Compile-time guard: detects upstream drift in APIOverwrite (API ⟶ local
+ * direction), failing to compile when discord-api-types renames or retypes
+ * these fields. This is intentionally one-directional, matching
+ * `_ChannelCompatGuard` above: `ChannelOverwriteObject.type` is deliberately
+ * widened to `number` (the DB stores an integer) rather than the narrower
+ * `OverwriteType` enum, so a bidirectional check would fail by design.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type _OverwriteCompatGuard =
@@ -116,6 +119,38 @@ export function getChannelOverwrites(
 }
 
 /**
+ * Retrieves permission overwrites for multiple channels in a single query,
+ * grouped by channel ID. Used to avoid an N+1 query pattern when building a
+ * channel list.
+ * @param db - Database
+ * @param channelIds - Channel IDs to load overwrites for
+ * @returns Map from channel ID to its overwrite objects (channels with no
+ * overwrites are absent from the map)
+ */
+export function getChannelOverwritesForChannels(
+  db: Database,
+  channelIds: string[]
+): Map<string, ChannelOverwriteObject[]> {
+  const result = new Map<string, ChannelOverwriteObject[]>()
+  if (channelIds.length === 0) return result
+
+  const placeholders = channelIds.map(() => '?').join(', ')
+  const rows = db
+    .prepare(
+      `SELECT channel_id, id, type, allow, deny FROM channel_overwrites
+       WHERE channel_id IN (${placeholders}) ORDER BY id`
+    )
+    .all(...channelIds) as (ChannelOverwriteRow & { channel_id: string })[]
+
+  for (const row of rows) {
+    const list = result.get(row.channel_id) ?? []
+    list.push({ id: row.id, type: row.type, allow: row.allow, deny: row.deny })
+    result.set(row.channel_id, list)
+  }
+  return result
+}
+
+/**
  * Creates or updates a permission overwrite for a channel (upsert).
  * @param db - Database
  * @param channelId - Channel ID
@@ -156,11 +191,14 @@ export function deleteChannelOverwrite(
 
 /**
  * Converts a DB channel record into the API response format.
- * @param db - Database, used to load the channel's permission overwrites
  * @param row - DB record
+ * @param overwrites - The channel's permission overwrites (empty if none)
  * @returns Object for API responses
  */
-function toChannelObject(db: Database, row: ChannelRow): ChannelObject {
+function toChannelObject(
+  row: ChannelRow,
+  overwrites: ChannelOverwriteObject[]
+): ChannelObject {
   return {
     id: row.id,
     type: row.type,
@@ -173,7 +211,7 @@ function toChannelObject(db: Database, row: ChannelRow): ChannelObject {
     last_message_id: row.last_message_id,
     rate_limit_per_user: row.rate_limit_per_user,
     parent_id: row.parent_id,
-    permission_overwrites: getChannelOverwrites(db, row.id),
+    permission_overwrites: overwrites,
   }
 }
 
@@ -190,7 +228,7 @@ export function getChannel(
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
-  return row ? toChannelObject(db, row) : null
+  return row ? toChannelObject(row, getChannelOverwrites(db, row.id)) : null
 }
 
 /** Channel update request type */
@@ -240,7 +278,7 @@ export function updateChannel(
   const updated = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
-  return toChannelObject(db, updated)
+  return toChannelObject(updated, getChannelOverwrites(db, updated.id))
 }
 
 /**
@@ -260,7 +298,7 @@ export function deleteChannel(
 
   // Build the response before deleting: the DELETE cascades to
   // channel_overwrites, so overwrites must be read first.
-  const result = toChannelObject(db, row)
+  const result = toChannelObject(row, getChannelOverwrites(db, row.id))
   db.prepare('DELETE FROM channels WHERE id = ?').run(channelId)
   return result
 }
@@ -278,7 +316,14 @@ export function getGuildChannels(
   const rows = db
     .prepare('SELECT * FROM channels WHERE guild_id = ? ORDER BY position, id')
     .all(guildId) as ChannelRow[]
-  return rows.map((row) => toChannelObject(db, row))
+  // Bulk-load overwrites for all channels in one query to avoid N+1.
+  const overwritesByChannel = getChannelOverwritesForChannels(
+    db,
+    rows.map((row) => row.id)
+  )
+  return rows.map((row) =>
+    toChannelObject(row, overwritesByChannel.get(row.id) ?? [])
+  )
 }
 
 /** Guild channel creation parameters */
@@ -320,5 +365,6 @@ export function createGuildChannel(
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
-  return toChannelObject(db, row)
+  // A newly created channel never has permission overwrites yet.
+  return toChannelObject(row, [])
 }

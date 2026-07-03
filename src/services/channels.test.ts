@@ -4,8 +4,10 @@ import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
 import {
   createGuildChannel,
   getChannel,
+  getGuildChannels,
   putChannelOverwrite,
   getChannelOverwrites,
+  getChannelOverwritesForChannels,
   deleteChannelOverwrite,
 } from './channels.js'
 import type { Database } from '../db.js'
@@ -56,12 +58,13 @@ describe('createGuildChannel', () => {
 
 describe('channel permission overwrites service', () => {
   let db: Database
+  let guildId: string
   let channelId: string
 
   beforeEach(() => {
     db = initializeDatabase(':memory:')
     const token = seedBot(db)
-    const guildId = seedGuild(db, token)
+    guildId = seedGuild(db, token)
     channelId = seedChannel(db, guildId)
   })
 
@@ -93,5 +96,47 @@ describe('channel permission overwrites service', () => {
 
     deleteChannelOverwrite(db, channelId, '444444444444444444')
     expect(getChannelOverwrites(db, channelId)).toEqual([])
+  })
+
+  it('bulk-loads overwrites for multiple channels, grouped by channel', () => {
+    const channelId2 = seedChannel(db, guildId, '555555555555555555')
+    putChannelOverwrite(db, channelId, '444444444444444444', {
+      type: 0,
+      allow: '1024',
+      deny: '0',
+    })
+    putChannelOverwrite(db, channelId2, '666666666666666666', {
+      type: 1,
+      allow: '0',
+      deny: '2048',
+    })
+
+    const grouped = getChannelOverwritesForChannels(db, [channelId, channelId2])
+    expect(grouped.get(channelId)).toEqual([
+      { id: '444444444444444444', type: 0, allow: '1024', deny: '0' },
+    ])
+    expect(grouped.get(channelId2)).toEqual([
+      { id: '666666666666666666', type: 1, allow: '0', deny: '2048' },
+    ])
+    // An empty input yields an empty map (no query issued).
+    expect(getChannelOverwritesForChannels(db, []).size).toBe(0)
+  })
+
+  it('getGuildChannels reflects each channel own overwrites', () => {
+    const chA = channelId
+    const chB = seedChannel(db, guildId, '888888888888888888')
+    putChannelOverwrite(db, chA, '444444444444444444', {
+      type: 0,
+      allow: '8',
+      deny: '0',
+    })
+
+    const channels = getGuildChannels(db, guildId)
+    const a = channels.find((c) => c.id === chA)
+    const b = channels.find((c) => c.id === chB)
+    expect(a?.permission_overwrites).toEqual([
+      { id: '444444444444444444', type: 0, allow: '8', deny: '0' },
+    ])
+    expect(b?.permission_overwrites).toEqual([])
   })
 })

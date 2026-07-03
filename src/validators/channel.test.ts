@@ -37,6 +37,13 @@ describe('validatePermissionOverwrite', () => {
     ).toBeDefined()
   })
 
+  it('reports an allow/deny error message reflecting both accepted forms', () => {
+    const errors = validatePermissionOverwrite({ type: 0, allow: 'abc' })
+    expect(errors.allow._errors[0]?.message).toBe(
+      'Value must be an integer or a numeric string.'
+    )
+  })
+
   it('normalizes numbers and null to strings with "0" defaults', () => {
     expect(
       normalizePermissionOverwrite({ type: 0, allow: 1024, deny: null })

@@ -4,7 +4,7 @@
  * Validation follows the Discord API error format (code 50035).
  */
 
-import { typeError, type ValidationErrors } from './common.js'
+import type { FieldError, ValidationErrors } from './common.js'
 
 /** Invite creation payload */
 export interface InviteCreatePayload {
@@ -105,6 +105,19 @@ function isValidBitfield(value: unknown): boolean {
 }
 
 /**
+ * Builds the error reported when a permission bitfield (`allow`/`deny`) is
+ * neither a non-negative integer nor a numeric string. The message reflects
+ * both accepted input forms rather than claiming a plain string is required.
+ * @returns Field error object
+ */
+function bitfieldTypeError(): FieldError {
+  return {
+    code: 'BASE_TYPE_BAD_TYPE',
+    message: 'Value must be an integer or a numeric string.',
+  }
+}
+
+/**
  * Validates a channel permission overwrite payload. `type` must be 0 (role)
  * or 1 (member); `allow`/`deny`, when present, must be a non-negative integer
  * or a numeric string.
@@ -128,10 +141,10 @@ export function validatePermissionOverwrite(
   }
 
   if (!isValidBitfield(payload.allow)) {
-    errors.allow = { _errors: [typeError('string')] }
+    errors.allow = { _errors: [bitfieldTypeError()] }
   }
   if (!isValidBitfield(payload.deny)) {
-    errors.deny = { _errors: [typeError('string')] }
+    errors.deny = { _errors: [bitfieldTypeError()] }
   }
 
   return errors
