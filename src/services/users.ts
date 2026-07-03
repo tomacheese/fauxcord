@@ -118,27 +118,32 @@ export function updateBotUser(
     | undefined
   if (!bot) return null
 
-  if (payload.username !== undefined) {
-    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(
-      payload.username,
-      bot.user_id
-    )
-    db.prepare('UPDATE bots SET username = ? WHERE token = ?').run(
-      payload.username,
-      botToken
-    )
-  }
+  // Wrap the users/bots updates in a single transaction so the two tables
+  // never end up partially synced if a statement fails mid-way.
+  const applyUpdate = db.transaction(() => {
+    if (payload.username !== undefined) {
+      db.prepare('UPDATE users SET username = ? WHERE id = ?').run(
+        payload.username,
+        bot.user_id
+      )
+      db.prepare('UPDATE bots SET username = ? WHERE token = ?').run(
+        payload.username,
+        botToken
+      )
+    }
 
-  if (payload.avatar !== undefined) {
-    db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(
-      payload.avatar,
-      bot.user_id
-    )
-    db.prepare('UPDATE bots SET avatar = ? WHERE token = ?').run(
-      payload.avatar,
-      botToken
-    )
-  }
+    if (payload.avatar !== undefined) {
+      db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(
+        payload.avatar,
+        bot.user_id
+      )
+      db.prepare('UPDATE bots SET avatar = ? WHERE token = ?').run(
+        payload.avatar,
+        botToken
+      )
+    }
+  })
+  applyUpdate()
 
   return getBotUser(db, botToken)
 }
