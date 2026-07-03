@@ -133,6 +133,54 @@ describe('POST /channels/:channelId/messages/:messageId/threads', () => {
     const body = (await res.json()) as { code: number }
     expect(body.code).toBe(10_008)
   })
+
+  it('returns 404 when the message belongs to a different channel', async () => {
+    const { app, db, guildId, channelId } = setup()
+    const otherChannel = seedChannel(db, guildId, '444444444444444444')
+    const messageId = seedMessage(
+      db,
+      otherChannel,
+      BOT_USER_ID,
+      'Bot testtoken'
+    )
+    const res = await app.request(
+      `/channels/${channelId}/messages/${messageId}/threads`,
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ name: 'x' }),
+      }
+    )
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as { code: number }
+    expect(body.code).toBe(10_008)
+  })
+
+  it('returns 400 when a thread already exists for the message', async () => {
+    const { app, db, channelId } = setup()
+    const messageId = seedMessage(db, channelId, BOT_USER_ID, 'Bot testtoken')
+    const first = await app.request(
+      `/channels/${channelId}/messages/${messageId}/threads`,
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ name: 'first' }),
+      }
+    )
+    expect(first.status).toBe(201)
+
+    const second = await app.request(
+      `/channels/${channelId}/messages/${messageId}/threads`,
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ name: 'second' }),
+      }
+    )
+    expect(second.status).toBe(400)
+    const body = (await second.json()) as { code: number }
+    expect(body.code).toBe(160_004)
+  })
 })
 
 describe('thread member join/leave (@me)', () => {

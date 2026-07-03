@@ -42,6 +42,8 @@ export const DiscordErrorCode = {
   INVALID_FORM_BODY: 50_035,
   INVALID_API_VERSION: 50_041,
   FILE_TOO_LARGE: 50_045,
+  // 160xxx — Threads
+  THREAD_ALREADY_CREATED: 160_004,
 } as const
 
 /** Error response type */
@@ -135,4 +137,6 @@ export const ERROR_MESSAGES = {
   [DiscordErrorCode.INVALID_FORM_BODY]: 'Invalid Form Body',
   [DiscordErrorCode.INVALID_API_VERSION]: 'Invalid API version provided',
   [DiscordErrorCode.FILE_TOO_LARGE]: 'File uploaded exceeds the maximum size',
+  [DiscordErrorCode.THREAD_ALREADY_CREATED]:
+    'A thread has already been created for this message',
 } as const

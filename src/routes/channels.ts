@@ -87,9 +87,10 @@ export function createChannelRoutes(
     return c.json(deleted)
   })
 
-  // channel-threads is mounted before channel-messages so its literal
-  // "/messages/:messageId/threads" and "/threads/*" routes are registered
-  // ahead of channel-messages' parameterized routes (Hono is first-match-wins).
+  // Thread routes. Their paths ("/threads/*", "/thread-members/*", and the
+  // 4-segment "/messages/:messageId/threads") do not overlap the message/pin
+  // routes, so mount order is not load-bearing here; they are grouped with the
+  // other channel sub-routers for readability.
   app.route('/', createChannelThreadRoutes(db))
 
   // channel-pins MUST be mounted before channel-messages: its literal

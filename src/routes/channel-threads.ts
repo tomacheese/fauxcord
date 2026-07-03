@@ -67,14 +67,29 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     )
     if (channel instanceof Response) return channel
 
+    // Scope the message lookup to the parent channel so a message from another
+    // channel cannot be used to create a thread here (matches Discord's 404).
     const message = db
-      .prepare('SELECT id FROM messages WHERE id = ?')
-      .get(messageId) as { id: string } | undefined
+      .prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?')
+      .get(messageId, channelId) as { id: string } | undefined
     if (!message) {
       return c.json(
         discordError(DiscordErrorCode.UNKNOWN_MESSAGE, 'Unknown Message', 404)
           .body,
         404
+      )
+    }
+
+    // A message can only have one thread. The thread ID equals the message ID,
+    // so an existing channel row with that ID means a thread already exists.
+    if (getThread(db, messageId)) {
+      return c.json(
+        discordError(
+          DiscordErrorCode.THREAD_ALREADY_CREATED,
+          'A thread has already been created for this message',
+          400
+        ).body,
+        400
       )
     }
 
@@ -91,7 +106,10 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       ownerId: resolveUserId(c, db),
       type: 11,
       autoArchiveDuration: payload.auto_archive_duration,
-      rateLimitPerUser: payload.rate_limit_per_user as number | undefined,
+      rateLimitPerUser:
+        typeof payload.rate_limit_per_user === 'number'
+          ? payload.rate_limit_per_user
+          : undefined,
     })
     return c.json(thread, 201)
   })
@@ -128,7 +146,10 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       ownerId: resolveUserId(c, db),
       type,
       autoArchiveDuration: payload.auto_archive_duration,
-      rateLimitPerUser: payload.rate_limit_per_user as number | undefined,
+      rateLimitPerUser:
+        typeof payload.rate_limit_per_user === 'number'
+          ? payload.rate_limit_per_user
+          : undefined,
       invitable: payload.invitable as boolean | undefined,
     })
     return c.json(thread, 201)

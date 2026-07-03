@@ -75,8 +75,8 @@ export interface ThreadMemberObject {
 }
 
 /**
- * Normalizes an arbitrary auto-archive-duration value to a valid spec enum
- * value (60/1440/4320/10080), defaulting to 1440 (one day).
+ * Normalizes an arbitrary auto-archive-duration value to a value in
+ * `THREAD_AUTO_ARCHIVE_DURATIONS`, defaulting to 1440 (one day) when invalid.
  * @param value - Raw value from the request or DB
  * @returns A valid ThreadAutoArchiveDuration
  */
