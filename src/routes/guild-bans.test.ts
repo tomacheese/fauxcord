@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createGuildBanRoutes } from './guild-bans'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedMember, seedBan } from '../test-helpers'
+import {
+  seedBot,
+  seedGuild,
+  seedChannel,
+  seedMessage,
+  seedMember,
+  seedBan,
+} from '../test-helpers'
 import type { Database } from '../db'
 
 describe('Guild Bans API', () => {
@@ -38,6 +45,27 @@ describe('Guild Bans API', () => {
         .prepare('SELECT * FROM guild_bans WHERE guild_id = ? AND user_id = ?')
         .get(guildId, userId) as { user_id: string } | undefined
       expect(row?.user_id).toBe(userId)
+    })
+
+    it('deletes the banned user recent messages when delete_message_seconds is set', async () => {
+      const userId = '444444444444444444'
+      db.prepare(
+        "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'Target')"
+      ).run(userId)
+      const channelId = seedChannel(db, guildId)
+      const messageId = seedMessage(db, channelId, userId, token, 'spam')
+
+      const res = await app.request(`/guilds/${guildId}/bans/${userId}`, {
+        method: 'PUT',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ delete_message_seconds: 3600 }),
+      })
+      expect(res.status).toBe(204)
+
+      const msg = db
+        .prepare('SELECT id FROM messages WHERE id = ?')
+        .get(messageId) as { id: string } | undefined
+      expect(msg).toBeUndefined()
     })
 
     it('stores the X-Audit-Log-Reason header as the ban reason', async () => {

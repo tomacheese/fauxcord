@@ -108,17 +108,22 @@ export function getGuildBans(
 /**
  * Creates or updates a guild ban and removes the user's guild membership.
  * Banning a user implies kicking them, so their `guild_members` and
- * `member_roles` rows are deleted in the same transaction.
+ * `member_roles` rows are deleted in the same transaction. When
+ * `deleteMessageSeconds` is greater than 0, the banned user's messages in the
+ * guild's channels newer than that window are also deleted (matching Discord's
+ * `delete_message_seconds` behavior).
  * @param db - Database
  * @param guildId - Guild ID
  * @param userId - User ID to ban
  * @param reason - Ban reason (from the X-Audit-Log-Reason header), or null
+ * @param deleteMessageSeconds - Age window (seconds) of the user's messages to delete
  */
 export function createGuildBan(
   db: Database,
   guildId: string,
   userId: string,
-  reason: string | null
+  reason: string | null,
+  deleteMessageSeconds = 0
 ): void {
   const banUser = db.transaction(() => {
     db.prepare(
@@ -131,6 +136,14 @@ export function createGuildBan(
     db.prepare(
       'DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?'
     ).run(guildId, userId)
+    if (deleteMessageSeconds > 0) {
+      db.prepare(
+        `DELETE FROM messages
+         WHERE author_id = ?
+           AND channel_id IN (SELECT id FROM channels WHERE guild_id = ?)
+           AND created_at >= datetime('now', ?)`
+      ).run(userId, guildId, `-${deleteMessageSeconds} seconds`)
+    }
   })
   banUser()
 }
