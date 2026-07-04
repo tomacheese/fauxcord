@@ -531,6 +531,7 @@ describe('Integration tests', () => {
         `/channels/${CHANNEL_ID}/messages/${messageId}`,
         { headers: { Authorization: TEST_TOKEN } }
       )
+      expect(withReaction.status).toBe(200)
       const reactedMsg = (await withReaction.json()) as {
         reactions?: { count: number; me: boolean; emoji: { name: string } }[]
       }
@@ -572,6 +573,7 @@ describe('Integration tests', () => {
         `/channels/${CHANNEL_ID}/messages/${messageId}/reactions/${thumbsUp}`,
         { headers: { Authorization: TEST_TOKEN } }
       )
+      expect(emptyRes.status).toBe(200)
       const emptyReactors = (await emptyRes.json()) as { id: string }[]
       expect(emptyReactors.length).toBe(0)
 
@@ -1208,11 +1210,13 @@ describe('Integration tests', () => {
       const otherMsgsRes = await app.request(
         `/_test/messages/${OTHER_CHANNEL_ID}`
       )
+      expect(otherMsgsRes.status).toBe(200)
       const otherBody = (await otherMsgsRes.json()) as { messages: unknown[] }
       expect(otherBody.messages.length).toBe(0)
 
       // 5. The shared bot's message is preserved
       const sharedMsgsRes = await app.request(`/_test/messages/${CHANNEL_ID}`)
+      expect(sharedMsgsRes.status).toBe(200)
       const sharedBody = (await sharedMsgsRes.json()) as {
         messages: { content: string }[]
       }
