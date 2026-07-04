@@ -16,13 +16,13 @@ Acceptance: no `-` cells remain; every `N/A`/`⛔blocked` has an evidence note b
 | DELETE /channels/{channel_id}/messages/{message_id}/reactions | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /channels/{channel_id}/messages/{message_id}/threads | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| GET /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| GET /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | PATCH /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /channels/{channel_id}/messages/bulk-delete | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/messages/pins/{message_id} | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | PUT /channels/{channel_id}/messages/pins/{message_id} | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /channels/{channel_id}/messages/pins | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| GET /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| GET /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | PUT /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
@@ -44,7 +44,7 @@ Acceptance: no `-` cells remain; every `N/A`/`⛔blocked` has an evidence note b
 | GET /channels/{channel_id}/webhooks | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /channels/{channel_id}/webhooks | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id} | N/A | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| GET /channels/{channel_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| GET /channels/{channel_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | PATCH /channels/{channel_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /gateway/bot | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /gateway | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
@@ -59,11 +59,11 @@ Acceptance: no `-` cells remain; every `N/A`/`⛔blocked` has an evidence note b
 | PATCH /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /guilds/{guild_id}/emojis | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /guilds/{guild_id}/emojis | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| PUT /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| PUT /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /guilds/{guild_id}/members/{user_id} | N/A | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| GET /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| PATCH /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| GET /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| PATCH /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /guilds/{guild_id}/members | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /guilds/{guild_id}/roles/{role_id} | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | PATCH /guilds/{guild_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
@@ -108,4 +108,7 @@ Acceptance: no `-` cells remain; every `N/A`/`⛔blocked` has an evidence note b
 - discord.js: all 28 originally-reported `❌→lib` findings were triaged per the Task 27 protocol and turned out to be verifier bootstrap/design bugs (401-cascade on a shared `REST` instance, thread-member endpoints targeting a plain channel instead of a real thread, self-targeted BAN/member-removal calls that kicked the bot out of the shared test guild, dual-form webhook-delete and webhook-message id collisions, and OAuth2 endpoints that are structurally incompatible with a Bot token) — none were genuine Fauxcord or discord.js bugs. All were fixed directly in `js-discordjs/verify.mjs` (not recorded as `❌→fix`/`❌→lib`, per Task 27 policy for verifier-side bugs). Result: 80/86 pass, 6 n-a, 0 lib-issue.
 - Oceanic: the same triage found the identical three bug classes (thread-members-vs-real-thread, self-targeted BAN, OAuth2-vs-Bot-token) already present in `js-oceanic/verify.mjs`; fixed the same way. Result: 67/86 pass, 19 n-a, 0 lib-issue.
 - `PUT /channels/{channel_id}/pins/{message_id}` and `PUT /channels/{channel_id}/messages/pins/{message_id}` (discord.js `❌→lib` finding, since resolved as `❌→fix`): re-pinning an already-pinned message returned an error instead of succeeding. `spec/openapi.json` does not document this case, but the real Discord API and every major client library (including discord.js) treat the pin endpoint as idempotent. Fixed in `src/services/pins.ts` (commit `1024416`); see `src/routes/channel-pins.test.ts` for the regression test.
+- `GET /guilds/{guild_id}/members/{user_id}`, `PATCH /guilds/{guild_id}/members/{user_id}`, `PUT /guilds/{guild_id}/members/{user_id}/roles/{role_id}`, `DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id}` (Discord.Net `❌→fix`): `POST /_test/setup` did not register the Bot itself as a member of the Guilds it created, so any self-targeted member lookup 404'd as Unknown Member (`RestGuild.GetUserAsync(botId)` returned `null`). Fixed in `src/services/test-control.ts` (commit `b9071ac`); see the "registers the bot as a member of every created guild" case in `src/routes/test.test.ts`.
+- `GET /channels/{channel_id}` (Discord.Net `❌→fix`): thread-type channels (10/11/12) were returned in the plain-channel shape, without `thread_metadata`, which caused Discord.Net's `RestTextChannel` → `RestThreadChannel` cast to throw `InvalidCastException`. Fixed in `src/routes/channels.ts` (commit `b9071ac`); see the "returns the thread shape (with thread_metadata) for a thread channel" case in `src/routes/channels.test.ts`.
+- `GET /channels/{channel_id}/messages/{message_id}`, `GET /channels/{channel_id}/messages` (Discord.Net `❌→fix`): the `Reaction` object omitted the spec-required `count_details`/`me_burst`/`burst_colors` fields, causing a `NullReferenceException` in Discord.Net's `RestReaction.Create` whenever a fetched message had reactions. Fixed in `src/services/messages.ts` (commit `b9071ac`); see `src/services/messages.test.ts`.
 
