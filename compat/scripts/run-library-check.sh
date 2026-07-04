@@ -2,9 +2,17 @@
 # Drives one library's compatibility check end-to-end so the caller only has
 # to read a short summary line instead of raw container logs.
 #
-# Usage: run-library-check.sh <library-name> [extra-timeout-seconds]
+# Usage: run-library-check.sh <library-name> [extra-timeout-seconds] [project-suffix]
 #   e.g. run-library-check.sh oceanic
 #        run-library-check.sh discordgo 900
+#        run-library-check.sh serenity 900 retry2   # project: fauxcord-compat-serenity-retry2
+#
+# project-suffix: opt-in escape hatch for when a previous invocation for the
+# same library may still be alive (e.g. its log looked STALE but you are not
+# fully certain -- see compat/scripts/status-check.sh). Appending a unique
+# suffix guarantees a brand-new Compose project name, so a leftover live
+# invocation cannot collide with the new one even if the "is it dead" check
+# was wrong. Omit it for the normal case (no suspected leftover run).
 #
 # Behavior:
 #   1. docker compose build fauxcord verify-<lib>   (retried once on timeout)
@@ -31,15 +39,16 @@
 # hoped to be serialized.
 set -uo pipefail
 
-LIB="${1:?usage: run-library-check.sh <library-name> [timeout-seconds]}"
+LIB="${1:?usage: run-library-check.sh <library-name> [timeout-seconds] [project-suffix]}"
 EXTRA_TIMEOUT="${2:-}"
+PROJECT_SUFFIX="${3:-}"
 COMPAT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$COMPAT_DIR"
 
 BUILD_TIMEOUT="${EXTRA_TIMEOUT:-900}"   # 15 min default (host is I/O-saturated)
 RUN_TIMEOUT=600                          # 10 min for the verifier run itself
 SERVICE="verify-${LIB}"
-PROJECT="fauxcord-compat-${LIB}"
+PROJECT="fauxcord-compat-${LIB}${PROJECT_SUFFIX:+-${PROJECT_SUFFIX}}"
 COMPOSE=(docker compose -p "$PROJECT" -f docker-compose.yml)
 LOG_DIR="${COMPAT_DIR}/results/_logs"
 mkdir -p "$LOG_DIR"
