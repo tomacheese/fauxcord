@@ -150,7 +150,8 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
         typeof payload.rate_limit_per_user === 'number'
           ? payload.rate_limit_per_user
           : undefined,
-      invitable: payload.invitable as boolean | undefined,
+      invitable:
+        typeof payload.invitable === 'boolean' ? payload.invitable : undefined,
     })
     return c.json(thread, 201)
   })
