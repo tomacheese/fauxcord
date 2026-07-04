@@ -88,6 +88,21 @@ export function validateWebhookUpdate(
     }
   }
 
+  if (
+    payload.avatar !== undefined &&
+    payload.avatar !== null &&
+    typeof payload.avatar !== 'string'
+  ) {
+    errors.avatar = { _errors: [typeError('string')] }
+  }
+
+  if (
+    payload.channel_id !== undefined &&
+    typeof payload.channel_id !== 'string'
+  ) {
+    errors.channel_id = { _errors: [typeError('string')] }
+  }
+
   return errors
 }
 

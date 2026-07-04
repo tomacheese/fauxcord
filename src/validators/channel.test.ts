@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validatePermissionOverwrite,
   normalizePermissionOverwrite,
+  validateChannelUpdate,
 } from './channel'
 
 describe('validatePermissionOverwrite', () => {
@@ -53,5 +54,41 @@ describe('validatePermissionOverwrite', () => {
       allow: '0',
       deny: '0',
     })
+  })
+})
+
+describe('validateChannelUpdate', () => {
+  it('accepts a valid update payload', () => {
+    expect(
+      Object.keys(
+        validateChannelUpdate({
+          name: 'general',
+          topic: 'chat',
+          nsfw: true,
+          rate_limit_per_user: 5,
+          position: 1,
+        })
+      )
+    ).toHaveLength(0)
+  })
+
+  it('reports a required error (not a type error) for an empty name', () => {
+    const errors = validateChannelUpdate({ name: '' })
+    expect(errors.name._errors[0].code).toBe('BASE_TYPE_REQUIRED')
+  })
+
+  it('reports a type error for a non-string name', () => {
+    const errors = validateChannelUpdate({ name: 123 })
+    expect(errors.name._errors[0].code).toBe('BASE_TYPE_BAD_TYPE')
+  })
+
+  it('reports a type error for a non-boolean nsfw', () => {
+    const errors = validateChannelUpdate({ nsfw: 'false' })
+    expect(errors.nsfw._errors[0].code).toBe('BASE_TYPE_BAD_TYPE')
+  })
+
+  it('accepts nsfw omitted or null', () => {
+    expect(Object.keys(validateChannelUpdate({}))).toHaveLength(0)
+    expect(Object.keys(validateChannelUpdate({ nsfw: null }))).toHaveLength(0)
   })
 })

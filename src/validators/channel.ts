@@ -4,7 +4,7 @@
  * Validation follows the Discord API error format (code 50035).
  */
 
-import { maxLengthError, typeError } from './common'
+import { maxLengthError, requiredError, typeError } from './common'
 import type { FieldError, ValidationErrors } from './common'
 
 /** Invite creation payload */
@@ -112,8 +112,10 @@ export function validateChannelUpdate(
   const errors: ValidationErrors = {}
 
   if (payload.name !== undefined && payload.name !== null) {
-    if (typeof payload.name !== 'string' || payload.name.length === 0) {
+    if (typeof payload.name !== 'string') {
       errors.name = { _errors: [typeError('string')] }
+    } else if (payload.name.length === 0) {
+      errors.name = { _errors: [requiredError()] }
     } else if (payload.name.length > CHANNEL_LIMITS.NAME_MAX) {
       errors.name = { _errors: [maxLengthError(CHANNEL_LIMITS.NAME_MAX)] }
     }
@@ -125,6 +127,14 @@ export function validateChannelUpdate(
     } else if (payload.topic.length > CHANNEL_LIMITS.TOPIC_MAX) {
       errors.topic = { _errors: [maxLengthError(CHANNEL_LIMITS.TOPIC_MAX)] }
     }
+  }
+
+  if (
+    payload.nsfw !== undefined &&
+    payload.nsfw !== null &&
+    typeof payload.nsfw !== 'boolean'
+  ) {
+    errors.nsfw = { _errors: [typeError('boolean')] }
   }
 
   validateOptionalIntBound(
