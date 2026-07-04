@@ -293,6 +293,15 @@ const SKIP = {
     'not exercised: would delete the shared test channel other rows depend on',
   'DELETE /guilds/{guild_id}':
     'not exercised: bots cannot delete guilds in the real Discord API (owner-only), and doing so would cascade-destroy every other guild-scoped fixture this run still needs',
+  // ctx['{user_id}'] is BOT itself. Removing the bot from its own guild is
+  // harmless within a single fresh run (DELETEs run last), but doSetup()'s
+  // 409-means-"already set up by a prior run" handling shows this harness
+  // is meant to tolerate re-running against a reused container — and a
+  // second run would then find the bot already kicked, 404ing every
+  // guild-member endpoint (same failure mode as the ban self-target bug
+  // above). Same precedent as js-oceanic/verify.mjs's `calls` table entry.
+  'DELETE /guilds/{guild_id}/members/{user_id}':
+    'not exercised: would remove the bot itself from the shared test guild',
   // These require an OAuth2 bearer/authorization-code or client-credentials
   // flow, which a raw REST client instance configured with a single Bot
   // token (rest.setToken()) cannot produce — this is a semantic mismatch
