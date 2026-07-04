@@ -96,7 +96,14 @@ export function createGuildBanRoutes(db: Database): Hono {
     }
 
     const reason = c.req.header('X-Audit-Log-Reason') ?? null
-    createGuildBan(db, guildId, userId, reason)
+    // Discord accepts either delete_message_seconds or the deprecated
+    // delete_message_days; normalize both to a seconds window.
+    const deleteMessageSeconds =
+      payload.delete_message_seconds ??
+      (payload.delete_message_days == null
+        ? 0
+        : payload.delete_message_days * 86_400)
+    createGuildBan(db, guildId, userId, reason, deleteMessageSeconds)
     return c.body(null, 204)
   })
 

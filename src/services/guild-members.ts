@@ -192,19 +192,44 @@ export function getGuildMembers(
     )
     .all(guildId, after, clampedLimit) as MemberRow[]
 
+  if (memberRows.length === 0) return []
+
+  // Batch-load users and role assignments for the whole page to avoid an
+  // N+1 query pattern (one users lookup + one member_roles lookup per member).
+  const userIds = memberRows.map((m) => m.user_id)
+  const placeholders = userIds.map(() => '?').join(', ')
+
+  const userRows = db
+    .prepare(`SELECT * FROM users WHERE id IN (${placeholders})`)
+    .all(...userIds) as {
+    id: string
+    username: string
+    discriminator: string
+    avatar: string | null
+    bot: number
+  }[]
+  const usersById = new Map(userRows.map((u) => [u.id, u]))
+
+  const roleRows = db
+    .prepare(
+      `SELECT user_id, role_id FROM member_roles
+       WHERE guild_id = ? AND user_id IN (${placeholders})
+       ORDER BY role_id`
+    )
+    .all(guildId, ...userIds) as { user_id: string; role_id: string }[]
+  const rolesByUser = new Map<string, string[]>()
+  for (const { user_id: memberUserId, role_id: roleId } of roleRows) {
+    const list = rolesByUser.get(memberUserId)
+    if (list) {
+      list.push(roleId)
+    } else {
+      rolesByUser.set(memberUserId, [roleId])
+    }
+  }
+
   return memberRows
     .map((memberRow): GuildMemberObject | null => {
-      const userRow = db
-        .prepare('SELECT * FROM users WHERE id = ?')
-        .get(memberRow.user_id) as
-        | {
-            id: string
-            username: string
-            discriminator: string
-            avatar: string | null
-            bot: number
-          }
-        | undefined
+      const userRow = usersById.get(memberRow.user_id)
       if (!userRow) return null
 
       return {
@@ -216,7 +241,7 @@ export function getGuildMembers(
         nick: memberRow.nick,
         pending: false,
         premium_since: null,
-        roles: getMemberRoleIds(db, guildId, memberRow.user_id),
+        roles: rolesByUser.get(memberRow.user_id) ?? [],
         user: {
           id: userRow.id,
           username: userRow.username,

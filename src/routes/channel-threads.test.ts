@@ -90,6 +90,35 @@ describe('POST /channels/:channelId/threads', () => {
     expect(body.code).toBe(50_035)
   })
 
+  it('honors invitable: false for a private thread', async () => {
+    const { app, channelId } = setup()
+    const res = await app.request(`/channels/${channelId}/threads`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: 'private', type: 12, invitable: false }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as {
+      thread_metadata: { invitable?: boolean }
+    }
+    expect(body.thread_metadata.invitable).toBe(false)
+  })
+
+  it('does not treat a non-boolean invitable as false (defaults to invitable)', async () => {
+    const { app, channelId } = setup()
+    const res = await app.request(`/channels/${channelId}/threads`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      // A malformed non-boolean value must not silently disable invitable.
+      body: JSON.stringify({ name: 'private', type: 12, invitable: 'false' }),
+    })
+    expect(res.status).toBe(201)
+    const body = (await res.json()) as {
+      thread_metadata: { invitable?: boolean }
+    }
+    expect(body.thread_metadata.invitable).toBe(true)
+  })
+
   it('returns 404 for an unknown channel', async () => {
     const { app } = setup()
     const res = await app.request('/channels/999999999999999999/threads', {

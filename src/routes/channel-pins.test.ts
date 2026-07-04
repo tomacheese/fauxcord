@@ -89,6 +89,34 @@ describe('Channel Pins API', () => {
       const body = (await res.json()) as { code: number }
       expect(body.code).toBe(10_008)
     })
+
+    it('returns a valid ISO pinned_at timestamp for a pinned message', async () => {
+      const authorId = '222222222222222222'
+      db.prepare(
+        "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'Author')"
+      ).run(authorId)
+      const messageId = seedMessage(db, channelId, authorId, token)
+      const pinRes = await app.request(
+        `/channels/${channelId}/messages/pins/${messageId}`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(pinRes.status).toBe(204)
+
+      const res = await app.request(`/channels/${channelId}/messages/pins`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        items: { pinned_at: string; message: { id: string } }[]
+        has_more: boolean
+      }
+      expect(body.has_more).toBe(false)
+      expect(body.items).toHaveLength(1)
+      expect(body.items[0].message.id).toBe(messageId)
+      // pinned_at must be a valid ISO-8601 UTC timestamp (ends with Z).
+      expect(body.items[0].pinned_at).toMatch(/Z$/)
+      expect(Number.isNaN(Date.parse(body.items[0].pinned_at))).toBe(false)
+    })
   })
 
   describe('legacy pins API (/pins)', () => {

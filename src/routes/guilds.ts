@@ -151,6 +151,15 @@ export function createGuildRoutes(db: Database): Hono {
   // GET /guilds/:guildId/webhooks — List a guild's webhooks
   app.get('/guilds/:guildId/webhooks', (c) => {
     const { guildId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
     const webhooks = getGuildWebhooks(db, guildId)
     return c.json(webhooks)
   })

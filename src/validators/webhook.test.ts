@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validateWebhookCreate,
   validateWebhookExecute,
+  validateWebhookUpdate,
   isChannelWebhookLimitReached,
   WEBHOOK_LIMITS,
 } from './webhook'
@@ -50,6 +51,32 @@ describe('validateWebhookExecute', () => {
     )
     const errors = validateWebhookExecute({ embeds })
     expect(errors.embeds).toBeDefined()
+  })
+})
+
+describe('validateWebhookUpdate', () => {
+  it('accepts a valid update payload', () => {
+    expect(
+      validateWebhookUpdate({
+        name: 'New Name',
+        avatar: 'abc123',
+        channel_id: '111111111111111111',
+      })
+    ).toEqual({})
+  })
+
+  it('accepts avatar set to null (clearing the avatar)', () => {
+    expect(validateWebhookUpdate({ avatar: null })).toEqual({})
+  })
+
+  it('flags a non-string avatar', () => {
+    const errors = validateWebhookUpdate({ avatar: {} })
+    expect(errors.avatar._errors[0].code).toBe('BASE_TYPE_BAD_TYPE')
+  })
+
+  it('flags a non-string channel_id', () => {
+    const errors = validateWebhookUpdate({ channel_id: 123 })
+    expect(errors.channel_id._errors[0].code).toBe('BASE_TYPE_BAD_TYPE')
   })
 })
 

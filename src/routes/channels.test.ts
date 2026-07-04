@@ -62,5 +62,47 @@ describe('Channels API', () => {
       const body = (await res.json()) as Record<string, unknown>
       expect(body.name).toBe('updated-channel')
     })
+
+    it('rejects an empty name with a validation error', async () => {
+      const res = await app.request(`/channels/${channelId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: '' }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(50_035)
+    })
+
+    it('rejects an out-of-range rate_limit_per_user', async () => {
+      const res = await app.request(`/channels/${channelId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ rate_limit_per_user: 999_999 }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(50_035)
+    })
+
+    it('rejects a topic longer than 1024 characters', async () => {
+      const res = await app.request(`/channels/${channelId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ topic: 'a'.repeat(1025) }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(50_035)
+    })
   })
 })

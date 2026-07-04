@@ -66,6 +66,23 @@ export interface AppEnv {
 }
 
 /**
+ * Builds a dummy Bot record used when authentication is disabled and the
+ * provided token is not registered in the database.
+ * @param token - The raw Authorization header value to associate with the dummy bot
+ * @returns A dummy BotRecord representing the default MockBot
+ */
+function createDummyBot(token: string): BotRecord {
+  return {
+    token,
+    user_id: '000000000000000000',
+    username: 'MockBot',
+    discriminator: '0',
+    bot: 1,
+    avatar: null,
+  }
+}
+
+/**
  * Creates a Bot/Bearer token authentication middleware.
  * @param db - Database
  * @param disableAuth - When true, any token is allowed
@@ -95,40 +112,24 @@ export const createAuthMiddleware =
     // Bot token authentication
     if (authorization.startsWith('Bot ')) {
       const token = authorization
-
-      if (disableAuth) {
-        // Auth-disabled mode: treat tokens not in the DB as a default Bot
-        const bot = db
-          .prepare('SELECT * FROM bots WHERE token = ?')
-          .get(token) as BotRecord | undefined
-        if (bot) {
-          c.set('bot', bot)
-        } else {
-          // Set a dummy bot object
-          c.set('bot', {
-            token,
-            user_id: '000000000000000000',
-            username: 'MockBot',
-            discriminator: '0',
-            bot: 1,
-            avatar: null,
-          } satisfies BotRecord)
-        }
-        await next()
-        return
-      }
-
       const bot = db
         .prepare('SELECT * FROM bots WHERE token = ?')
         .get(token) as BotRecord | undefined
 
-      if (!bot) {
-        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+      if (bot) {
+        c.set('bot', bot)
+        await next()
+        return
       }
 
-      c.set('bot', bot)
-      await next()
-      return
+      // Auth-disabled mode: treat tokens not in the DB as a default Bot
+      if (disableAuth) {
+        c.set('bot', createDummyBot(token))
+        await next()
+        return
+      }
+
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
     // Bearer token authentication
@@ -140,11 +141,30 @@ export const createAuthMiddleware =
         )
         .get(token) as AccessTokenRecord | undefined
 
-      if (!accessToken) {
-        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+      if (accessToken) {
+        c.set('accessToken', accessToken)
+        await next()
+        return
       }
 
-      c.set('accessToken', accessToken)
+      // Auth-disabled mode: accept any Bearer token with a dummy access token
+      if (disableAuth) {
+        c.set('accessToken', {
+          token,
+          user_id: '000000000000000000',
+          scope: '',
+        } satisfies AccessTokenRecord)
+        await next()
+        return
+      }
+
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    }
+
+    // Unrecognized authorization scheme: allow through as a dummy Bot when
+    // authentication is disabled, otherwise reject.
+    if (disableAuth) {
+      c.set('bot', createDummyBot(authorization))
       await next()
       return
     }

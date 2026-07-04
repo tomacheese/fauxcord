@@ -7,8 +7,9 @@
 
 import { Hono } from 'hono'
 import type { Database } from '../db'
-import { DiscordErrorCode, discordError } from '../errors'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { getChannel, updateChannel, deleteChannel } from '../services/channels'
+import { validateChannelUpdate } from '../validators/channel'
 import type { AppEnv } from '../middleware/auth'
 import { requireEntity } from '../lib/route-helpers'
 import { createChannelPinRoutes } from './channel-pins'
@@ -57,6 +58,11 @@ export function createChannelRoutes(
       rate_limit_per_user?: number
       position?: number
     }>()
+
+    const errors = validateChannelUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
 
     const updated = requireEntity(
       c,

@@ -108,4 +108,23 @@ describe('Guilds API', () => {
       expect(body.code).toBe(10_004)
     })
   })
+
+  describe('GET /guilds/:guildId/webhooks', () => {
+    it('returns the webhook list for an existing guild', async () => {
+      const res = await app.request(`/guilds/${guildId}/webhooks`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      expect(Array.isArray(await res.json())).toBe(true)
+    })
+
+    it('returns 404 Unknown Guild for a non-existent guild', async () => {
+      const res = await app.request('/guilds/999999999999999999/webhooks', {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(10_004)
+    })
+  })
 })
