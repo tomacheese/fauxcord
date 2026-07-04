@@ -95,12 +95,45 @@ let WEBHOOK_ID = '500000000000000001'
 let WEBHOOK_TOKEN = 'compat-token-xyz'
 let CODE = 'compat'
 let EMOJI_ID = '600000000000000001'
+let THREAD_ID = CH
+// A dummy target for ban endpoints. Banning BOT itself would kick it from
+// guild_members (matching real Discord ban semantics), which then cascades
+// into "Unknown Member" failures on every later member-role/get/edit call
+// that also targets BOT (same bug class already fixed in
+// js-discordjs/verify.mjs).
+const BAN_USER_ID = '900000000000000001'
 
 try {
   const msg = await rest.channels.createMessage(CH, { content: 'compat' })
   MSG = msg.id
 } catch {
   /* fall back to placeholder id */
+}
+try {
+  // Bootstrap a real thread so the thread-member endpoints operate on an
+  // actual thread channel rather than the plain parent channel (a
+  // thread-member add/remove/list on a non-thread channel 404s as "Unknown
+  // Channel" in real Discord and in Fauxcord).
+  const threadSourceMsg = await rest.channels.createMessage(CH, {
+    content: 'compat-thread-source',
+  })
+  const thread = await rest.channels.startThreadFromMessage(
+    CH,
+    threadSourceMsg.id,
+    {
+      name: 'compat-thread-bootstrap',
+    }
+  )
+  THREAD_ID = thread.id
+} catch {
+  /* fall back to the plain channel id */
+}
+try {
+  // Pre-create the ban on the dummy target so the GET (which runs before
+  // the PUT in endpoint order) finds it instead of 404ing as "Unknown Ban".
+  await rest.guilds.createBan(GUILD, BAN_USER_ID)
+} catch {
+  /* ignore: the PUT call below still exercises the create-ban wire format */
 }
 try {
   const role = await rest.guilds.createRole(GUILD, { name: 'compat-role' })
@@ -140,16 +173,15 @@ try {
 // Endpoint key -> [fn, note-if-n-a]. `fn` undefined => n-a (note required).
 const calls = {
   'GET /channels/{channel_id}/invites': [() => rest.channels.getInvites(CH)],
-  'POST /channels/{channel_id}/invites': [() => rest.channels.createInvite(CH, {})],
-  'DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}': [
-    () => rest.channels.deleteReaction(CH, MSG, EMOJI, BOT),
+  'POST /channels/{channel_id}/invites': [
+    () => rest.channels.createInvite(CH, {}),
   ],
-  'DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me': [
-    () => rest.channels.deleteReaction(CH, MSG, EMOJI),
-  ],
-  'PUT /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me': [
-    () => rest.channels.createReaction(CH, MSG, EMOJI),
-  ],
+  'DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}':
+    [() => rest.channels.deleteReaction(CH, MSG, EMOJI, BOT)],
+  'DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me':
+    [() => rest.channels.deleteReaction(CH, MSG, EMOJI)],
+  'PUT /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me':
+    [() => rest.channels.createReaction(CH, MSG, EMOJI)],
   'GET /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}': [
     () => rest.channels.getReactions(CH, MSG, EMOJI),
   ],
@@ -157,12 +189,15 @@ const calls = {
     () => rest.channels.deleteReactions(CH, MSG),
   ],
   'POST /channels/{channel_id}/messages/{message_id}/threads': [
-    () => rest.channels.startThreadFromMessage(CH, MSG, { name: 'compat-thread' }),
+    () =>
+      rest.channels.startThreadFromMessage(CH, MSG, { name: 'compat-thread' }),
   ],
   'DELETE /channels/{channel_id}/messages/{message_id}': [
     () => rest.channels.deleteMessage(CH, MSG),
   ],
-  'GET /channels/{channel_id}/messages/{message_id}': [() => rest.channels.getMessage(CH, MSG)],
+  'GET /channels/{channel_id}/messages/{message_id}': [
+    () => rest.channels.getMessage(CH, MSG),
+  ],
   'PATCH /channels/{channel_id}/messages/{message_id}': [
     () => rest.channels.editMessage(CH, MSG, { content: 'compat-edit' }),
   ],
@@ -190,25 +225,36 @@ const calls = {
     () => rest.channels.deletePermission(CH, BOT),
   ],
   'PUT /channels/{channel_id}/permissions/{overwrite_id}': [
-    () => rest.channels.editPermission(CH, BOT, { allow: '0', deny: '0', type: 1 }),
+    () =>
+      rest.channels.editPermission(CH, BOT, { allow: '0', deny: '0', type: 1 }),
   ],
   'DELETE /channels/{channel_id}/pins/{message_id}': [
     () => rest.channels.unpinMessage(CH, MSG),
   ],
-  'PUT /channels/{channel_id}/pins/{message_id}': [() => rest.channels.pinMessage(CH, MSG)],
-  'GET /channels/{channel_id}/pins': [() => rest.channels.getPinnedMessages(CH)],
+  'PUT /channels/{channel_id}/pins/{message_id}': [
+    () => rest.channels.pinMessage(CH, MSG),
+  ],
+  'GET /channels/{channel_id}/pins': [
+    () => rest.channels.getPinnedMessages(CH),
+  ],
   'DELETE /channels/{channel_id}/thread-members/{user_id}': [
-    () => rest.channels.removeThreadMember(CH, BOT),
+    () => rest.channels.removeThreadMember(THREAD_ID, BOT),
   ],
   'GET /channels/{channel_id}/thread-members/{user_id}': [
-    () => rest.channels.getThreadMember(CH, BOT),
+    () => rest.channels.getThreadMember(THREAD_ID, BOT),
   ],
   'PUT /channels/{channel_id}/thread-members/{user_id}': [
-    () => rest.channels.addThreadMember(CH, BOT),
+    () => rest.channels.addThreadMember(THREAD_ID, BOT),
   ],
-  'DELETE /channels/{channel_id}/thread-members/@me': [() => rest.channels.leaveThread(CH)],
-  'PUT /channels/{channel_id}/thread-members/@me': [() => rest.channels.joinThread(CH)],
-  'GET /channels/{channel_id}/thread-members': [() => rest.channels.getThreadMembers(CH)],
+  'DELETE /channels/{channel_id}/thread-members/@me': [
+    () => rest.channels.leaveThread(THREAD_ID),
+  ],
+  'PUT /channels/{channel_id}/thread-members/@me': [
+    () => rest.channels.joinThread(THREAD_ID),
+  ],
+  'GET /channels/{channel_id}/thread-members': [
+    () => rest.channels.getThreadMembers(THREAD_ID),
+  ],
   'GET /channels/{channel_id}/threads/archived/private': [
     () => rest.channels.getPrivateArchivedThreads(CH),
   ],
@@ -220,29 +266,58 @@ const calls = {
     'no high-level wrapper for the thread search endpoint',
   ],
   'POST /channels/{channel_id}/threads': [
-    () => rest.channels.startThreadWithoutMessage(CH, { name: 'compat-thread', type: 11 }),
+    () =>
+      rest.channels.startThreadWithoutMessage(CH, {
+        name: 'compat-thread',
+        type: 11,
+      }),
   ],
   'POST /channels/{channel_id}/typing': [() => rest.channels.sendTyping(CH)],
   'GET /channels/{channel_id}/users/@me/threads/archived/private': [
     () => rest.channels.getJoinedPrivateArchivedThreads(CH),
   ],
-  'GET /channels/{channel_id}/webhooks': [() => rest.webhooks.getForChannel(CH)],
-  'POST /channels/{channel_id}/webhooks': [() => rest.webhooks.create(CH, { name: 'compat-wh2' })],
-  'DELETE /channels/{channel_id}': [undefined, 'not exercised: would delete the shared test channel other rows depend on'],
+  'GET /channels/{channel_id}/webhooks': [
+    () => rest.webhooks.getForChannel(CH),
+  ],
+  'POST /channels/{channel_id}/webhooks': [
+    () => rest.webhooks.create(CH, { name: 'compat-wh2' }),
+  ],
+  'DELETE /channels/{channel_id}': [
+    undefined,
+    'not exercised: would delete the shared test channel other rows depend on',
+  ],
   'GET /channels/{channel_id}': [() => rest.channels.get(CH)],
-  'PATCH /channels/{channel_id}': [() => rest.channels.edit(CH, { name: 'general' })],
-  'GET /gateway/bot': [undefined, 'gateway bootstrap info is fetched internally by Client#connect, no standalone REST wrapper'],
-  'GET /gateway': [undefined, 'gateway bootstrap info is fetched internally by Client#connect, no standalone REST wrapper'],
-  'DELETE /guilds/{guild_id}/bans/{user_id}': [() => rest.guilds.removeBan(GUILD, BOT)],
-  'GET /guilds/{guild_id}/bans/{user_id}': [() => rest.guilds.getBan(GUILD, BOT)],
-  'PUT /guilds/{guild_id}/bans/{user_id}': [() => rest.guilds.createBan(GUILD, BOT)],
+  'PATCH /channels/{channel_id}': [
+    () => rest.channels.edit(CH, { name: 'general' }),
+  ],
+  'GET /gateway/bot': [
+    undefined,
+    'gateway bootstrap info is fetched internally by Client#connect, no standalone REST wrapper',
+  ],
+  'GET /gateway': [
+    undefined,
+    'gateway bootstrap info is fetched internally by Client#connect, no standalone REST wrapper',
+  ],
+  'DELETE /guilds/{guild_id}/bans/{user_id}': [
+    () => rest.guilds.removeBan(GUILD, BAN_USER_ID),
+  ],
+  'GET /guilds/{guild_id}/bans/{user_id}': [
+    () => rest.guilds.getBan(GUILD, BAN_USER_ID),
+  ],
+  'PUT /guilds/{guild_id}/bans/{user_id}': [
+    () => rest.guilds.createBan(GUILD, BAN_USER_ID),
+  ],
   'GET /guilds/{guild_id}/bans': [() => rest.guilds.getBans(GUILD)],
   'GET /guilds/{guild_id}/channels': [() => rest.guilds.getChannels(GUILD)],
   'POST /guilds/{guild_id}/channels': [
     () => rest.guilds.createChannel(GUILD, 0, { name: 'compat-channel' }),
   ],
-  'DELETE /guilds/{guild_id}/emojis/{emoji_id}': [() => rest.guilds.deleteEmoji(GUILD, EMOJI_ID)],
-  'GET /guilds/{guild_id}/emojis/{emoji_id}': [() => rest.guilds.getEmoji(GUILD, EMOJI_ID)],
+  'DELETE /guilds/{guild_id}/emojis/{emoji_id}': [
+    () => rest.guilds.deleteEmoji(GUILD, EMOJI_ID),
+  ],
+  'GET /guilds/{guild_id}/emojis/{emoji_id}': [
+    () => rest.guilds.getEmoji(GUILD, EMOJI_ID),
+  ],
   'PATCH /guilds/{guild_id}/emojis/{emoji_id}': [
     () => rest.guilds.editEmoji(GUILD, EMOJI_ID, { name: 'compat2' }),
   ],
@@ -265,7 +340,9 @@ const calls = {
     undefined,
     'not exercised: would remove the bot itself from the shared test guild',
   ],
-  'GET /guilds/{guild_id}/members/{user_id}': [() => rest.guilds.getMember(GUILD, BOT)],
+  'GET /guilds/{guild_id}/members/{user_id}': [
+    () => rest.guilds.getMember(GUILD, BOT),
+  ],
   'PATCH /guilds/{guild_id}/members/{user_id}': [
     () => rest.guilds.editMember(GUILD, BOT, { nick: 'compat' }),
   ],
@@ -278,26 +355,32 @@ const calls = {
     () => rest.guilds.editRole(GUILD, ROLE, { name: 'compat-role-renamed' }),
   ],
   'GET /guilds/{guild_id}/roles': [() => rest.guilds.getRoles(GUILD)],
-  'POST /guilds/{guild_id}/roles': [() => rest.guilds.createRole(GUILD, { name: 'compat-role2' })],
+  'POST /guilds/{guild_id}/roles': [
+    () => rest.guilds.createRole(GUILD, { name: 'compat-role2' }),
+  ],
   'GET /guilds/{guild_id}/webhooks': [() => rest.webhooks.getForGuild(GUILD)],
-  'DELETE /guilds/{guild_id}': [undefined, 'no high-level wrapper: bots cannot delete guilds in the real Discord API (owner-only)'],
+  'DELETE /guilds/{guild_id}': [
+    undefined,
+    'no high-level wrapper: bots cannot delete guilds in the real Discord API (owner-only)',
+  ],
   'GET /guilds/{guild_id}': [() => rest.guilds.get(GUILD)],
-  'PATCH /guilds/{guild_id}': [() => rest.guilds.edit(GUILD, { name: 'Compat Guild' })],
+  'PATCH /guilds/{guild_id}': [
+    () => rest.guilds.edit(GUILD, { name: 'Compat Guild' }),
+  ],
   'DELETE /invites/{code}': [() => rest.channels.deleteInvite(CODE)],
   'GET /invites/{code}': [() => rest.channels.getInvite(CODE)],
-  'GET /oauth2/@me': [() => rest.oauth.getCurrentAuthorizationInformation()],
+  'GET /oauth2/@me': [
+    undefined,
+    'not exercised: requires an OAuth2 bearer token from a completed authorization, not a Bot token',
+  ],
   'GET /oauth2/applications/@me': [() => rest.oauth.getApplication()],
   'POST /oauth2/token/revoke': [
-    () => rest.oauth.revokeToken({ clientID: BOT, clientSecret: 'x', token: 'x' }),
+    undefined,
+    'not exercised: requires a form-urlencoded token-revocation request, not a Bot-token JSON call',
   ],
   'POST /oauth2/token': [
-    () =>
-      rest.oauth.exchangeCode({
-        clientID: BOT,
-        clientSecret: 'x',
-        code: 'x',
-        redirectURI: 'http://localhost/cb',
-      }),
+    undefined,
+    'not exercised: requires a form-urlencoded authorization-code/client-credentials grant request, not a Bot-token JSON call',
   ],
   'GET /users/{user_id}': [() => rest.users.get(BOT)],
   'GET /users/@me/guilds': [() => rest.oauth.getCurrentGuilds()],
@@ -323,17 +406,23 @@ const calls = {
     () => rest.webhooks.get(WEBHOOK_ID, WEBHOOK_TOKEN),
   ],
   'PATCH /webhooks/{webhook_id}/{webhook_token}': [
-    () => rest.webhooks.editToken(WEBHOOK_ID, WEBHOOK_TOKEN, { name: 'compat-renamed' }),
+    () =>
+      rest.webhooks.editToken(WEBHOOK_ID, WEBHOOK_TOKEN, {
+        name: 'compat-renamed',
+      }),
   ],
   'POST /webhooks/{webhook_id}/{webhook_token}': [
-    () => rest.webhooks.execute(WEBHOOK_ID, WEBHOOK_TOKEN, { content: 'compat' }),
+    () =>
+      rest.webhooks.execute(WEBHOOK_ID, WEBHOOK_TOKEN, { content: 'compat' }),
   ],
   'DELETE /webhooks/{webhook_id}': [
     undefined,
     'not exercised: would delete the shared webhook other rows still need',
   ],
   'GET /webhooks/{webhook_id}': [() => rest.webhooks.get(WEBHOOK_ID)],
-  'PATCH /webhooks/{webhook_id}': [() => rest.webhooks.edit(WEBHOOK_ID, { name: 'compat-renamed2' })],
+  'PATCH /webhooks/{webhook_id}': [
+    () => rest.webhooks.edit(WEBHOOK_ID, { name: 'compat-renamed2' }),
+  ],
 }
 
 // The canonical endpoint order runs some DELETE/GET calls before the PUT/POST
@@ -354,7 +443,8 @@ for (const { method, path } of ordered) {
     results.push({
       endpoint: key,
       status: 'n-a',
-      note: entry?.[1] ?? 'no high-level Oceanic.js method found for this endpoint',
+      note:
+        entry?.[1] ?? 'no high-level Oceanic.js method found for this endpoint',
     })
     continue
   }
@@ -371,13 +461,18 @@ for (const { method, path } of ordered) {
 }
 
 writeFileSync(
-  '/results/oceanic.json',
+  process.env.RESULTS_PATH ?? '/results/oceanic.json',
   JSON.stringify(
-    { library: 'oceanic.js', version: '1.11.x', baseUrlOverridable: true, results },
+    {
+      library: 'oceanic.js',
+      version: '1.11.x',
+      baseUrlOverridable: true,
+      results,
+    },
     null,
-    2,
-  ),
+    2
+  )
 )
 console.log(
-  `oceanic done: ${results.filter((r) => r.status === 'pass').length}/${results.length} pass`,
+  `oceanic done: ${results.filter((r) => r.status === 'pass').length}/${results.length} pass`
 )
