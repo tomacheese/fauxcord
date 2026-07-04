@@ -181,7 +181,7 @@ export function getUser(db: Database, userId: string): UserObject | null {
 }
 
 /**
- * Retrieves application information (@applications/@me).
+ * Retrieves application information (/applications/@me and /oauth2/applications/@me).
  * @param db - Database
  * @param botToken - Bot token
  * @returns Application information object conforming to

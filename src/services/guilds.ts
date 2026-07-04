@@ -38,7 +38,7 @@ export interface GuildObject {
   region: string
   afk_channel_id: string | null
   afk_timeout: number
-  system_channel_id: null
+  system_channel_id: string | null
   system_channel_flags: number
   widget_enabled: boolean
   widget_channel_id: string | null
