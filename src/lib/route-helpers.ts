@@ -49,3 +49,22 @@ export function parseLimitQuery(
   const raw = c.req.query('limit') ?? String(defaultValue)
   return Math.min(Number.parseInt(raw, 10), max)
 }
+
+/**
+ * Parses the request body as JSON, tolerating a missing/empty/invalid body.
+ * Some real Discord library HTTP clients issue PATCH/POST requests with no
+ * body at all (e.g. a no-op update); `c.req.json()` throws a raw
+ * `SyntaxError` on an empty body, which must not surface as a 500. A literal
+ * JSON `null` or a JSON array also parse without error but are not usable as
+ * a field bag, so both fall back to an empty object as well.
+ * @param c - Hono context
+ * @returns the parsed body if it is a JSON object; otherwise an empty object
+ */
+export async function parseJsonBody(
+  c: Context
+): Promise<Record<string, unknown>> {
+  const parsed: unknown = await c.req.json().catch(() => ({}))
+  return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {}
+}

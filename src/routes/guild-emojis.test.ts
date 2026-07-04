@@ -245,6 +245,19 @@ describe('Guild Emojis API', () => {
       })
       expect(res.status).toBe(400)
     })
+
+    it('treats an empty request body as no changes (does not 500)', async () => {
+      // Some libraries (e.g. @discordjs/rest via a bare PATCH call) send no
+      // body at all; the mock must not crash on JSON.parse of an empty body.
+      const emojiId = seedEmoji(db, guildId, userId, 'no_body')
+      const res = await app.request(`/guilds/${guildId}/emojis/${emojiId}`, {
+        method: 'PATCH',
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { name: string }
+      expect(body.name).toBe('no_body')
+    })
   })
 
   describe('DELETE /guilds/:guildId/emojis/:emojiId', () => {

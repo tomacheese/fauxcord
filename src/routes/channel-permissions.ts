@@ -18,7 +18,7 @@ import {
   normalizePermissionOverwrite,
   type PermissionOverwritePayload,
 } from '../validators/channel'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import type { AppEnv } from '../middleware/auth'
 
 /**
@@ -41,7 +41,7 @@ export function createChannelPermissionRoutes(db: Database): Hono<AppEnv> {
     )
     if (channel instanceof Response) return channel
 
-    const payload = await c.req.json<PermissionOverwritePayload>()
+    const payload = (await parseJsonBody(c)) as PermissionOverwritePayload
     const errors = validatePermissionOverwrite(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)

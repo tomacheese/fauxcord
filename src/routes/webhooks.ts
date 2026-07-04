@@ -18,6 +18,7 @@ import {
 import { getMessage, updateMessage, deleteMessage } from '../services/messages'
 import { validateWebhookExecute } from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
+import { parseJsonBody } from '../lib/route-helpers'
 
 /**
  * Creates the Webhooks API routes.
@@ -73,10 +74,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   // PATCH /webhooks/:webhookId — Update webhook information
   app.patch('/webhooks/:webhookId', async (c) => {
     const { webhookId } = c.req.param()
-    const payload = await c.req.json<{
+    const payload = (await parseJsonBody(c)) as {
       name?: string
       channel_id?: string
-    }>()
+    }
 
     const updated = updateWebhook(db, webhookId, payload)
     if (!updated) {
@@ -119,10 +120,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    const payload = await c.req.json<{
+    const payload = (await parseJsonBody(c)) as {
       name?: string
       avatar?: string | null
-    }>()
+    }
 
     const updated = updateWebhook(db, webhookId, {
       name: payload.name,
@@ -197,7 +198,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
         ? (JSON.parse(payloadJson as string) as Record<string, unknown>)
         : {}
     } else {
-      payload = await c.req.json<Record<string, unknown>>()
+      payload = await parseJsonBody(c)
     }
 
     const hasAttachments = false // File attachments on webhook execution are a simplified implementation
@@ -301,10 +302,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    const payload = await c.req.json<{
+    const payload = (await parseJsonBody(c)) as {
       content?: string
       embeds?: unknown[]
-    }>()
+    }
 
     const updated = updateMessage(db, messageId, payload, baseUrl)
     if (!updated) {

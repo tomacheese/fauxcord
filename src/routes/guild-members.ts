@@ -17,8 +17,15 @@ import {
   addMemberRole,
   removeMemberRole,
 } from '../services/guild-members'
-import { validateGuildMemberUpdate } from '../validators/guild'
-import { requireEntity, parseLimitQuery } from '../lib/route-helpers'
+import {
+  validateGuildMemberUpdate,
+  type GuildMemberUpdatePayload,
+} from '../validators/guild'
+import {
+  requireEntity,
+  parseLimitQuery,
+  parseJsonBody,
+} from '../lib/route-helpers'
 
 /**
  * Creates the guild members API routes.
@@ -56,10 +63,7 @@ export function createGuildMemberRoutes(db: Database): Hono {
   app.patch('/guilds/:guildId/members/:userId', async (c) => {
     const { guildId, userId } = c.req.param()
 
-    const payload = await c.req.json<{
-      nick?: string | null
-      roles?: string[]
-    }>()
+    const payload = (await parseJsonBody(c)) as GuildMemberUpdatePayload
 
     const errors = validateGuildMemberUpdate(payload)
     if (Object.keys(errors).length > 0) {

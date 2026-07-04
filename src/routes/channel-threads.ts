@@ -25,7 +25,7 @@ import {
   THREAD_CHANNEL_TYPES,
 } from '../validators/thread'
 import type { AppEnv, BotRecord } from '../middleware/auth'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 
 /**
  * Resolves the authenticated bot's user ID, falling back to a direct token
@@ -93,7 +93,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       )
     }
 
-    const payload = await c.req.json<Record<string, unknown>>()
+    const payload = await parseJsonBody(c)
     const errors = validateThreadCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
@@ -126,7 +126,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     )
     if (channel instanceof Response) return channel
 
-    const payload = await c.req.json<Record<string, unknown>>()
+    const payload = await parseJsonBody(c)
     const errors = validateThreadCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)

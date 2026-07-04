@@ -15,8 +15,9 @@ import {
   validateChannelCreate,
   validateGuildName,
   GUILD_LIMITS,
+  type ChannelCreatePayload,
 } from '../validators/guild'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import { createGuildRoleRoutes } from './guild-roles'
 import { createGuildMemberRoutes } from './guild-members'
 import { createGuildEmojiRoutes } from './guild-emojis'
@@ -130,14 +131,7 @@ export function createGuildRoutes(db: Database): Hono {
       return c.json(err.body, 400)
     }
 
-    const payload = await c.req.json<{
-      name: string
-      type?: number
-      topic?: string | null
-      nsfw?: boolean
-      parent_id?: string | null
-      position?: number | null
-    }>()
+    const payload = (await parseJsonBody(c)) as unknown as ChannelCreatePayload
 
     const errors = validateChannelCreate(payload)
     if (Object.keys(errors).length > 0) {
