@@ -65,16 +65,22 @@ retry_with_timeout() {
   local attempt rc
   for attempt in 1 2; do
     log "attempt ${attempt}/2 (timeout ${secs}s): $*"
-    if timeout "$secs" "$@" >"$logfile" 2>&1; then
+    # NOTE: rc must be captured on the line directly after the command runs,
+    # NOT via `if timeout ...; then return 0; fi` followed by `rc=$?`. When
+    # the tested command fails, bash's `if`-without-`else` construct reports
+    # its OWN exit status as 0 (POSIX: "if no commands in a branch are
+    # executed, the if-list's exit status is 0") -- so `$?` right after such
+    # an `if/fi` is always 0, never the real failure code. This silently
+    # broke both the 124/143 timeout-retry branch below (dead code -- rc was
+    # never anything but 0) and the "attempt N failed" message (always
+    # printed "exit code 0" regardless of the actual failure). Confirmed via
+    # a real serenity build that hit this exact path; only the separate
+    # downstream image-existence check caught the resulting failure.
+    timeout "$secs" "$@" >"$logfile" 2>&1
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
       return 0
     fi
-    # NOTE: `rc=$?` must NOT be declared with `local` here — `local`'s own
-    # successful exit status (0) would overwrite $? before it's captured,
-    # so every failure would be misreported as "exit code 0" (confirmed via
-    # a real buildkit crash that this bug silently swallowed, letting the
-    # script proceed as if the build had succeeded). `rc` is declared
-    # above instead, so this plain assignment reads the real exit code.
-    rc=$?
     if [[ $rc -eq 124 || $rc -eq 143 ]]; then
       log "attempt ${attempt} timed out after ${secs}s; tail of log:"
       tail -n 20 "$logfile"
