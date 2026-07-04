@@ -60,7 +60,6 @@ export async function saveAttachment(
 
   const size = buffer.byteLength
 
-  // Record in the DB
   const relativePath = path.join(channelId, messageId, filename)
   db.prepare(
     `INSERT INTO attachments (id, message_id, filename, size, content_type, file_path)

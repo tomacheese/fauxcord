@@ -133,4 +133,77 @@ describe('Channel Reactions API', () => {
       expect(body.code).toBe(50_035)
     })
   })
+
+  describe('GET /channels/:channelId/messages/:messageId/reactions/:emoji', () => {
+    it('lists users who reacted', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'r')
+      const reactor = '777777777777777777'
+      db.prepare("INSERT INTO users (id, username) VALUES (?, 'R')").run(
+        reactor
+      )
+      db.prepare(
+        'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+      ).run(messageId, reactor, '👍')
+
+      const emoji = encodeURIComponent('👍')
+      const res = await app.request(
+        `/channels/${channelId}/messages/${messageId}/reactions/${emoji}`,
+        { headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(200)
+      const users = (await res.json()) as { id: string }[]
+      expect(users.some((u) => u.id === reactor)).toBe(true)
+    })
+  })
+
+  describe('DELETE all reactions', () => {
+    it('removes every reaction on a message', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'r')
+      db.prepare(
+        'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+      ).run(messageId, botUserId, '👍')
+
+      const res = await app.request(
+        `/channels/${channelId}/messages/${messageId}/reactions`,
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(204)
+
+      const remaining = db
+        .prepare('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?')
+        .get(messageId) as { n: number }
+      expect(remaining.n).toBe(0)
+    })
+  })
+
+  describe('DELETE reactions for a specific emoji', () => {
+    it('removes all reactions for one emoji', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'r')
+      db.prepare(
+        'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+      ).run(messageId, botUserId, '👍')
+
+      const emoji = encodeURIComponent('👍')
+      const res = await app.request(
+        `/channels/${channelId}/messages/${messageId}/reactions/${emoji}`,
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(204)
+    })
+  })
 })

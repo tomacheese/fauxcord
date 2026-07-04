@@ -93,4 +93,34 @@ describe('createAuthMiddleware', () => {
     const healthRes = await appWithAuth.request('/_mock/health')
     expect(healthRes.status).toBe(200)
   })
+
+  it('authenticates with a valid Bearer token', async () => {
+    // oauth2_access_tokens references oauth2_clients (FK); insert a client first.
+    db.prepare(
+      'INSERT INTO oauth2_clients (client_id, client_secret) VALUES (?, ?)'
+    ).run('c1', 's1')
+    db.prepare(
+      `INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at)
+       VALUES ('tok-valid', 'c1', NULL, 'identify', datetime('now', '+1 day'))`
+    ).run()
+
+    const res = await app.request('/test', {
+      headers: { Authorization: 'Bearer tok-valid' },
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 401 for an unknown Bearer token', async () => {
+    const res = await app.request('/test', {
+      headers: { Authorization: 'Bearer nonexistent' },
+    })
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 401 for an unsupported auth scheme', async () => {
+    const res = await app.request('/test', {
+      headers: { Authorization: 'Basic dXNlcjpwYXNz' },
+    })
+    expect(res.status).toBe(401)
+  })
 })

@@ -74,4 +74,30 @@ export const ENUM_NOISE: EnumNoiseEntry[] = [
     reason:
       'src/services/guilds.ts (getBotGuilds) always returns features: [] (fixed empty array).',
   },
+  {
+    specPath: '/guilds/{guild_id}',
+    method: 'get',
+    field: 'nsfw_level',
+    reason: 'src/services/guilds.ts always returns nsfw_level: 0 (fixed).',
+  },
+  {
+    specPath: '/guilds/{guild_id}',
+    method: 'patch',
+    field: 'nsfw_level',
+    reason: 'src/services/guilds.ts always returns nsfw_level: 0 (fixed).',
+  },
+  {
+    specPath: '/oauth2/applications/@me',
+    method: 'get',
+    field: 'explicit_content_filter',
+    reason:
+      'src/services/users.ts (getApplication) always returns explicit_content_filter: 0 (fixed).',
+  },
+  {
+    specPath: '/applications/@me',
+    method: 'get',
+    field: 'explicit_content_filter',
+    reason:
+      'src/services/users.ts (getApplication) always returns explicit_content_filter: 0 (fixed).',
+  },
 ]

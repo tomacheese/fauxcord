@@ -1,4 +1,3 @@
-// src/routes/channel-messages.ts
 /**
  * Channel messages API routing
  *

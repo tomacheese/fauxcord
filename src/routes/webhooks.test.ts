@@ -117,6 +117,122 @@ describe('Webhooks API (with token)', () => {
     })
   })
 
+  describe('GET /webhooks/:webhookId', () => {
+    it('retrieves a webhook by id', async () => {
+      const res = await app.request(`/webhooks/${WEBHOOK_ID}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { id: string }
+      expect(body.id).toBe(WEBHOOK_ID)
+    })
+
+    it('returns 404 (10015) for an unknown webhook', async () => {
+      const res = await app.request('/webhooks/111111111111111111')
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_015)
+    })
+  })
+
+  describe('GET /webhooks/:webhookId/:token', () => {
+    it('retrieves a webhook by id and token', async () => {
+      const res = await app.request(`/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`)
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { id: string }
+      expect(body.id).toBe(WEBHOOK_ID)
+    })
+  })
+
+  describe('POST /webhooks/:webhookId/:token (execute)', () => {
+    it('executes with wait=true and returns the message', async () => {
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}?wait=true`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'hi' }),
+        }
+      )
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { content: string }
+      expect(body.content).toBe('hi')
+    })
+
+    it('executes with wait=1 (discord.py style)', async () => {
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}?wait=1`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'py' }),
+        }
+      )
+      expect(res.status).toBe(200)
+    })
+
+    it('returns 204 when wait is not set', async () => {
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'async' }),
+        }
+      )
+      expect(res.status).toBe(204)
+    })
+
+    it('returns 404 for an invalid token', async () => {
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/wrong-token?wait=true`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'x' }),
+        }
+      )
+      expect(res.status).toBe(404)
+    })
+  })
+
+  describe('webhook message GET/PATCH/DELETE', () => {
+    it('gets, edits, and deletes a webhook message', async () => {
+      // Execute with wait=true to create a message
+      const execRes = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}?wait=true`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'original' }),
+        }
+      )
+      expect(execRes.status).toBe(200)
+      const { id: messageId } = (await execRes.json()) as { id: string }
+
+      const getRes = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}/messages/${messageId}`
+      )
+      expect(getRes.status).toBe(200)
+
+      const patchRes = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}/messages/${messageId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'edited' }),
+        }
+      )
+      expect(patchRes.status).toBe(200)
+      const patchBody = (await patchRes.json()) as { content: string }
+      expect(patchBody.content).toBe('edited')
+
+      const delRes = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}/messages/${messageId}`,
+        { method: 'DELETE' }
+      )
+      expect(delRes.status).toBe(204)
+    })
+  })
+
   describe('PATCH /webhooks/:webhookId (validation and channel checks)', () => {
     it('rejects an empty name with 400', async () => {
       const res = await app.request(`/webhooks/${WEBHOOK_ID}`, {

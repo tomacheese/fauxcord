@@ -139,3 +139,79 @@ describe('PATCH /users/@me', () => {
     }
   })
 })
+
+describe('Users GET endpoints', () => {
+  let db: ReturnType<typeof createFullTestApp>['db']
+  let app: ReturnType<typeof createFullTestApp>['app']
+  let cleanup: () => void
+  const token = 'Bot testtoken'
+  const userId = '111111111111111111'
+
+  beforeEach(() => {
+    const ctx = createFullTestApp()
+    db = ctx.db
+    app = ctx.app
+    cleanup = ctx.cleanup
+    seedBot(db, token, userId)
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('GET /users/@me returns the bot user', async () => {
+    const res = await app.request('/api/v10/users/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { id: string }
+    expect(body.id).toBe(userId)
+  })
+
+  it('GET /users/@me returns 401 for an unregistered token', async () => {
+    const res = await app.request('/api/v10/users/@me', {
+      headers: { Authorization: 'Bot unregistered' },
+    })
+    expect(res.status).toBe(401)
+  })
+
+  it('GET /users/:id returns a known user', async () => {
+    const res = await app.request(`/api/v10/users/${userId}`, {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { id: string }
+    expect(body.id).toBe(userId)
+  })
+
+  it('GET /users/:id returns 404 (10013) for an unknown user', async () => {
+    const res = await app.request('/api/v10/users/999999999999999999', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as { code: number }
+    expect(body.code).toBe(10_013)
+  })
+
+  it('GET /users/@me/guilds returns an array', async () => {
+    const res = await app.request('/api/v10/users/@me/guilds', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    expect(Array.isArray(await res.json())).toBe(true)
+  })
+
+  it('GET /applications/@me returns application info', async () => {
+    const res = await app.request('/api/v10/applications/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('GET /oauth2/applications/@me returns application info (Discord.Net alias)', async () => {
+    const res = await app.request('/api/v10/oauth2/applications/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+  })
+})

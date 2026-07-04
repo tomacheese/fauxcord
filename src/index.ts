@@ -27,10 +27,8 @@ import { setupTestEnvironment } from './services/test-control'
 
 const config = loadConfig()
 
-// Initialize the database
 const db = initializeDatabase(config.dbPath)
 
-// Create the Hono app
 const app = new Hono<AppEnv>()
 
 // Configure middleware (applied to all requests)

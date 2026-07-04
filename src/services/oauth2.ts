@@ -106,7 +106,6 @@ export function exchangeAuthCode(
 
   if (!authCode) return null
 
-  // Mark the code as used
   db.prepare('UPDATE oauth2_auth_codes SET used = 1 WHERE code = ?').run(code)
 
   const accessToken = generateToken('mock_access_token')

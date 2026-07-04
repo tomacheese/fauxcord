@@ -50,7 +50,6 @@ export function initializeDatabase(dbPath: string): Database {
   db.exec('PRAGMA foreign_keys = ON')
   db.exec('PRAGMA synchronous = NORMAL')
 
-  // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS bots (
       token         TEXT PRIMARY KEY,
