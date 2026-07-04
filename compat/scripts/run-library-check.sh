@@ -91,6 +91,25 @@ if ! retry_with_timeout "$BUILD_TIMEOUT" "$BUILD_LOG" -- \
   exit 1
 fi
 
+# `docker compose build` (bake mode, used automatically when building
+# multiple targets in one invocation) has been observed to report exit 0
+# for the *overall* command even when one of the targets actually failed to
+# compile -- the per-target "failed to solve" error is printed into the
+# build log, but does not affect the aggregate exit code. Trusting the exit
+# code alone previously let a real serenity `cargo build` compile failure
+# slip through here silently, only to surface much later (and far more
+# expensively, since it forced an implicit rebuild inside the shorter,
+# fixed-length run-step timeout) as an opaque `RUN_FAILED`/timeout. Verify
+# each image was actually tagged before trusting the build "succeeded".
+for svc_image in "${PROJECT}-fauxcord" "${PROJECT}-${SERVICE}"; do
+  if [[ -z "$(docker images -q "$svc_image" 2>/dev/null)" ]]; then
+    log "image ${svc_image} was not produced despite build reporting success; tail of log:"
+    tail -n 40 "$BUILD_LOG"
+    echo "SUMMARY ${LIB}: BUILD_FAILED (see ${BUILD_LOG})"
+    exit 1
+  fi
+done
+
 log "starting fauxcord (waiting for healthcheck)"
 if ! retry_with_timeout 300 "${LOG_DIR}/${LIB}-up.log" -- \
   "${COMPOSE[@]}" up -d --wait fauxcord; then
@@ -99,9 +118,19 @@ if ! retry_with_timeout 300 "${LOG_DIR}/${LIB}-up.log" -- \
 fi
 
 log "running verifier"
-if ! timeout "$RUN_TIMEOUT" "${COMPOSE[@]}" run --rm "$SERVICE" \
-  >"$RUN_LOG" 2>&1; then
-  rc=$?
+# NOTE: exit code must be captured directly from `timeout`, NOT via
+# `if ! timeout ...; then rc=$?; ...`. Negating with `!` makes `$?` inside
+# the then-branch reflect the (always-0) exit status of the negated `if`
+# condition itself, not the real exit code of `timeout` — this previously
+# caused every failure here to be misreported as "exit 0", hiding the real
+# cause (same class of bug the retry_with_timeout comment above warns about
+# for `local rc=$?`, confirmed via a real serenity run that logged
+# "failed/timed out (exit 0)" for what was actually a dependency-not-ready
+# failure).
+timeout "$RUN_TIMEOUT" "${COMPOSE[@]}" run --rm "$SERVICE" \
+  >"$RUN_LOG" 2>&1
+rc=$?
+if [[ $rc -ne 0 ]]; then
   log "verifier run failed/timed out (exit ${rc}); tail of log:"
   tail -n 40 "$RUN_LOG"
   echo "SUMMARY ${LIB}: RUN_FAILED (see ${RUN_LOG})"

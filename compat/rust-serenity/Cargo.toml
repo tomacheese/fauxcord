@@ -17,8 +17,15 @@ publish = false
 # feature, or a missing type/method because some model types are gated behind
 # a separate "model" feature in this exact release, add the missing feature
 # name rather than assuming serenity is unusable here.
+#
+# CONFIRMED VIA `cargo build` (0.12.5): "http" alone fails to compile --
+# serenity's own `http/client.rs` and `http/multipart.rs` unconditionally
+# `use crate::builder::{...}`, so `builder` must be enabled too even though
+# this file never calls the `CreateXxx` builder types directly (every call
+# here uses a raw `serde_json::Map` body).
 serenity = { version = "0.12", default-features = false, features = [
   "http",
+  "builder",
   "rustls_backend",
 ] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
