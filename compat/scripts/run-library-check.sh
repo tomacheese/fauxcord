@@ -15,8 +15,20 @@
 #
 # This host's disk (/mnt/hdd) is I/O-saturated, so build/run steps use long
 # timeouts (10min build, 5min run) with one retry on timeout (exit 124/143).
-# Docker operations are NOT run in parallel across libraries — only one
-# `run-library-check.sh` invocation should be active on the host at a time.
+#
+# Compose project isolation: each invocation runs under its own Compose
+# project name (`-p fauxcord-compat-<lib>`), NOT the shared default derived
+# from the directory name. Without this, two concurrent invocations for
+# different libraries resolve to the SAME project and therefore the SAME
+# container name for the shared `fauxcord` service
+# (`fauxcord-compat-fauxcord-1`) — one invocation's `down`/cleanup then
+# SIGTERMs the *other* invocation's still-in-use fauxcord container out from
+# under it. This was confirmed as the root cause of a real cross-track
+# failure (discordnet + discordgo run concurrently, one's teardown killed
+# the other's fauxcord container), not just host I/O contention. Per-library
+# project names mean each invocation gets its own independent fauxcord
+# container, so concurrent runs are actually isolated rather than merely
+# hoped to be serialized.
 set -uo pipefail
 
 LIB="${1:?usage: run-library-check.sh <library-name> [timeout-seconds]}"
@@ -27,6 +39,8 @@ cd "$COMPAT_DIR"
 BUILD_TIMEOUT="${EXTRA_TIMEOUT:-900}"   # 15 min default (host is I/O-saturated)
 RUN_TIMEOUT=600                          # 10 min for the verifier run itself
 SERVICE="verify-${LIB}"
+PROJECT="fauxcord-compat-${LIB}"
+COMPOSE=(docker compose -p "$PROJECT" -f docker-compose.yml)
 LOG_DIR="${COMPAT_DIR}/results/_logs"
 mkdir -p "$LOG_DIR"
 BUILD_LOG="${LOG_DIR}/${LIB}-build.log"
@@ -39,13 +53,19 @@ retry_with_timeout() {
   local secs="$1" logfile="$2"
   shift 2
   [[ "$1" == "--" ]] && shift
-  local attempt
+  local attempt rc
   for attempt in 1 2; do
     log "attempt ${attempt}/2 (timeout ${secs}s): $*"
     if timeout "$secs" "$@" >"$logfile" 2>&1; then
       return 0
     fi
-    local rc=$?
+    # NOTE: `rc=$?` must NOT be declared with `local` here — `local`'s own
+    # successful exit status (0) would overwrite $? before it's captured,
+    # so every failure would be misreported as "exit code 0" (confirmed via
+    # a real buildkit crash that this bug silently swallowed, letting the
+    # script proceed as if the build had succeeded). `rc` is declared
+    # above instead, so this plain assignment reads the real exit code.
+    rc=$?
     if [[ $rc -eq 124 || $rc -eq 143 ]]; then
       log "attempt ${attempt} timed out after ${secs}s; tail of log:"
       tail -n 20 "$logfile"
@@ -60,26 +80,26 @@ retry_with_timeout() {
 }
 
 cleanup() {
-  docker compose -f docker-compose.yml down -v --remove-orphans >/dev/null 2>&1
+  "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1
 }
 trap cleanup EXIT
 
-log "building fauxcord + ${SERVICE}"
+log "building fauxcord + ${SERVICE} (project: ${PROJECT})"
 if ! retry_with_timeout "$BUILD_TIMEOUT" "$BUILD_LOG" -- \
-  docker compose -f docker-compose.yml build fauxcord "$SERVICE"; then
+  "${COMPOSE[@]}" build fauxcord "$SERVICE"; then
   echo "SUMMARY ${LIB}: BUILD_FAILED (see ${BUILD_LOG})"
   exit 1
 fi
 
 log "starting fauxcord (waiting for healthcheck)"
 if ! retry_with_timeout 300 "${LOG_DIR}/${LIB}-up.log" -- \
-  docker compose -f docker-compose.yml up -d --wait fauxcord; then
+  "${COMPOSE[@]}" up -d --wait fauxcord; then
   echo "SUMMARY ${LIB}: FAUXCORD_START_FAILED (see ${LOG_DIR}/${LIB}-up.log)"
   exit 1
 fi
 
 log "running verifier"
-if ! timeout "$RUN_TIMEOUT" docker compose -f docker-compose.yml run --rm "$SERVICE" \
+if ! timeout "$RUN_TIMEOUT" "${COMPOSE[@]}" run --rm "$SERVICE" \
   >"$RUN_LOG" 2>&1; then
   rc=$?
   log "verifier run failed/timed out (exit ${rc}); tail of log:"
