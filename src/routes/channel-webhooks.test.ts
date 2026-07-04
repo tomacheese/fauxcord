@@ -4,6 +4,7 @@ import { createChannelWebhookRoutes } from './channel-webhooks'
 import { initializeDatabase, closeDatabase } from '../db'
 import { seedBot, seedGuild, seedChannel } from '../test-helpers'
 import { generateSnowflake } from '../snowflake'
+import { WEBHOOK_LIMITS } from '../validators/webhook'
 import type { Database } from '../db'
 
 describe('Channel Webhooks API', () => {
@@ -70,8 +71,9 @@ describe('Channel Webhooks API', () => {
   })
 
   it('returns 400 (30007) when the channel webhook limit is reached', async () => {
-    // Seed 15 webhooks directly so the 16th creation is rejected.
-    for (let i = 0; i < 15; i++) {
+    // Fill the channel up to its webhook limit directly so the next create is
+    // rejected.
+    for (let i = 0; i < WEBHOOK_LIMITS.CHANNEL_WEBHOOKS_MAX; i++) {
       db.prepare(
         'INSERT INTO webhooks (id, guild_id, channel_id, name, token) VALUES (?, ?, ?, ?, ?)'
       ).run(generateSnowflake(), guildId, channelId, `wh${i}`, `tok${i}`)

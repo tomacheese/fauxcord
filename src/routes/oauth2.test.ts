@@ -51,7 +51,8 @@ describe('OAuth2 API', () => {
 
   describe('POST /oauth2/token (authorization_code)', () => {
     it('exchanges a valid code for a token', async () => {
-      // Seed a client + auth code directly via the service layer
+      // Seed the client + user rows via raw SQL, then create the auth code via
+      // the service layer (createAuthCode).
       db.prepare(
         'INSERT INTO oauth2_clients (client_id, client_secret) VALUES (?, ?)'
       ).run('client1', 'secret1')
