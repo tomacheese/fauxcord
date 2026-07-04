@@ -53,6 +53,35 @@ describe('createAuthMiddleware', () => {
     expect(res.status).toBe(200)
   })
 
+  it('allows unknown Bearer tokens when DISABLE_AUTH=true', async () => {
+    const appNoAuth = new Hono()
+    appNoAuth.use('*', createAuthMiddleware(db, true))
+    appNoAuth.get('/test', (c) => c.json({ ok: true }))
+
+    const res = await appNoAuth.request('/test', {
+      headers: { Authorization: 'Bearer anybearertoken' },
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('allows an unrecognized authorization scheme when DISABLE_AUTH=true', async () => {
+    const appNoAuth = new Hono()
+    appNoAuth.use('*', createAuthMiddleware(db, true))
+    appNoAuth.get('/test', (c) => c.json({ ok: true }))
+
+    const res = await appNoAuth.request('/test', {
+      headers: { Authorization: 'mystery scheme-token' },
+    })
+    expect(res.status).toBe(200)
+  })
+
+  it('returns 401 for an unregistered Bearer token when auth is enabled', async () => {
+    const res = await app.request('/test', {
+      headers: { Authorization: 'Bearer notarealtoken' },
+    })
+    expect(res.status).toBe(401)
+  })
+
   it('skips authentication for auth-exempt paths', async () => {
     app.get('/_mock/health', (c) => c.json({ status: 'ok' }))
     // /_mock/health does not require auth, so it works even without a registered token
