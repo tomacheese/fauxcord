@@ -204,6 +204,7 @@ describe('Webhooks API (with token)', () => {
           body: JSON.stringify({ content: 'original' }),
         }
       )
+      expect(execRes.status).toBe(200)
       const { id: messageId } = (await execRes.json()) as { id: string }
 
       const getRes = await app.request(

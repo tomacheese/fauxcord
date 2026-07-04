@@ -1,35 +1,40 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { Hono } from 'hono'
-import { createLatencyMiddleware } from './latency'
+
+// Mock node:timers/promises' setTimeout so the test doesn't depend on real
+// wall-clock timing (which is flaky under CI load or timer jitter). This lets
+// us assert the middleware's behavior (whether/how it delays) deterministically.
+const sleepMock = vi.fn((ms: number) =>
+  Promise.resolve(ms).then(() => undefined)
+)
+vi.mock('node:timers/promises', () => ({
+  setTimeout: (ms: number) => sleepMock(ms),
+}))
+
+const { createLatencyMiddleware } = await import('./latency')
 
 describe('createLatencyMiddleware', () => {
-  it('adds a delay only when latency is configured', async () => {
-    const fast = new Hono()
-    fast.use('*', createLatencyMiddleware(0))
-    fast.get('/t', (c) => c.json({ ok: true }))
+  it('skips the delay when latency is 0', async () => {
+    sleepMock.mockClear()
+    const app = new Hono()
+    app.use('*', createLatencyMiddleware(0))
+    app.get('/t', (c) => c.json({ ok: true }))
 
-    const slow = new Hono()
-    slow.use('*', createLatencyMiddleware(100))
-    slow.get('/t', (c) => c.json({ ok: true }))
+    const res = await app.request('/t')
 
-    // Warm both apps first to pay one-time import/JIT costs, so the measured
-    // difference reflects only the middleware behavior.
-    await fast.request('/t')
-    await slow.request('/t')
+    expect(res.status).toBe(200)
+    expect(sleepMock).not.toHaveBeenCalled()
+  })
 
-    const t0 = performance.now()
-    const fastRes = await fast.request('/t')
-    const fastElapsed = performance.now() - t0
+  it('delays by the configured duration when latency is set', async () => {
+    sleepMock.mockClear()
+    const app = new Hono()
+    app.use('*', createLatencyMiddleware(100))
+    app.get('/t', (c) => c.json({ ok: true }))
 
-    const t1 = performance.now()
-    const slowRes = await slow.request('/t')
-    const slowElapsed = performance.now() - t1
+    const res = await app.request('/t')
 
-    expect(fastRes.status).toBe(200)
-    expect(slowRes.status).toBe(200)
-    // Assert the relative difference driven by the configured delay rather than
-    // an absolute wall-clock ceiling, so ambient load cannot cause flakes: both
-    // requests share the same conditions and only the slow path calls sleep().
-    expect(slowElapsed - fastElapsed).toBeGreaterThanOrEqual(80)
+    expect(res.status).toBe(200)
+    expect(sleepMock).toHaveBeenCalledWith(100)
   })
 })
