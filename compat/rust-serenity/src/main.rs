@@ -172,7 +172,20 @@ async fn main() {
         std::env::var("FAUXCORD_BASE").unwrap_or_else(|_| "http://fauxcord:3000/api/v10".into());
     let origin = proxy_origin_from(&base);
 
-    let plain_client = reqwest::Client::new();
+    // NOTE: neither reqwest::Client::new() nor serenity's default HttpBuilder
+    // configure any per-request timeout, so a single stalled connection to
+    // fauxcord (or a genuinely hung request) blocks this entire sequential
+    // run forever with zero stdout output -- confirmed as the likely cause
+    // of a real run that hit the outer driver-script timeout with no
+    // /results/serenity.json ever written. An explicit per-request timeout
+    // turns a hang into a bounded Outcome::Fail row instead, guaranteeing
+    // the loop -- and therefore the final fs::write below -- is always
+    // reached.
+    let request_timeout = Duration::from_secs(15);
+    let plain_client = reqwest::Client::builder()
+        .timeout(request_timeout)
+        .build()
+        .expect("build reqwest client");
     wait_healthy(&plain_client, &origin).await;
 
     let setup_raw = fs::read_to_string("common/setup.json").expect("read common/setup.json");
@@ -208,7 +221,14 @@ async fn main() {
     // See the module-level comment: proxy() takes the bare origin, and
     // serenity's own request-building code appends /api/vN/... itself.
     let proxy_url: reqwest::Url = origin.parse().expect("FAUXCORD_BASE is a valid URL");
-    let http: Http = HttpBuilder::new(&token).proxy(proxy_url).build();
+    let http_client = reqwest::Client::builder()
+        .timeout(request_timeout)
+        .build()
+        .expect("build reqwest client for serenity Http");
+    let http: Http = HttpBuilder::new(&token)
+        .client(http_client)
+        .proxy(proxy_url)
+        .build();
 
     // Reaction emoji: pass the raw unicode character, not a pre-encoded
     // string — serenity's ReactionType Display/url-encoding handles that
@@ -350,9 +370,16 @@ async fn main() {
     let mut ordered = endpoints.clone();
     ordered.sort_by_key(|e| e.method == "DELETE");
 
-    let mut results = Vec::with_capacity(ordered.len());
-    for ep in &ordered {
+    let total_endpoints = ordered.len();
+    let mut results = Vec::with_capacity(total_endpoints);
+    for (i, ep) in ordered.iter().enumerate() {
         let key = format!("{} {}", ep.method, ep.path);
+        // Per-endpoint progress line on stderr: cheap, and the only way to
+        // tell (from container logs alone) whether a run that produces no
+        // final output ever made progress, or stalled on the very first
+        // call -- there was previously zero output between process start
+        // and the final summary line.
+        eprintln!("[{}/{total_endpoints}] {key}", i + 1);
         let outcome = run_one(&http, &ctx, &reaction, &key).await;
         results.push(match outcome {
             Outcome::Pass => EndpointResult {
