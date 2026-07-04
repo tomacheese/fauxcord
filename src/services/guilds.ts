@@ -1,4 +1,3 @@
-// src/services/guilds.ts
 /**
  * Guild core operations service
  *
