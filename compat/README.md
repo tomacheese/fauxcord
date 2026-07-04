@@ -148,6 +148,15 @@ un-run in this environment is recorded in "Known run limitations" below.
   thread search, both OAuth2 grant-flow endpoints — the library has none —
   and the shared-resource-destroying DELETEs) with evidence notes in
   `python-interactions/verify.py`.
+- `jvm-discord4j`: unlike JDA, Discord4J ships a genuine gateway-free
+  `RestClient` (`.build()` opens no WebSocket), so it is runnable; the REST
+  base URL is overridden by reconstructing a `RouterOptions` with a custom
+  `discordBaseUrl` inside `RestClient.restBuilder(token).setExtraOptions(...)`
+  (the 8-arg public constructor + public getters, all confirmed against the
+  `3.2.6` source). Reactive calls are driven with `.block()`. `n-a` rows:
+  threads (absent in 3.2.6's `ChannelService`), the new-format pins API,
+  OAuth2 code-grant, and shared-resource deletes — see
+  `jvm-discord4j/src/main/java/Verify.java`.
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
