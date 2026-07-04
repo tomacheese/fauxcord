@@ -1,0 +1,13 @@
+# Exactly one Discord fork must be installed in this environment: py-cord.
+# Do NOT add discord.py or nextcord here. IMPORTANT: py-cord's PyPI
+# distribution name (`py-cord`) differs from its import name (`discord`) --
+# the same import name as discord.py itself -- so installing py-cord
+# alongside discord.py or importing the wrong one in a shared environment
+# would resolve `import discord` unpredictably. This requirements.txt must
+# stay py-cord-only.
+#
+# Version pin confidence: py-cord 2.6.1 was a real, current stable release as
+# of this verifier's authoring; if it has since been superseded,
+# `pip install py-cord~=2.6` is a safe fallback.
+py-cord==2.6.1
+aiohttp

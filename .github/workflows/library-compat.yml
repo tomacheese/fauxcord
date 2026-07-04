@@ -1,0 +1,83 @@
+# Discord library compatibility check.
+#
+# Drives every scaffolded compat/<lang>-<lib> verifier against a fresh
+# Fauxcord container and uploads each library's results/<lib>.json as a
+# workflow artifact. This is intentionally decoupled from the main test
+# suite (pnpm test): these are slow, network/Docker-heavy checks that
+# exercise real third-party libraries' high-level APIs, not Fauxcord's own
+# unit/contract tests.
+#
+# Runs are informational (a single library's build/runtime failure does not
+# fail the whole job) so that one library going red upstream (a dependency
+# bump breaking its own build, for example) doesn't block visibility into
+# every other library. See compat/README.md for the harness overview and
+# compat/coverage-matrix.md for the human-readable summary this feeds.
+
+name: Library Compatibility
+
+on:
+  schedule:
+    # Sundays at 05:00 UTC. Off-peak, ahead of the Monday spec-drift check.
+    - cron: '0 5 * * 0'
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'compat/**'
+      - 'src/**'
+      - '.github/workflows/library-compat.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  compat:
+    name: ${{ matrix.library }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        library:
+          - discordjs
+          - eris
+          - oceanic
+          - discordgo
+          - discordnet
+          - serenity
+          - hikari
+          - discordpy
+          - nextcord
+          - pycord
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Run ${{ matrix.library }} compatibility check
+        id: check
+        continue-on-error: true
+        run: |
+          bash compat/scripts/run-library-check.sh ${{ matrix.library }} 900
+
+      - name: Upload result JSON
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa9 # v4.6.2
+        with:
+          name: compat-result-${{ matrix.library }}
+          path: |
+            compat/results/${{ matrix.library }}.json
+            compat/results/_logs/${{ matrix.library }}-*.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail step summary on error
+        if: steps.check.outcome == 'failure'
+        run: |
+          echo "### :x: ${{ matrix.library }} compatibility check failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "See the uploaded \`compat-result-${{ matrix.library }}\` artifact logs for details." >> "$GITHUB_STEP_SUMMARY"

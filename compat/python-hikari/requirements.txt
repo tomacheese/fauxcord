@@ -1,0 +1,6 @@
+# Pinned to the latest stable hikari release confirmed via PyPI/docs research
+# during authoring (2.5.0, released 2025-10-31). If Renovate/Dependabot later
+# bumps this, re-verify that RESTApp(url=...) base-URL override still exists
+# before merging (see verify.py's module docstring for the citation trail).
+hikari==2.5.0
+aiohttp
