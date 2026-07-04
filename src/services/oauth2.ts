@@ -240,7 +240,8 @@ export function getOAuth2Me(
       bot_public: true,
       bot_require_code_grant: false,
     },
-    scopes: accessToken.scope.split(' '),
+    // Guard against an empty scope so we return [] rather than [""].
+    scopes: accessToken.scope ? accessToken.scope.split(' ') : [],
     expires: new Date(accessToken.expires_at).toISOString(),
     user: {
       id: user.id,

@@ -99,4 +99,43 @@ describe('PATCH /users/@me', () => {
     const body = (await res.json()) as Record<string, unknown>
     expect(body.id).toBe(userId)
   })
+
+  it('GET /users/:userId returns the user, and 404 for an unknown user', async () => {
+    const known = await app.request(`/api/v10/users/${userId}`, {
+      headers: { Authorization: token },
+    })
+    expect(known.status).toBe(200)
+    const knownBody = (await known.json()) as Record<string, unknown>
+    expect(knownBody.id).toBe(userId)
+
+    const missing = await app.request('/api/v10/users/999999999999999999', {
+      headers: { Authorization: token },
+    })
+    expect(missing.status).toBe(404)
+    const missingBody = (await missing.json()) as Record<string, unknown>
+    expect(missingBody.code).toBe(10_013)
+  })
+
+  it('GET /users/%40me resolves the percent-encoded @me to the bot user', async () => {
+    const res = await app.request('/api/v10/users/%40me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.id).toBe(userId)
+  })
+
+  it('GET /applications/@me and /oauth2/applications/@me return the application', async () => {
+    for (const path of [
+      '/api/v10/applications/@me',
+      '/api/v10/oauth2/applications/@me',
+    ]) {
+      const res = await app.request(path, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.id).toBeDefined()
+    }
+  })
 })
