@@ -190,6 +190,54 @@ func main() {
 
 ---
 
+## Library compatibility matrix
+
+Fauxcord tracks compatibility for 20+ Discord libraries across 6 languages using a
+Docker-based verification harness under [`compat/`](../compat/README.md). Every
+library is exercised against the full set of implemented endpoints inside its own
+language-specific container, so results are reproducible and independent of the
+host's installed toolchains.
+
+The full per-endpoint, per-library breakdown lives in
+[`compat/coverage-matrix.md`](../compat/coverage-matrix.md) (source of truth).
+The summary below reflects the latest state of that matrix.
+
+| Library                   | Language | Base URL override                                        | Status                                        |
+| ------------------------- | -------- | -------------------------------------------------------- | --------------------------------------------- |
+| @discordjs/rest           | JS/TS    | `new REST({ api: "..." })`                               | ✅ Verified, some raw findings pending triage |
+| Eris                      | JS/TS    | ❌ Not possible (hardcodes HTTPS on port 443)            | ⛔ Blocked                                    |
+| Oceanic.js                | JS/TS    | Fully overridable client option                          | ✅ Verified, some findings pending triage     |
+| discord.py                | Python   | `Route.BASE = "..."`                                     | ✅ Verified                                   |
+| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | 🧪 Scaffolded, run pending                    |
+| Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | 🧪 Scaffolded, run pending                    |
+| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | 🧪 Scaffolded, run pending                    |
+| interactions.py           | Python   | HTTP client base URL                                     | See `compat/README.md`                        |
+| discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | 🧪 Verifier being fixed, run pending          |
+| Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (62/86 pass, 24 n/a, 0 lib-issue) |
+| DSharpPlus 5.x            | C#       | Under investigation                                      | See `compat/README.md`                        |
+| DSharpPlus 4.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
+| JDA                       | JVM      | ❌ Not usable without a real Gateway WebSocket handshake | ⛔ Blocked                                    |
+| Discord4J, Javacord, Kord | JVM      | See `compat/README.md`                                   | See `compat/README.md`                        |
+| Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | 🧪 Scaffolded, run pending                    |
+| Twilight                  | Rust     | See `compat/README.md`                                   | See `compat/README.md`                        |
+| DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                    |
+| Concord, Sleepy Discord   | C/C++    | See `compat/README.md`                                   | See `compat/README.md`                        |
+
+Legend: ✅ verified and working · 🧪 verifier code written, awaiting a Docker run ·
+⛔ confirmed technical blocker (cannot point the library at Fauxcord at all).
+
+### How verification runs
+
+All library verification is Dockerized under `compat/` — no language runtime needs
+to be installed on the host. The `.github/workflows/library-compat.yml` CI
+workflow runs every scaffolded verifier as an independent, informational matrix
+job (one library's failure does not block the others); it triggers on a weekly
+schedule, `workflow_dispatch`, and on pull requests that touch `compat/**` or
+`src/**`. See [`compat/README.md`](../compat/README.md) for how to run a single
+verifier locally and how to update the coverage matrix after a run.
+
+---
+
 ## Token formats
 
 | Library         | At setup           | At login                                |
