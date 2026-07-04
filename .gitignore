@@ -12,3 +12,5 @@ coverage/
 spec/openapi.upstream.json
 # library-compat harness run outputs (keep dir, ignore generated results)
 compat/results/*.json
+__pycache__/
+*.pyc
