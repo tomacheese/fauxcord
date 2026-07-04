@@ -167,6 +167,16 @@ un-run in this environment is recorded in "Known run limitations" below.
   signatures were confirmed against the `0.14.0` source. `n-a` rows: new-format
   pins, single thread-member GET, thread search, gateway bootstrap, OAuth2, and
   shared-resource deletes — see `jvm-kord/src/main/kotlin/Verify.kt`.
+- `rust-twilight`: base URL is overridable via twilight-http's documented
+  `ClientBuilder::proxy(host, use_http)` (bare `host:port`, no scheme/path —
+  twilight appends `/api/vN` itself) and the verifier runs for real. Method
+  names/await-style (0.16 uses `IntoFuture`, no `.exec()`) were read from the
+  `twilight-http-0.16.0` tag source rather than guessed; like `rust-serenity`,
+  it was authored without a `cargo build` in the loop (see the CONFIDENCE
+  CAVEAT block at the top of `rust-twilight/src/main.rs`). `n-a` rows:
+  new-format pins, thread search, OAuth2 grant flow, and shared-resource
+  deletes (twilight *does* wrap `GET /oauth2/@me` and `delete_guild`, unlike
+  serenity — the former is exercised, the latter skipped as destructive).
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
