@@ -157,6 +157,16 @@ un-run in this environment is recorded in "Known run limitations" below.
   threads (absent in 3.2.6's `ChannelService`), the new-format pins API,
   OAuth2 code-grant, and shared-resource deletes — see
   `jvm-discord4j/src/main/java/Verify.java`.
+- `jvm-kord`: Kord's `kord-rest` module is a standalone gateway-free REST
+  client, so it is runnable; its base URL (`Route.baseUrl`, a hardcoded
+  getter) is redirected by passing a custom Ktor `HttpClient` to
+  `KtorRequestHandler`'s primary constructor and installing a
+  `HttpRequestPipeline.Before` interceptor that rewrites only
+  protocol/host/port (the `/api/v10` path is already baked in by
+  `takeFrom(request.baseUrl)`, so it is left untouched). All service method
+  signatures were confirmed against the `0.14.0` source. `n-a` rows: new-format
+  pins, single thread-member GET, thread search, gateway bootstrap, OAuth2, and
+  shared-resource deletes — see `jvm-kord/src/main/kotlin/Verify.kt`.
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
