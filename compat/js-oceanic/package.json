@@ -1,0 +1,8 @@
+{
+  "name": "compat-oceanic",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "oceanic.js": "^1.11.0"
+  }
+}

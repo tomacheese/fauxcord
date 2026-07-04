@@ -1,0 +1,346 @@
+[
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/invites"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/invites"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me"
+  },
+  {
+    "method": "PUT",
+    "path": "/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/messages/{message_id}/reactions"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/messages/{message_id}/threads"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/messages/{message_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/messages/{message_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/channels/{channel_id}/messages/{message_id}"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/messages/bulk-delete"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/messages/pins/{message_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/channels/{channel_id}/messages/pins/{message_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/messages/pins"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/messages"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/messages"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/permissions/{overwrite_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/channels/{channel_id}/permissions/{overwrite_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/pins/{message_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/channels/{channel_id}/pins/{message_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/pins"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/thread-members/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/thread-members/{user_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/channels/{channel_id}/thread-members/{user_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/thread-members/@me"
+  },
+  {
+    "method": "PUT",
+    "path": "/channels/{channel_id}/thread-members/@me"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/thread-members"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/threads/archived/private"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/threads/archived/public"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/threads/search"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/threads"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/typing"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/users/@me/threads/archived/private"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}/webhooks"
+  },
+  {
+    "method": "POST",
+    "path": "/channels/{channel_id}/webhooks"
+  },
+  {
+    "method": "DELETE",
+    "path": "/channels/{channel_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/channels/{channel_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/channels/{channel_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/gateway/bot"
+  },
+  {
+    "method": "GET",
+    "path": "/gateway"
+  },
+  {
+    "method": "DELETE",
+    "path": "/guilds/{guild_id}/bans/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/bans/{user_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/guilds/{guild_id}/bans/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/bans"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/channels"
+  },
+  {
+    "method": "POST",
+    "path": "/guilds/{guild_id}/channels"
+  },
+  {
+    "method": "DELETE",
+    "path": "/guilds/{guild_id}/emojis/{emoji_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/emojis/{emoji_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/guilds/{guild_id}/emojis/{emoji_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/emojis"
+  },
+  {
+    "method": "POST",
+    "path": "/guilds/{guild_id}/emojis"
+  },
+  {
+    "method": "DELETE",
+    "path": "/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
+  },
+  {
+    "method": "PUT",
+    "path": "/guilds/{guild_id}/members/{user_id}/roles/{role_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/guilds/{guild_id}/members/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/members/{user_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/guilds/{guild_id}/members/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/members"
+  },
+  {
+    "method": "DELETE",
+    "path": "/guilds/{guild_id}/roles/{role_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/guilds/{guild_id}/roles/{role_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/roles"
+  },
+  {
+    "method": "POST",
+    "path": "/guilds/{guild_id}/roles"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}/webhooks"
+  },
+  {
+    "method": "DELETE",
+    "path": "/guilds/{guild_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/guilds/{guild_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/guilds/{guild_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/invites/{code}"
+  },
+  {
+    "method": "GET",
+    "path": "/invites/{code}"
+  },
+  {
+    "method": "GET",
+    "path": "/oauth2/@me"
+  },
+  {
+    "method": "GET",
+    "path": "/oauth2/applications/@me"
+  },
+  {
+    "method": "POST",
+    "path": "/oauth2/token/revoke"
+  },
+  {
+    "method": "POST",
+    "path": "/oauth2/token"
+  },
+  {
+    "method": "GET",
+    "path": "/users/{user_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/users/@me/guilds"
+  },
+  {
+    "method": "GET",
+    "path": "/users/@me"
+  },
+  {
+    "method": "PATCH",
+    "path": "/users/@me"
+  },
+  {
+    "method": "DELETE",
+    "path": "/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/webhooks/{webhook_id}/{webhook_token}"
+  },
+  {
+    "method": "GET",
+    "path": "/webhooks/{webhook_id}/{webhook_token}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/webhooks/{webhook_id}/{webhook_token}"
+  },
+  {
+    "method": "POST",
+    "path": "/webhooks/{webhook_id}/{webhook_token}"
+  },
+  {
+    "method": "DELETE",
+    "path": "/webhooks/{webhook_id}"
+  },
+  {
+    "method": "GET",
+    "path": "/webhooks/{webhook_id}"
+  },
+  {
+    "method": "PATCH",
+    "path": "/webhooks/{webhook_id}"
+  }
+]

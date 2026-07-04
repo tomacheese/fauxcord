@@ -1,0 +1,62 @@
+name: fauxcord-compat
+
+services:
+  fauxcord:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      DISABLE_AUTH: "false"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/_mock/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  # --- Mechanism A: JS/TS verifiers (light images, run in default CI) ---
+
+  verify-discordjs:
+    build:
+      context: .
+      dockerfile: ./js-discordjs/Dockerfile
+    depends_on:
+      fauxcord:
+        condition: service_healthy
+    environment:
+      FAUXCORD_BASE: "http://fauxcord:3000/api/v10"
+    volumes:
+      - ./results:/results
+
+  verify-eris:
+    build:
+      context: .
+      dockerfile: ./js-eris/Dockerfile
+    depends_on:
+      fauxcord:
+        condition: service_healthy
+    environment:
+      FAUXCORD_BASE: "http://fauxcord:3000/api/v10"
+    volumes:
+      - ./results:/results
+
+  verify-oceanic:
+    build:
+      context: .
+      dockerfile: ./js-oceanic/Dockerfile
+    depends_on:
+      fauxcord:
+        condition: service_healthy
+    environment:
+      FAUXCORD_BASE: "http://fauxcord:3000/api/v10"
+    volumes:
+      - ./results:/results
+
+# Verifier services for the remaining languages (Python / Go / .NET / JVM / Rust /
+# C / C++) are added incrementally per the plan. Each follows the same shape:
+#
+#   verify-<lib>:
+#     build: { context: ., dockerfile: ./<lang>-<lib>/Dockerfile }
+#     depends_on: { fauxcord: { condition: service_healthy } }
+#     environment: { FAUXCORD_BASE: "http://fauxcord:3000/api/v10" }
+#     volumes: [ "./results:/results" ]
