@@ -452,19 +452,18 @@ export const MANIFEST: SpecEndpoint[] = [
   // ─── Guilds ─────────────────────────────────────────────────────────────────
 
   {
-    // GuildWithCountsResponse → GuildResponse requires ~40 required fields.
-    // Drift detection only; contract test skipped.
     specPath: '/guilds/{guild_id}',
     method: 'get',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}` }),
   },
   {
     specPath: '/guilds/{guild_id}',
     method: 'patch',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
+    responseSchemaOverride: 'GuildResponse',
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}`,
       init: {

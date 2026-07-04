@@ -28,19 +28,43 @@ export interface GuildObject {
   id: string
   name: string
   icon: string | null
+  description: string | null
+  home_header: string | null
+  splash: string | null
+  discovery_splash: string | null
+  banner: string | null
   owner_id: string
+  application_id: string | null
+  region: string
+  afk_channel_id: string | null
   afk_timeout: number
-  verification_level: number
-  default_message_notifications: number
-  explicit_content_filter: number
-  roles: RoleObject[]
-  emojis: never[]
-  features: never[]
-  mfa_level: number
   system_channel_id: null
+  system_channel_flags: number
+  widget_enabled: boolean
+  widget_channel_id: string | null
+  verification_level: number
+  roles: RoleObject[]
+  default_message_notifications: number
+  mfa_level: number
+  explicit_content_filter: number
+  max_presences: number | null
+  max_members: number
+  max_stage_video_channel_users: number
+  max_video_channel_users: number
+  vanity_url_code: string | null
   premium_tier: number
   premium_subscription_count: number
   preferred_locale: string
+  rules_channel_id: string | null
+  safety_alerts_channel_id: string | null
+  public_updates_channel_id: string | null
+  premium_progress_bar_enabled: boolean
+  nsfw: boolean
+  nsfw_level: number
+  emojis: never[]
+  features: never[]
+  stickers: never[]
+  incidents_data: null
   channels?: unknown[]
   approximate_member_count?: number
 }
@@ -56,19 +80,43 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
     id: row.id,
     name: row.name,
     icon: row.icon,
+    description: null,
+    home_header: null,
+    splash: null,
+    discovery_splash: null,
+    banner: null,
     owner_id: row.owner_id,
+    application_id: null,
+    region: 'deprecated',
+    afk_channel_id: null,
     afk_timeout: 300,
-    verification_level: row.verification_level,
-    default_message_notifications: row.default_message_notifications,
-    explicit_content_filter: row.explicit_content_filter,
-    roles,
-    emojis: [],
-    features: [],
-    mfa_level: 0,
     system_channel_id: null,
+    system_channel_flags: 0,
+    widget_enabled: false,
+    widget_channel_id: null,
+    verification_level: row.verification_level,
+    roles,
+    default_message_notifications: row.default_message_notifications,
+    mfa_level: 0,
+    explicit_content_filter: row.explicit_content_filter,
+    max_presences: null,
+    max_members: 500000,
+    max_stage_video_channel_users: 50,
+    max_video_channel_users: 25,
+    vanity_url_code: null,
     premium_tier: row.premium_tier,
     premium_subscription_count: 0,
     preferred_locale: row.preferred_locale,
+    rules_channel_id: null,
+    safety_alerts_channel_id: null,
+    public_updates_channel_id: null,
+    premium_progress_bar_enabled: false,
+    nsfw: false,
+    nsfw_level: 0,
+    emojis: [],
+    features: [],
+    stickers: [],
+    incidents_data: null,
   }
 }
 
