@@ -258,6 +258,8 @@ beforeAll(() => {
   const memberId = seedMember(db, guildId)
   const emojiId = seedEmoji(db, guildId, BOT_USER_ID)
   const inviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)
+  // A separate invite consumed only by the destructive DELETE contract test.
+  const deletableInviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)
   const bannedUserId = seedBan(db, guildId, undefined, 'Contract test ban')
 
   // Seed an archived public thread (type 11) with the bot as a member so the
@@ -286,6 +288,7 @@ beforeAll(() => {
     memberId,
     emojiId,
     inviteCode,
+    deletableInviteCode,
     bannedUserId,
     threadId,
   }

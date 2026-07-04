@@ -81,6 +81,12 @@ export interface ContractFixture {
   emojiId: string
   /** Seeded invite code */
   inviteCode: string
+  /**
+   * A second, disposable invite code used exclusively by the destructive
+   * DELETE /invites/{code} contract test so it does not consume the
+   * inviteCode fixture that GET /invites/{code} relies on.
+   */
+  deletableInviteCode: string
   /** Seeded banned user ID (a user with a ban record in the guild) */
   bannedUserId: string
   /** Seeded thread (channel type 11) ID, archived, with the bot as a member */
@@ -436,16 +442,16 @@ export const MANIFEST: SpecEndpoint[] = [
     request: (f) => ({ path: `/api/v10/invites/${f.inviteCode}` }),
   },
   {
-    // DELETE returns the deleted invite (200), but is excluded from contract
-    // tests because it is destructive: deleting the fixture invite would break
-    // the GET /invites/{code} contract test in the same run.
+    // DELETE returns the deleted invite (200). It uses a dedicated disposable
+    // invite fixture so deleting it does not break the GET /invites/{code}
+    // contract test that runs against the shared inviteCode fixture.
     specPath: '/invites/{code}',
     method: 'delete',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildInviteResponse',
     request: (f) => ({
-      path: `/api/v10/invites/${f.inviteCode}`,
+      path: `/api/v10/invites/${f.deletableInviteCode}`,
       init: { method: 'DELETE' },
     }),
   },
