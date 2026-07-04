@@ -197,4 +197,27 @@ describe('Guild Roles API', () => {
       expect(res.status).toBe(400)
     })
   })
+
+  describe('guild-existence checks', () => {
+    const UNKNOWN_GUILD = '999999999999999999'
+
+    it('GET roles returns 404 Unknown Guild for a nonexistent guild', async () => {
+      const res = await app.request(`/guilds/${UNKNOWN_GUILD}/roles`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_004)
+    })
+
+    it('DELETE role returns 404 Unknown Guild for a nonexistent guild', async () => {
+      const res = await app.request(
+        `/guilds/${UNKNOWN_GUILD}/roles/888888888888888888`,
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_004)
+    })
+  })
 })
