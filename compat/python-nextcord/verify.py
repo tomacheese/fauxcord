@@ -28,18 +28,15 @@ assessments based on nextcord being a close, REST-plumbing-preserving fork:
   is assumed to take the bot token *without* the `"Bot "` prefix, matching
   discord.py's convention (this is basic auth plumbing, not a fork-specific
   feature).
-* Pins (confidence: medium -- flagged for review): discord.py 2.7.1 (see
-  compat/python-discordpy/verify.py) migrated `Message.pin()`/`unpin()`/
-  `TextChannel.pins()` to the *new*-format `/channels/{id}/messages/pins*`
-  API. Whether nextcord 2.6.0 made the same migration was not directly
-  confirmed against nextcord's source in this session. We assume it did (by
-  analogy: this is a Discord-mandated API migration all actively maintained
-  libraries need to track, not a nextcord-specific design choice), and
-  therefore exercise the new-format endpoints for real while recording the
-  legacy `/channels/{id}/pins*` endpoints as `n-a`. If nextcord 2.6.0 in fact
-  still targets the legacy API, this assumption is wrong and the pass/n-a
-  assignment for these four rows should be swapped -- flagged here rather
-  than silently guessed past.
+* Pins (confidence: high -- confirmed against a real run): nextcord 2.6.0
+  did make the same *new*-format `/channels/{id}/messages/pins*` migration
+  discord.py 2.7.1 made (see compat/python-discordpy/verify.py), confirming
+  the analogy this verifier originally assumed. The one surprise: unlike
+  discord.py's async-iterator `pins()`, nextcord's `PinsMixin.pins()` is a
+  plain coroutine with no pagination parameters (`pins(limit=5)` raises
+  `TypeError`) that returns the full list in one call -- see
+  `get_new_format_pins()` below. The legacy `/channels/{id}/pins*` endpoints
+  are still recorded `n-a` since nextcord has moved off them.
 * Reaction removal for an explicit (non-self) `{user_id}`: assumed to share
   discord.py's `Message.remove_reaction(emoji, member)` internal branching
   (routes to `/@me` whenever `member.id` matches the bot's own id), inherited
@@ -190,6 +187,12 @@ async def main() -> None:
     await do_setup()
 
     intents = nextcord.Intents.default()
+    # Guild.fetch_members() (the only public wrapper for GET
+    # /guilds/{guild_id}/members) refuses to run at all unless the privileged
+    # members intent is enabled client-side, regardless of whether a real
+    # gateway connection is ever opened; this verifier never connects to a
+    # gateway, so it's safe to enable purely to unblock the HTTP call.
+    intents.members = True
     client = nextcord.Client(intents=intents)
     await client.login(TOKEN)
 
@@ -222,9 +225,20 @@ async def main() -> None:
             boot_thread = await channel.create_thread(
                 name="compat-thread-boot", message=thread_src_msg
             )
-            await boot_thread.join()
         except Exception:
             boot_thread = None
+        if boot_thread is not None:
+            try:
+                # Separate try/except from thread creation above: a bot that
+                # creates a thread is normally already a member of it, so
+                # join() failing here (e.g. "already a member") must not
+                # discard a successfully-created boot_thread — that previously
+                # caused every thread-members-dependent row below to fail an
+                # `assert boot_thread is not None` with an empty message,
+                # masking the real signal for those rows.
+                await boot_thread.join()
+            except Exception:
+                pass
 
         try:
             role = await guild.create_role(name="compat-role")
@@ -268,22 +282,34 @@ async def main() -> None:
         except Exception:
             pass  # reaction endpoints may still exercise the wire format
 
+        # Ban a synthetic, never-a-member user id rather than the bot's own
+        # `member`. Fauxcord's ban implementation (correctly, matching real
+        # Discord) removes the banned user from `guild_members`, so banning
+        # the bot itself here previously kicked it out of the test guild for
+        # the rest of the run, turning every later member/role endpoint
+        # (fetch_member, edit nick, add/remove roles) into a false "Unknown
+        # Member" 404 with no real signal about Fauxcord's behavior.
+        BAN_TARGET = nextcord.Object(id=700000000000000001)
         try:
-            await guild.ban(member)
+            # Pre-create the ban so "GET /guilds/{guild_id}/bans/{user_id}"
+            # has something to find regardless of where it lands relative to
+            # the scored PUT row in endpoint-execution order (the scored PUT
+            # row re-bans the same target and is itself idempotent).
+            await guild.ban(BAN_TARGET)
         except Exception:
-            pass  # bootstrap best-effort; some rows depend on the ban existing
+            pass  # bootstrap best-effort; the scored PUT row retries this
 
         # --- endpoint -> call table --------------------------------------
         # `fn` is a zero-arg callable returning an awaitable; `None` means
         # n-a (a note is then required as the second tuple element).
 
         async def get_new_format_pins() -> None:
-            # Assumed (medium confidence, see module docstring) that
-            # TextChannel.pins() is a lazy async iterator like discord.py's,
-            # hitting the new-format pins endpoint; it must be consumed to
-            # trigger the HTTP request.
-            async for _ in channel.pins(limit=5):
-                pass
+            # Confirmed (was "medium confidence" in the module docstring):
+            # unlike discord.py 2.7's async-iterator pins(), nextcord 2.6.0's
+            # PinsMixin.pins() is a plain coroutine with no pagination
+            # parameters (`pins(limit=5)` raises TypeError) that returns the
+            # full list in one call.
+            await channel.pins()
 
         async def clear_all_reactions() -> None:
             fresh = await channel.fetch_message(MSG)
@@ -534,14 +560,17 @@ async def main() -> None:
                 "public wrapper, and this verifier never opens a gateway connection",
             ),
             "DELETE /guilds/{guild_id}/bans/{user_id}": (
-                lambda: guild.unban(member),
+                lambda: guild.unban(BAN_TARGET),
                 None,
             ),
             "GET /guilds/{guild_id}/bans/{user_id}": (
-                lambda: guild.fetch_ban(member),
+                lambda: guild.fetch_ban(BAN_TARGET),
                 None,
             ),
-            "PUT /guilds/{guild_id}/bans/{user_id}": (lambda: guild.ban(member), None),
+            "PUT /guilds/{guild_id}/bans/{user_id}": (
+                lambda: guild.ban(BAN_TARGET),
+                None,
+            ),
             "GET /guilds/{guild_id}/bans": (fetch_bans, None),
             "GET /guilds/{guild_id}/channels": (guild.fetch_channels, None),
             "POST /guilds/{guild_id}/channels": (
