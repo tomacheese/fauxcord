@@ -26,14 +26,15 @@ import {
   parseLimitQuery,
   parseJsonBody,
 } from '../lib/route-helpers'
+import type { AppEnv } from '../middleware/auth'
 
 /**
  * Creates the guild members API routes.
  * @param db - Database
  * @returns Hono router instance
  */
-export function createGuildMemberRoutes(db: Database): Hono {
-  const app = new Hono()
+export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
+  const app = new Hono<AppEnv>()
 
   // GET /guilds/:guildId/members — List a guild's members
   app.get('/guilds/:guildId/members', (c) => {
@@ -43,6 +44,35 @@ export function createGuildMemberRoutes(db: Database): Hono {
 
     const members = getGuildMembers(db, guildId, limit, after)
     return c.json(members)
+  })
+
+  // PATCH /guilds/:guildId/members/@me — Update the bot's own guild member
+  // (nickname only; avatar/bio/banner from the real spec are not modeled).
+  // Must be defined before the parameterized /:userId route below, and before
+  // any auth-context-independent handler, since Hono uses first-match-wins
+  // and "@me" would otherwise be captured by the :userId param.
+  app.patch('/guilds/:guildId/members/@me', async (c) => {
+    const { guildId } = c.req.param()
+    const bot = c.get('bot')
+    if (!bot) {
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    }
+
+    const payload = (await parseJsonBody(c)) as GuildMemberUpdatePayload
+    const errors = validateGuildMemberUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
+
+    const updated = updateGuildMember(db, guildId, bot.user_id, payload)
+    const result = requireEntity(
+      c,
+      updated,
+      DiscordErrorCode.UNKNOWN_MEMBER,
+      'Unknown Member'
+    )
+    if (result instanceof Response) return result
+    return c.json(result)
   })
 
   // GET /guilds/:guildId/members/:userId — Retrieve a specific guild member

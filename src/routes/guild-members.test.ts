@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createGuildMemberRoutes } from './guild-members'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild } from '../test-helpers'
+import { seedBot, seedGuild, createFullTestApp } from '../test-helpers'
 import type { Database } from '../db'
 
 describe('Guild Members API', () => {
@@ -391,5 +391,71 @@ describe('Guild Members API', () => {
         .get(guildId, userId) as { count: number }
       expect(remaining.count).toBe(0)
     })
+  })
+})
+
+describe('PATCH /guilds/:guildId/members/@me', () => {
+  // Real Discord API (see spec/openapi.json's
+  // "/guilds/{guild_id}/members/@me") exposes a separate endpoint for a bot
+  // to update its own guild member (nickname etc). Discord.Net's
+  // RestGuildUser.ModifyAsync routes to this endpoint when the target is the
+  // client's own user — confirmed via a real 404 "Unknown Member" in the
+  // compat/dotnet-discordnet verifier, since Fauxcord previously had no route
+  // for the literal "@me" path segment here (only /members/:userId, which
+  // does not special-case "@me").
+  let db: Database
+  let app: ReturnType<typeof createFullTestApp>['app']
+  let cleanup: () => void
+  const token = 'Bot selftoken'
+  const botUserId = '111111111111111111'
+  let guildId: string
+
+  beforeEach(() => {
+    const ctx = createFullTestApp()
+    db = ctx.db
+    app = ctx.app
+    cleanup = ctx.cleanup
+    seedBot(db, token, botUserId)
+    guildId = seedGuild(db, token)
+    db.prepare(
+      'INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+    ).run(guildId, botUserId)
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it("updates the bot's own nickname via the @me alias", async () => {
+    const res = await app.request(`/api/v10/guilds/${guildId}/members/@me`, {
+      method: 'PATCH',
+      headers: { Authorization: token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nick: 'compat' }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.nick).toBe('compat')
+
+    const row = db
+      .prepare(
+        'SELECT nick FROM guild_members WHERE guild_id = ? AND user_id = ?'
+      )
+      .get(guildId, botUserId) as { nick: string | null }
+    expect(row.nick).toBe('compat')
+  })
+
+  it('returns 404 (10007) when the bot is not a member of the guild', async () => {
+    db.prepare(
+      'DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?'
+    ).run(guildId, botUserId)
+
+    const res = await app.request(`/api/v10/guilds/${guildId}/members/@me`, {
+      method: 'PATCH',
+      headers: { Authorization: token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nick: 'compat' }),
+    })
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.code).toBe(10_007)
   })
 })

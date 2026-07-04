@@ -255,6 +255,13 @@ beforeAll(() => {
   const webhookMessageId = seedMessage(db, channelId, webhookId, 'webhook')
 
   const roleId = seedRole(db, guildId)
+  // Real Discord always has the bot itself as a member of any guild it is
+  // in (see setupTestEnvironment's equivalent insert); needed for the
+  // PATCH /guilds/{guild_id}/members/@me contract test below.
+  db.prepare(
+    'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+  ).run(guildId, BOT_USER_ID)
+
   const memberId = seedMember(db, guildId)
   const emojiId = seedEmoji(db, guildId, BOT_USER_ID)
   const inviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)

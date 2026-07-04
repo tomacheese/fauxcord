@@ -515,6 +515,20 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
+    specPath: '/guilds/{guild_id}/members/@me',
+    method: 'patch',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/@me`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: 'SelfNick' }),
+      },
+    }),
+  },
+  {
     specPath: '/guilds/{guild_id}/members/{user_id}',
     method: 'patch',
     contractTested: true,
