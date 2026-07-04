@@ -17,6 +17,7 @@ import { createUserRoutes } from './routes/users'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
+import { createOAuth2Routes } from './routes/oauth2'
 import type { Database } from './db'
 
 const BASE_URL = 'http://localhost:3000'
@@ -48,6 +49,7 @@ function buildTestServer(db: Database): Hono {
     app.route(prefix, createChannelRoutes(db, BASE_URL))
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
+    app.route(prefix, createOAuth2Routes(db))
   }
 
   app.onError((err, c) => {
@@ -132,6 +134,42 @@ describe('Integration tests', () => {
       expect(res.status).toBe(400)
       const body = (await res.json()) as Record<string, unknown>
       expect(body.code).toBe(50_041)
+    })
+
+    // OAuth2 routes were previously only mounted at the bare `/` prefix in
+    // src/index.ts (unlike every other route group), so `/api/v10/oauth2/*`
+    // and `/api/oauth2/*` returned 404 for real clients that always call
+    // through the versioned base URL. Discovered via a real discordjs/
+    // oceanic.js compatibility run (compat/) that hit `/api/v10/oauth2/*`
+    // directly.
+    it('OAuth2 routes work with the /api/v10/ prefix', async () => {
+      // Real REST clients (e.g. discord.js/Oceanic.js) send a single global
+      // Authorization header on every request, including OAuth2 calls, so
+      // this reproduces what a real client sends rather than isolating the
+      // route-mounting bug from auth behavior.
+      const res = await app.request('/api/v10/oauth2/token', {
+        method: 'POST',
+        headers: {
+          Authorization: TEST_TOKEN,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ grant_type: 'client_credentials' }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.access_token).toBeTruthy()
+    })
+
+    it('OAuth2 routes work with the /api/ prefix', async () => {
+      const res = await app.request('/api/oauth2/token', {
+        method: 'POST',
+        headers: {
+          Authorization: TEST_TOKEN,
+          'content-type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({ grant_type: 'client_credentials' }),
+      })
+      expect(res.status).toBe(200)
     })
   })
 
