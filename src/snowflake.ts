@@ -29,7 +29,9 @@ export function generateSnowflake(): string {
     // If the counter overflows within the same millisecond, wait until the next millisecond
     if (increment === 0n) {
       while (BigInt(Date.now()) - DISCORD_EPOCH <= lastTimestamp) {
-        // Spin wait (within a few microseconds in practice)
+        // Busy-wait until the clock advances to the next millisecond.
+        // This only triggers after 4096 IDs in one millisecond and blocks
+        // for up to ~1ms in the worst case.
       }
       timestamp = BigInt(Date.now()) - DISCORD_EPOCH
     }
