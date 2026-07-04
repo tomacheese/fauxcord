@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createWebhookRoutes } from './webhooks.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createWebhookRoutes } from './webhooks'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import type { Database } from '../db'
 
 const BASE_URL = 'http://localhost:3000'
 const WEBHOOK_ID = '666666666666666666'

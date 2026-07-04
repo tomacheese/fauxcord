@@ -4,7 +4,7 @@
  * Provides CRUD operations for guild roles.
  */
 
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 // Used for compile-time type drift detection.
 import type { APIRole } from 'discord-api-types/v10'
 

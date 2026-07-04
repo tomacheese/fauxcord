@@ -7,7 +7,7 @@
 import { mkdir, writeFile, readFile, access } from 'node:fs/promises'
 import path from 'node:path'
 import { constants } from 'node:fs'
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 
 /** Maximum attachment size (25MB) */
 export const MAX_FILE_SIZE = 25 * 1024 * 1024

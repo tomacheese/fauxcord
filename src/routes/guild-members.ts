@@ -5,10 +5,10 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { getGuild } from '../services/guilds.js'
-import { getRole } from '../services/guild-roles.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { getGuild } from '../services/guilds'
+import { getRole } from '../services/guild-roles'
 import {
   getGuildMember,
   getGuildMembers,
@@ -16,9 +16,9 @@ import {
   removeGuildMember,
   addMemberRole,
   removeMemberRole,
-} from '../services/guild-members.js'
-import { validateGuildMemberUpdate } from '../validators/guild.js'
-import { requireEntity, parseLimitQuery } from '../lib/route-helpers.js'
+} from '../services/guild-members'
+import { validateGuildMemberUpdate } from '../validators/guild'
+import { requireEntity, parseLimitQuery } from '../lib/route-helpers'
 
 /**
  * Creates the guild members API routes.

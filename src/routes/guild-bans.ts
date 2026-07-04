@@ -5,20 +5,17 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { getGuild } from '../services/guilds.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { getGuild } from '../services/guilds'
 import {
   getGuildBan,
   getGuildBans,
   createGuildBan,
   removeGuildBan,
-} from '../services/guild-bans.js'
-import {
-  validateBanCreate,
-  type BanCreatePayload,
-} from '../validators/guild.js'
-import { requireEntity, parseLimitQuery } from '../lib/route-helpers.js'
+} from '../services/guild-bans'
+import { validateBanCreate, type BanCreatePayload } from '../validators/guild'
+import { requireEntity, parseLimitQuery } from '../lib/route-helpers'
 
 /**
  * Creates the guild bans API routes.

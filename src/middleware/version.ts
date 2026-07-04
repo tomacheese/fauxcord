@@ -8,7 +8,7 @@
  */
 
 import type { Context, Next } from 'hono'
-import { discordError, DiscordErrorCode } from '../errors.js'
+import { discordError, DiscordErrorCode } from '../errors'
 
 /** Pattern for unsupported API versions (blocks any version other than v10) */
 const UNSUPPORTED_VERSION_PATTERN = /^\/api\/v(?!10\/)([0-9]+)\//

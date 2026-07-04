@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createChannelPermissionRoutes } from './channel-permissions.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
-import { getChannel } from '../services/channels.js'
-import type { Database } from '../db.js'
+import { createChannelPermissionRoutes } from './channel-permissions'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import { getChannel } from '../services/channels'
+import type { Database } from '../db'
 
 describe('Channel Permissions API', () => {
   let db: Database

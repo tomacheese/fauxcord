@@ -5,8 +5,8 @@
  * reused by the message-list, single-message, and pin-list queries.
  */
 
-import type { Database } from '../db.js'
-import { snowflakeToTimestamp } from '../snowflake.js'
+import type { Database } from '../db'
+import { snowflakeToTimestamp } from '../snowflake'
 // Used for compile-time type drift detection.
 // When Renovate bumps discord-api-types, `pnpm lint:tsc` will fail if the
 // safe-field subset of MessageResponse is renamed or retyped upstream.

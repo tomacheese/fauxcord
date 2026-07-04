@@ -5,23 +5,20 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import type { AppEnv } from '../middleware/auth.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { generateSnowflake } from '../snowflake.js'
-import { getGuild } from '../services/guilds.js'
+import type { Database } from '../db'
+import type { AppEnv } from '../middleware/auth'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { generateSnowflake } from '../snowflake'
+import { getGuild } from '../services/guilds'
 import {
   getGuildEmojis,
   getEmoji,
   createEmoji,
   updateEmoji,
   deleteEmoji,
-} from '../services/guild-emojis.js'
-import {
-  validateEmojiCreate,
-  validateEmojiUpdate,
-} from '../validators/guild.js'
-import { requireEntity } from '../lib/route-helpers.js'
+} from '../services/guild-emojis'
+import { validateEmojiCreate, validateEmojiUpdate } from '../validators/guild'
+import { requireEntity } from '../lib/route-helpers'
 
 /** Minimal bot record shape needed to resolve the emoji creator. */
 interface BotRow {

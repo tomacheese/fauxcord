@@ -219,6 +219,9 @@ importers:
       hono:
         specifier: 4.12.27
         version: 4.12.27
+      tsx:
+        specifier: 4.22.4
+        version: 4.22.4
     devDependencies:
       '@book000/eslint-config':
         specifier: 1.14.53
@@ -247,9 +250,6 @@ importers:
       prettier:
         specifier: 3.8.3
         version: 3.8.3
-      tsx:
-        specifier: 4.22.4
-        version: 4.22.4
       typescript:
         specifier: 6.0.3
         version: 6.0.3

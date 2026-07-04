@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 thread limits.
  */
 
-import { maxLengthError, typeError, type ValidationErrors } from './common.js'
+import { maxLengthError, typeError, type ValidationErrors } from './common'
 
 /** Thread limit values */
 export const THREAD_LIMITS = {

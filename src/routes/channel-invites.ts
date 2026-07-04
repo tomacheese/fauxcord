@@ -5,16 +5,16 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError, validationError } from '../errors.js'
-import { getChannel } from '../services/channels.js'
-import { getChannelInvites, createInvite } from '../services/invites.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import { getChannel } from '../services/channels'
+import { getChannelInvites, createInvite } from '../services/invites'
 import {
   validateInviteCreate,
   type InviteCreatePayload,
-} from '../validators/channel.js'
-import type { AppEnv, BotRecord } from '../middleware/auth.js'
-import { requireEntity } from '../lib/route-helpers.js'
+} from '../validators/channel'
+import type { AppEnv, BotRecord } from '../middleware/auth'
+import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the channel invites API routes.

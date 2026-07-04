@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 message limits.
  */
 
-import { maxLengthError, type ValidationErrors } from './common.js'
+import { maxLengthError, type ValidationErrors } from './common'
 
 /** Message creation request type */
 export interface MessageCreatePayload {

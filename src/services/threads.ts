@@ -5,9 +5,9 @@
  * additional thread-specific columns, plus a `thread_members` join table.
  */
 
-import type { Database } from '../db.js'
-import { generateSnowflake } from '../snowflake.js'
-import { THREAD_AUTO_ARCHIVE_DURATIONS } from '../validators/thread.js'
+import type { Database } from '../db'
+import { generateSnowflake } from '../snowflake'
+import { THREAD_AUTO_ARCHIVE_DURATIONS } from '../validators/thread'
 
 /** Default thread type when the request omits `type` (Public Thread). */
 const DEFAULT_THREAD_TYPE = 11

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createFullTestApp, seedBot } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createFullTestApp, seedBot } from '../test-helpers'
+import type { Database } from '../db'
 
 describe('PATCH /users/@me', () => {
   let db: Database

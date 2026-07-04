@@ -5,7 +5,7 @@ Run integration tests for Discord bots and apps without connecting to the real s
 
 ## Tech Stack
 
-- **Runtime**: Node.js 24 + TypeScript (ES2024, NodeNext)
+- **Runtime**: Node.js 24 + TypeScript (ES2024, bundler resolution)
 - **Framework**: Hono (`@hono/node-server`)
 - **DB**: SQLite via `better-sqlite3` (WAL mode, foreign keys enabled)
 - **Type definitions**: `discord-api-types` v10 (types only, no runtime usage)
@@ -21,8 +21,7 @@ pnpm test             # Run tests (113 tests)
 pnpm test:watch       # テスト watch モード
 pnpm lint             # tsc + eslint + prettier (required before committing)
 pnpm fix              # eslint --fix + prettier --write
-pnpm build            # tsc -p tsconfig.build.json (excludes test files)
-pnpm start            # node dist/index.js (production)
+pnpm start            # tsx src/index.ts (production)
 pnpm spec:fetch       # Download the latest upstream spec to spec/openapi.upstream.json
 pnpm spec:diff        # Diff spec/openapi.json vs spec/openapi.upstream.json (exit 1 = diff)
 pnpm spec:update      # Update the committed spec snapshot (spec/openapi.json) to upstream

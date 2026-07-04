@@ -6,7 +6,7 @@
  */
 
 import type { Context } from 'hono'
-import { discordError } from '../errors.js'
+import { discordError } from '../errors'
 
 /**
  * Looks up an entity and returns a 404 Discord-error Response if not found.

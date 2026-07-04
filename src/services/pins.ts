@@ -4,12 +4,12 @@
  * Provides pin/unpin/list operations for channel message pins.
  */
 
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 import {
   hydrateMessageRow,
   type MessageRow,
   type MessageObject,
-} from './messages.js'
+} from './messages'
 
 /**
  * Retrieves the list of pinned messages.

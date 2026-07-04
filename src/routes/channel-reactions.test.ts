@@ -1,15 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createChannelReactionRoutes } from './channel-reactions.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import {
-  seedBot,
-  seedGuild,
-  seedChannel,
-  seedMessage,
-} from '../test-helpers.js'
-import type { Database } from '../db.js'
-import type { AppEnv } from '../middleware/auth.js'
+import { createChannelReactionRoutes } from './channel-reactions'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
+import type { Database } from '../db'
+import type { AppEnv } from '../middleware/auth'
 
 const BASE_URL = 'http://localhost:3000'
 

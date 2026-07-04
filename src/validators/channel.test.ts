@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validatePermissionOverwrite,
   normalizePermissionOverwrite,
-} from './channel.js'
+} from './channel'
 
 describe('validatePermissionOverwrite', () => {
   it('accepts type 0/1 with numeric-string allow/deny', () => {

@@ -5,14 +5,14 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 import {
   createAuthCode,
   exchangeAuthCode,
   createClientCredentialsToken,
   revokeToken,
   getOAuth2Me,
-} from '../services/oauth2.js'
+} from '../services/oauth2'
 
 /**
  * Creates the OAuth2 API routes.

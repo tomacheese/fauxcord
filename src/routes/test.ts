@@ -5,14 +5,14 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 import {
   setupTestEnvironment,
   deleteTestSetup,
   resetTestData,
   getTestMessages,
-} from '../services/test-control.js'
-import { getChannelWebhooks } from '../services/webhooks.js'
+} from '../services/test-control'
+import { getChannelWebhooks } from '../services/webhooks'
 
 /**
  * Creates the test control API routes.

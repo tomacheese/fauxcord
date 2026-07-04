@@ -10,7 +10,7 @@ import {
   typeError,
   type FieldError,
   type ValidationErrors,
-} from './common.js'
+} from './common'
 
 /** Guild limit values */
 export const GUILD_LIMITS = {

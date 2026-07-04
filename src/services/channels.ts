@@ -4,11 +4,11 @@
  * Provides CRUD operations for channels.
  */
 
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 // Used for compile-time type drift detection.
 import type { APIGuildTextChannel, APIOverwrite } from 'discord-api-types/v10'
 import type { ChannelType } from 'discord-api-types/v10'
-import { generateSnowflake } from '../snowflake.js'
+import { generateSnowflake } from '../snowflake'
 
 /**
  * Compile-time guard: ensures the safe-field subset of ChannelObject is

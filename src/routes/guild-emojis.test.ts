@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createGuildEmojiRoutes } from './guild-emojis.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
+import { createGuildEmojiRoutes } from './guild-emojis'
+import { initializeDatabase, closeDatabase } from '../db'
 import {
   seedBot,
   seedGuild,
   seedEmoji,
   createFullTestApp,
-} from '../test-helpers.js'
-import type { Database } from '../db.js'
+} from '../test-helpers'
+import type { Database } from '../db'
 
 describe('Guild Emojis API', () => {
   let db: Database

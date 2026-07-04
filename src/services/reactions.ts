@@ -4,8 +4,8 @@
  * Provides add/remove/list operations for message reactions.
  */
 
-import type { Database } from '../db.js'
-import type { UserRow } from './messages.js'
+import type { Database } from '../db'
+import type { UserRow } from './messages'
 
 /**
  * Adds a reaction.

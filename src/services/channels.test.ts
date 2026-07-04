@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel } from '../test-helpers'
 import {
   createGuildChannel,
   getChannel,
@@ -9,8 +9,8 @@ import {
   getChannelOverwrites,
   getChannelOverwritesForChannels,
   deleteChannelOverwrite,
-} from './channels.js'
-import type { Database } from '../db.js'
+} from './channels'
+import type { Database } from '../db'
 
 describe('createGuildChannel', () => {
   let db: Database

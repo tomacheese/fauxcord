@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createChannelPinRoutes } from './channel-pins.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createChannelPinRoutes } from './channel-pins'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import type { Database } from '../db'
 
 const BASE_URL = 'http://localhost:3000'
 

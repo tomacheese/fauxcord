@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DiscordErrorCode, discordError, validationError } from './errors.js'
+import { DiscordErrorCode, discordError, validationError } from './errors'
 
 describe('DiscordErrorCode', () => {
   it('UNKNOWN_CHANNEL equals 10003', () => {

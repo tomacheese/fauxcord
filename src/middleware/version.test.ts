@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
-import { versionMiddleware } from './version.js'
+import { versionMiddleware } from './version'
 
 describe('versionMiddleware', () => {
   const app = new Hono()

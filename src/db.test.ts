@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { initializeDatabase, closeDatabase } from './db.js'
+import { initializeDatabase, closeDatabase } from './db'
 import type Database from 'better-sqlite3'
 
 describe('initializeDatabase', () => {

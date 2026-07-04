@@ -5,7 +5,7 @@
  * conforming to Discord API v10 limits.
  */
 
-import { typeError, type ValidationErrors } from './common.js'
+import { typeError, type ValidationErrors } from './common'
 
 /** Username length limits (Discord's Modify Current User limits) */
 export const CURRENT_USER_LIMITS = {

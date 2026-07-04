@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
-import { createAuthMiddleware } from './auth.js'
-import { initializeDatabase, closeDatabase } from '../db.js'
-import { seedBot } from '../test-helpers.js'
-import type { Database } from '../db.js'
+import { createAuthMiddleware } from './auth'
+import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot } from '../test-helpers'
+import type { Database } from '../db'
 
 describe('createAuthMiddleware', () => {
   let db: Database

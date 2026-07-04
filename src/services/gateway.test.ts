@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getGatewayInfo, getGatewayBotInfo } from './gateway.js'
+import { getGatewayInfo, getGatewayBotInfo } from './gateway'
 
 describe('gateway service', () => {
   it('derives a ws:// url from an http:// base url', () => {

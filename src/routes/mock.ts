@@ -5,8 +5,8 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { getAttachment, guessContentType } from '../services/attachments.js'
+import type { Database } from '../db'
+import { getAttachment, guessContentType } from '../services/attachments'
 
 /** Server start time */
 const START_TIME = Date.now()

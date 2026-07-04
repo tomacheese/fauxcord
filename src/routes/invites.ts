@@ -5,10 +5,10 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db.js'
-import { DiscordErrorCode, discordError } from '../errors.js'
-import { getInvite, deleteInvite } from '../services/invites.js'
-import { requireEntity } from '../lib/route-helpers.js'
+import type { Database } from '../db'
+import { DiscordErrorCode, discordError } from '../errors'
+import { getInvite, deleteInvite } from '../services/invites'
+import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the invites API routes.
