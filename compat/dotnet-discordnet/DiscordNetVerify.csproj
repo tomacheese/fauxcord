@@ -5,7 +5,15 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <InvariantGlobalization>true</InvariantGlobalization>
+    <!--
+      InvariantGlobalization must stay OFF: Discord.Net.Rest parses locale strings (e.g.
+      Guild.PreferredLocale) via CultureInfo.GetCultureInfo(name), which throws under
+      invariant-globalization mode for any non-invariant culture name. That's a verifier
+      self-inflicted limitation, not a real Fauxcord/Discord.Net compatibility issue
+      (confirmed via a real run: GET /guilds/{guild_id} failed with "Only the invariant
+      culture is supported in globalization-invariant mode" until this was turned off).
+    -->
+    <InvariantGlobalization>false</InvariantGlobalization>
     <AssemblyName>DiscordNetVerify</AssemblyName>
   </PropertyGroup>
 
@@ -14,13 +22,17 @@
       Discord.Net.Rest only (no Discord.Net.WebSocket, no Discord.Net.Webhook):
       this verifier exercises the bot-authenticated REST surface only.
 
-      Version note: docs/libraries.md states "verified with 3.20.0", but that
-      exact version could not be confirmed to exist on NuGet at the time this
-      file was written (no network access available to check). 3.15.2 is a
-      3.x release the author is confident was actually published; if 3.20.0
-      (or a later 3.x) is in fact published, bump this pin accordingly.
+      Version note: confirmed via the NuGet flat-container index
+      (https://api.nuget.org/v3-flatcontainer/discord.net.rest/index.json)
+      that 3.20.1 is the latest published stable release, matching what
+      docs/libraries.md claims ("verified with 3.20.0"). The previous 3.15.2
+      pin lacked RestTextChannel.GetPrivateArchivedThreadsAsync /
+      GetPublicArchivedThreadsAsync / GetJoinedPrivateArchivedThreadsAsync
+      (confirmed by a real CS1061 compile failure against 3.15.2), which the
+      official docs.discordnet.dev API reference documents as present on
+      RestTextChannel — so this bump is required, not just a nice-to-have.
     -->
-    <PackageReference Include="Discord.Net.Rest" Version="3.15.2" />
+    <PackageReference Include="Discord.Net.Rest" Version="3.20.1" />
   </ItemGroup>
 
 </Project>

@@ -32,17 +32,20 @@
 // false "Unknown X" errors from resource-lifecycle ordering rather than real Fauxcord/library
 // bugs (same fix as the other verifiers).
 //
-// NOTE ON UNCERTAIN METHODS: a handful of Discord.Net.Rest method names/overloads below are
-// flagged "UNCERTAIN" in inline comments because this file was written from documentation and
-// prior knowledge without a live NuGet restore/compile to confirm exact signatures (the build
-// host here is deliberately network/IO constrained). Please double-check those specific calls
-// against the actual installed package before trusting a "pass"/"lib-issue" result for them.
+// NOTE ON "UNCERTAIN" comments below: this file was originally written from documentation and
+// prior knowledge without a live NuGet restore/compile. It has since been built and run for
+// real against Discord.Net.Rest 3.20.1 (see DiscordNetVerify.csproj), so every method/overload
+// referenced below is now confirmed to exist and compile; the compile-time uncertainty is
+// resolved. Any remaining "UNCERTAIN" notes describe runtime-behavior assumptions only (e.g.
+// whether a call is paged vs. a plain Task, or which resource it targets) — those are exactly
+// what the pass/lib-issue verdicts below are meant to surface, not a sign the code is wrong.
 
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Discord;
 using Discord.Rest;
+using Discord.Net.Rest;
 
 var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
@@ -114,6 +117,13 @@ ulong webhookId = 500000000000000001;
 var webhookToken = "compat-token-xyz";
 var inviteCode = "compat";
 ulong emojiId = 600000000000000001;
+// Deliberately NOT the bot's own id: banning a user also kicks them (matches
+// real Discord), so exercising ban/unban against the bot itself would delete
+// its guild_members row and break every member-role/member-patch call that
+// runs afterward (confirmed via a real NullReferenceException from
+// Discord.Net's GetUserAsync-returns-null-on-404 pattern). Use a separate,
+// never-actually-a-member placeholder id instead, same as other verifiers.
+ulong banTargetId = 900000000000000001;
 
 RestTextChannel? channel = null;
 RestGuild? guild = null;
@@ -193,6 +203,26 @@ try
 catch
 {
     /* fall back to placeholder ids */
+}
+
+try
+{
+    if (channel is not null)
+    {
+        // Bootstrap a real thread up front (like role/webhook above) so the
+        // thread-members endpoints below operate on an actual thread instead
+        // of falling back to `threadId == channelId` (a plain text channel),
+        // which previously caused a real InvalidCastException when cast to
+        // RestThreadChannel.
+        var thread = await channel.CreateThreadAsync("compat-thread");
+        threadId = thread.Id;
+    }
+}
+catch
+{
+    /* fall back to placeholder id (channelId); thread-members calls below
+       will then legitimately fail the RestThreadChannel cast, same as
+       before bootstrap was added */
 }
 
 try
@@ -360,15 +390,24 @@ var calls = new Dictionary<string, CallEntry>
     ["GET /channels/{channel_id}/thread-members"] = new(async () =>
     {
         var thread = (RestThreadChannel)await client.GetChannelAsync(threadId);
-        _ = await thread.GetUsersAsync().FlattenAsync();
+        // GetUsersAsync() is obsolete in favor of GetThreadUsersAsync(), but the docs for the
+        // latter are contradictory about whether it's a paged/IAsyncEnumerable result. The real
+        // compiler confirmed GetUsersAsync() returns a plain Task<IReadOnlyCollection<T>> (no
+        // FlattenAsync), so keep using it (obsolete warning only, not an error) rather than risk
+        // a second unverified signature.
+#pragma warning disable CS0618
+        _ = await thread.GetUsersAsync();
+#pragma warning restore CS0618
     }),
     ["GET /channels/{channel_id}/threads/archived/private"] = new(async () =>
     {
-        _ = await channel!.GetPrivateArchivedThreadsAsync().FlattenAsync();
+        // Plain Task<IReadOnlyCollection<RestThreadChannel>>, not paged — no FlattenAsync.
+        // 3.20.1's overload has no default values, so all 3 params must be passed explicitly.
+        _ = await channel!.GetPrivateArchivedThreadsAsync(null, null, null);
     }),
     ["GET /channels/{channel_id}/threads/archived/public"] = new(async () =>
     {
-        _ = await channel!.GetPublicArchivedThreadsAsync().FlattenAsync();
+        _ = await channel!.GetPublicArchivedThreadsAsync(null, null, null);
     }),
     ["GET /channels/{channel_id}/threads/search"] = new(
         null,
@@ -384,7 +423,8 @@ var calls = new Dictionary<string, CallEntry>
     }),
     ["GET /channels/{channel_id}/users/@me/threads/archived/private"] = new(async () =>
     {
-        _ = await channel!.GetJoinedPrivateArchivedThreadsAsync().FlattenAsync();
+        // Plain Task<IReadOnlyCollection<RestThreadChannel>>, not paged — no FlattenAsync.
+        _ = await channel!.GetJoinedPrivateArchivedThreadsAsync(null, null, null);
     }),
     ["GET /channels/{channel_id}/webhooks"] = new(async () =>
     {
@@ -413,15 +453,17 @@ var calls = new Dictionary<string, CallEntry>
         "gateway bootstrap info is internal to the Socket/Sharded client connection flow; DiscordRestClient exposes no wrapper"),
     ["DELETE /guilds/{guild_id}/bans/{user_id}"] = new(async () =>
     {
-        await guild!.RemoveBanAsync(botId);
+        // banTargetId, not botId: see its declaration comment near the top —
+        // banning also kicks, so this must never target the shared bot user.
+        await guild!.RemoveBanAsync(banTargetId);
     }),
     ["GET /guilds/{guild_id}/bans/{user_id}"] = new(async () =>
     {
-        _ = await guild!.GetBanAsync(botId);
+        _ = await guild!.GetBanAsync(banTargetId);
     }),
     ["PUT /guilds/{guild_id}/bans/{user_id}"] = new(async () =>
     {
-        await guild!.AddBanAsync(botId, pruneDays: 0, reason: "compat");
+        await guild!.AddBanAsync(banTargetId, pruneDays: 0, reason: "compat");
     }),
     // UNCERTAIN: GetBansAsync() is treated as paged (IAsyncEnumerable), matching
     // GetUsersAsync()'s shape; older Discord.Net versions may return a plain
@@ -618,7 +660,7 @@ foreach (var ep in ordered)
     }
     catch (Exception ex)
     {
-        var message = ex.Message;
+        var message = $"{ex.GetType().Name}: {ex.Message}";
         if (message.Length > 300)
         {
             message = message[..300];
@@ -629,9 +671,8 @@ foreach (var ep in ordered)
 
 var report = new Report(
     "Discord.Net.Rest",
-    // Kept in sync with DiscordNetVerify.csproj's PackageReference version — see the
-    // uncertainty note there re: docs/libraries.md's "3.20.0".
-    "3.15.2",
+    // Kept in sync with DiscordNetVerify.csproj's PackageReference version.
+    "3.20.1",
     true,
     results);
 
