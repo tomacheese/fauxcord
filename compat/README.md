@@ -177,6 +177,16 @@ un-run in this environment is recorded in "Known run limitations" below.
   new-format pins, thread search, OAuth2 grant flow, and shared-resource
   deletes (twilight *does* wrap `GET /oauth2/@me` and `delete_guild`, unlike
   serenity — the former is exercised, the latter skipped as destructive).
+- `c-concord`: base URL is runtime-overridable via
+  `struct discord_config.base_url` (an upstream-unit-tested override:
+  `test/unit-base-url.c`), and Concord's synchronous REST calls work
+  gateway-free (no `discord_run`), so the verifier runs for real. The
+  Dockerfile builds Concord — and a websockets-enabled libcurl — from source
+  per Concord's own CI recipe. Function signatures and the blocking
+  `.sync`/`struct ccord_szbuf` call idioms were confirmed against upstream
+  headers/tests. `n-a` rows: new-format pins, single thread-member GET,
+  thread search, OAuth2 grant flow, and shared-resource deletes — see
+  `c-concord/verify.c`.
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
