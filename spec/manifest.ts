@@ -349,9 +349,10 @@ export const MANIFEST: SpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/webhooks',
     method: 'get',
-    contractTested: false,
-    // Response is an array of oneOf webhook types — too ambiguous to validate
-    // without knowing which branch each item belongs to.
+    contractTested: true,
+    // Response is an array of oneOf webhook types; the mock only ever returns
+    // the incoming-webhook branch, so pin the schema to validate each item.
+    responseSchemaOverride: 'GuildIncomingWebhookResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/webhooks` }),
   },
@@ -397,12 +398,12 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
-    // Response is an array of oneOf invite types. Following the
-    // GET /channels/{channel_id}/webhooks precedent, this is drift-detection
-    // only (contractTested: false) rather than validated per-item.
+    // Response is an array of oneOf invite types; the mock only ever returns
+    // the guild-invite branch, so pin the schema to validate each item.
     specPath: '/channels/{channel_id}/invites',
     method: 'get',
-    contractTested: false,
+    contractTested: true,
+    responseSchemaOverride: 'GuildInviteResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/invites` }),
   },
@@ -704,8 +705,9 @@ export const MANIFEST: SpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/webhooks',
     method: 'get',
-    contractTested: false,
-    // Array of oneOf webhook types — too ambiguous without branch pinning
+    contractTested: true,
+    // Same as channel webhooks: mock returns only the incoming-webhook branch.
+    responseSchemaOverride: 'GuildIncomingWebhookResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/webhooks` }),
   },
