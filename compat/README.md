@@ -193,6 +193,12 @@ un-run in this environment is recorded in "Known run limitations" below.
   high-level API requires a Gateway connection with no supported REST-only
   mode. No verifier/compose service is provided; see
   `dotnet-dsharpplus/README.md`.
+- `jvm-javacord`: `⛔blocked`. Its REST base URL is built inline from a
+  `public static final` (compile-time-constant) domain field over hardcoded
+  `https://`, with no runtime override, *and* a usable `DiscordApi` is only
+  obtainable via `DiscordApiBuilder.login()`, which requires a Gateway
+  WebSocket Fauxcord does not implement — either obstacle alone is fatal. No
+  verifier/compose service is provided; see `jvm-javacord/README.md`.
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
