@@ -185,9 +185,31 @@ func main() {
 	const EMOJI = "👍"
 	const pngDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
-	// discordgo.EndpointAPI must be overridden *before* the Session is
-	// created (see docs/libraries.md), including the trailing slash.
+	// Redirect discordgo at Fauxcord. Setting discordgo.EndpointAPI alone is
+	// NOT sufficient: discordgo derives the per-resource root endpoints
+	// (EndpointChannels, EndpointGuilds, ...) from EndpointAPI *once* at
+	// package-initialization time as plain string vars, so a later assignment
+	// to EndpointAPI does not propagate to them and requests would still hit
+	// the real https://discord.com host. The per-resource *functions*
+	// (EndpointChannel(id), EndpointGuild(id), ...) read these root vars at
+	// call time, so overriding every root var used by the exercised endpoints
+	// is enough. EndpointInvite is already a function reading EndpointAPI
+	// directly, so it is fixed by the EndpointAPI assignment alone. This is
+	// the "override other endpoint variables as needed" step documented for
+	// discordgo in docs/libraries.md / CLAUDE.md.
 	discordgo.EndpointAPI = base
+	discordgo.EndpointGuilds = base + "guilds/"
+	discordgo.EndpointChannels = base + "channels/"
+	discordgo.EndpointUsers = base + "users/"
+	discordgo.EndpointGateway = base + "gateway"
+	discordgo.EndpointGatewayBot = base + "gateway/bot"
+	discordgo.EndpointWebhooks = base + "webhooks/"
+	discordgo.EndpointApplications = base + "applications"
+	discordgo.EndpointOAuth2 = base + "oauth2/"
+	// sess.Application("@me") resolves via EndpointOAuth2Application ->
+	// EndpointOAuth2Applications, another init-frozen var, so it must be
+	// overridden explicitly (overriding EndpointOAuth2 alone is not enough).
+	discordgo.EndpointOAuth2Applications = base + "oauth2/applications"
 
 	sess, err := discordgo.New(setup.Token)
 	if err != nil {
@@ -208,6 +230,17 @@ func main() {
 	WEBHOOK_MSG := ""
 	CODE := "compat"
 	EMOJI_ID := "600000000000000001"
+	// A message dedicated to the in-loop POST .../threads probe. The bootstrap
+	// below already starts a thread from MSG, and Discord (and Fauxcord) allows
+	// only one thread per message (error 160004), so reusing MSG would make the
+	// probe fail with "a thread has already been created for this message". A
+	// fresh message keeps that probe meaningful.
+	THREAD_MSG := MSG
+	// A throwaway ban target distinct from the bot. Banning a user removes their
+	// guild membership (Discord kicks on ban), so banning the bot itself would
+	// make every later /guilds/{id}/members/{bot_id} probe 404. Banning a
+	// separate synthetic user keeps the bot's own membership intact.
+	const BAN_TARGET = "700000000000000001"
 
 	if msg, err := sess.ChannelMessageSend(CH, "compat"); err == nil {
 		MSG = msg.ID
@@ -249,6 +282,15 @@ func main() {
 	}); err == nil {
 		WEBHOOK_MSG = msg.ID
 	}
+	// Bootstrap a fresh message for the in-loop thread-create probe (see
+	// THREAD_MSG above).
+	if msg, err := sess.ChannelMessageSend(CH, "compat-thread-src"); err == nil {
+		THREAD_MSG = msg.ID
+	}
+	// Bootstrap the ban so GET /guilds/{id}/bans/{user_id} finds it even when
+	// that probe runs before the in-loop PUT ban: the runner defers DELETEs but
+	// not GETs, so a GET may precede its creating PUT.
+	_ = sess.GuildBanCreateWithReason(GUILD, BAN_TARGET, "compat", 0)
 
 	calls := map[string]callEntry{
 		"GET /channels/{channel_id}/invites": {fn: func() error {
@@ -276,7 +318,7 @@ func main() {
 			return sess.MessageReactionsRemoveAll(CH, MSG)
 		}},
 		"POST /channels/{channel_id}/messages/{message_id}/threads": {fn: func() error {
-			_, err := sess.MessageThreadStartComplex(CH, MSG, &discordgo.ThreadStart{
+			_, err := sess.MessageThreadStartComplex(CH, THREAD_MSG, &discordgo.ThreadStart{
 				Name:                "compat-thread2",
 				AutoArchiveDuration: 60,
 			})
@@ -399,14 +441,14 @@ func main() {
 			return err
 		}},
 		"DELETE /guilds/{guild_id}/bans/{user_id}": {fn: func() error {
-			return sess.GuildBanDelete(GUILD, BOT)
+			return sess.GuildBanDelete(GUILD, BAN_TARGET)
 		}},
 		"GET /guilds/{guild_id}/bans/{user_id}": {fn: func() error {
-			_, err := sess.GuildBan(GUILD, BOT)
+			_, err := sess.GuildBan(GUILD, BAN_TARGET)
 			return err
 		}},
 		"PUT /guilds/{guild_id}/bans/{user_id}": {fn: func() error {
-			return sess.GuildBanCreateWithReason(GUILD, BOT, "compat", 0)
+			return sess.GuildBanCreateWithReason(GUILD, BAN_TARGET, "compat", 0)
 		}},
 		"GET /guilds/{guild_id}/bans": {fn: func() error {
 			_, err := sess.GuildBans(GUILD, 100, "", "")
@@ -453,7 +495,7 @@ func main() {
 			return err
 		}},
 		"PATCH /guilds/{guild_id}/members/{user_id}": {fn: func() error {
-			_, err := sess.GuildMemberEdit(GUILD, BOT, &discordgo.GuildMemberParams{Nick: strPtr("compat")})
+			_, err := sess.GuildMemberEdit(GUILD, BOT, &discordgo.GuildMemberParams{Nick: "compat"})
 			return err
 		}},
 		"GET /guilds/{guild_id}/members": {fn: func() error {
@@ -524,7 +566,7 @@ func main() {
 			return err
 		}},
 		"PATCH /users/@me": {fn: func() error {
-			_, err := sess.UserUpdate("CompatBot", "")
+			_, err := sess.UserUpdate("CompatBot", "", "")
 			return err
 		}},
 		"DELETE /webhooks/{webhook_id}/{webhook_token}/messages/{message_id}": webhookMsgCall(WEBHOOK_MSG, func() error {
