@@ -187,6 +187,12 @@ un-run in this environment is recorded in "Known run limitations" below.
   headers/tests. `n-a` rows: new-format pins, single thread-member GET,
   thread search, OAuth2 grant flow, and shared-resource deletes — see
   `c-concord/verify.c`.
+- `dotnet-dsharpplus` (5.x): `⛔blocked`. Its REST base URL is a C#
+  `const string` (`Endpoints.BASE_URI`), compile-time-inlined and
+  non-overridable at runtime — the same mechanism as DSharpPlus 4.x — and its
+  high-level API requires a Gateway connection with no supported REST-only
+  mode. No verifier/compose service is provided; see
+  `dotnet-dsharpplus/README.md`.
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
