@@ -207,21 +207,24 @@ The summary below reflects the latest state of that matrix.
 | @discordjs/rest           | JS/TS    | `new REST({ api: "..." })`                               | ✅ Verified, some raw findings pending triage |
 | Eris                      | JS/TS    | ❌ Not possible (hardcodes HTTPS on port 443)            | ⛔ Blocked                                    |
 | Oceanic.js                | JS/TS    | Fully overridable client option                          | ✅ Verified, some findings pending triage     |
-| discord.py                | Python   | `Route.BASE = "..."`                                     | ✅ Verified                                   |
+| discord.py                | Python   | `Route.BASE = "..."`                                     | 🧪 Scaffolded, run pending                    |
 | Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | 🧪 Scaffolded, run pending                    |
 | Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | 🧪 Scaffolded, run pending                    |
 | hikari                    | Python   | `hikari.RESTApp(url=...)`                                | 🧪 Scaffolded, run pending                    |
-| interactions.py           | Python   | HTTP client base URL                                     | See `compat/README.md`                        |
-| discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | 🧪 Verifier being fixed, run pending          |
+| interactions.py           | Python   | `interactions.api.http.route.Route.BASE`                 | 🧪 Scaffolded, run pending                    |
+| discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | ✅ Verified (73/86 pass, 13 n/a, 0 lib-issue) |
 | Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (62/86 pass, 24 n/a, 0 lib-issue) |
-| DSharpPlus 5.x            | C#       | Under investigation                                      | See `compat/README.md`                        |
+| DSharpPlus 5.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
 | DSharpPlus 4.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
 | JDA                       | JVM      | ❌ Not usable without a real Gateway WebSocket handshake | ⛔ Blocked                                    |
-| Discord4J, Javacord, Kord | JVM      | See `compat/README.md`                                   | See `compat/README.md`                        |
+| Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | 🧪 Scaffolded, run pending                    |
+| Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                    |
+| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | 🧪 Scaffolded, run pending                    |
 | Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | 🧪 Scaffolded, run pending                    |
-| Twilight                  | Rust     | See `compat/README.md`                                   | See `compat/README.md`                        |
+| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | 🧪 Scaffolded, run pending                    |
 | DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                    |
-| Concord, Sleepy Discord   | C/C++    | See `compat/README.md`                                   | See `compat/README.md`                        |
+| Concord                   | C        | `struct discord_config.base_url`                         | 🧪 Scaffolded, run pending                    |
+| Sleepy Discord            | C++      | ❌ Not possible (hardcoded host + scheme literal)        | ⛔ Blocked                                    |
 
 Legend: ✅ verified and working · 🧪 verifier code written, awaiting a Docker run ·
 ⛔ confirmed technical blocker (cannot point the library at Fauxcord at all).

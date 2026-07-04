@@ -207,5 +207,6 @@ un-run in this environment is recorded in "Known run limitations" below.
 - The DSharpPlus 4.x doc-only blocker entry is tracked as follow-up work per
   the plan's task breakdown.
 - `coverage-matrix.md` (the per-endpoint/per-library source-of-truth table)
-  has not been created yet; it should be populated from `results/*.json`
-  once more verifiers are complete.
+  exists and is kept up to date as verifiers complete; several rows remain
+  `-` pending outstanding Docker runs (see the matrix's own evidence notes
+  for the current per-library breakdown).
