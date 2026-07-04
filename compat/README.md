@@ -52,6 +52,64 @@ cat compat/results/discordjs.json
 docker compose -f compat/docker-compose.yml up --build --abort-on-container-exit
 ```
 
+## Buildx builder setup
+
+All `docker compose build` invocations in this harness must target a
+dedicated buildx builder, not the host's `default` one.
+
+**Why**: `default` is a reserved name tied to the current Docker context —
+it cannot be removed or recreated (`docker buildx rm default` and
+`docker buildx create --name default` both fail). During this harness's
+development, a `default`-builder buildkit crash (`frontend grpc server
+closed unexpectedly`, triggered by a verifier double-launch — see
+`scripts/run-verify.sh`'s header comment) could not be recovered by tearing
+down and recreating the builder, since `default` itself is not a normal,
+disposable buildx object. Relying on `default` for a harness that expects
+to survive occasional buildkit crashes was a dead end.
+
+**What we use instead**: a separate, disposable builder named
+`fauxcord-compat`, using the `docker-container` driver (an isolated buildkit
+instance running in its own container, unlike `default`'s driver which talks
+to the Docker daemon's built-in builder):
+
+```bash
+# One-time setup (or after a crash — see "Recovering from a crash" below)
+docker buildx create --name fauxcord-compat --driver docker-container
+```
+
+**How to select it**: set the `BUILDX_BUILDER` environment variable before
+any `docker compose build`/`docker buildx` invocation, rather than running
+`docker buildx use fauxcord-compat`. `docker buildx use` changes the
+*global* current builder for the whole host (persisted in the buildx config,
+outside this repo), which would silently affect any other, unrelated Docker
+builds running on the same host. `BUILDX_BUILDER` only affects the
+invocations that actually set it:
+
+```bash
+export BUILDX_BUILDER=fauxcord-compat
+docker compose -f compat/docker-compose.yml build fauxcord verify-discordjs
+```
+
+`compat/scripts/run-library-check.sh` and `compat/scripts/run-verify.sh` do
+not currently export `BUILDX_BUILDER` themselves — set it in the calling
+shell/session before invoking them.
+
+**Recovering from a crash**: if `fauxcord-compat` itself becomes unusable
+(e.g. after a buildkit grpc crash), it — unlike `default` — is a disposable
+object and can simply be removed and recreated:
+
+```bash
+docker buildx rm fauxcord-compat
+docker buildx create --name fauxcord-compat --driver docker-container
+```
+
+**Verifying the builder is healthy**:
+
+```bash
+docker buildx ls                      # confirm fauxcord-compat is listed and its node is "running"
+docker buildx inspect fauxcord-compat # detailed status (BuildKit version, platforms, etc.)
+```
+
 ## Update the matrix
 
 After a run, transcribe each `results/<lib>.json` entry into `coverage-matrix.md`
