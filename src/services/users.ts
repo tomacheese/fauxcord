@@ -184,7 +184,8 @@ export function getUser(db: Database, userId: string): UserObject | null {
  * Retrieves application information (@applications/@me).
  * @param db - Database
  * @param botToken - Bot token
- * @returns Application information object, or null
+ * @returns Application information object conforming to
+ * PrivateApplicationResponse, or null when the bot is unknown
  */
 export function getApplication(
   db: Database,
@@ -194,9 +195,21 @@ export function getApplication(
   name: string
   icon: null
   description: string
+  type: null
+  verify_key: string
+  flags: number
+  flags_new: string
+  redirect_uris: string[]
+  interactions_endpoint_url: string | null
+  role_connections_verification_url: string | null
   bot_public: boolean
   bot_require_code_grant: boolean
   owner: UserObject
+  approximate_guild_count: number
+  approximate_user_install_count: number
+  approximate_user_authorization_count: number
+  explicit_content_filter: number
+  team: null
 } | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
     | BotRow
@@ -211,8 +224,21 @@ export function getApplication(
     name: bot.username,
     icon: null,
     description: '',
+    type: null,
+    verify_key:
+      '0000000000000000000000000000000000000000000000000000000000000000',
+    flags: 0,
+    flags_new: '0',
+    redirect_uris: [],
+    interactions_endpoint_url: null,
+    role_connections_verification_url: null,
     bot_public: true,
     bot_require_code_grant: false,
     owner: user,
+    approximate_guild_count: 0,
+    approximate_user_install_count: 0,
+    approximate_user_authorization_count: 0,
+    explicit_content_filter: 0,
+    team: null,
   }
 }

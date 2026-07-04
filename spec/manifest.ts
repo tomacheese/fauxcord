@@ -773,13 +773,22 @@ export const MANIFEST: SpecEndpoint[] = [
   // ─── OAuth2 ─────────────────────────────────────────────────────────────────
 
   {
-    // PrivateApplicationResponse requires ~20 fields the mock omits intentionally.
-    // Drift detection only; contract test skipped.
     specPath: '/oauth2/applications/@me',
     method: 'get',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
     request: () => ({ path: '/api/v10/oauth2/applications/@me' }),
+  },
+  {
+    // Implemented and present in the upstream spec; mapped here so it is both
+    // drift-detected and contract-tested (previously missing from the manifest).
+    specPath: '/applications/@me',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
+    request: () => ({ path: '/api/v10/applications/@me' }),
   },
   {
     specPath: '/oauth2/@me',
