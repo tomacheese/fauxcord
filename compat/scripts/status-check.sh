@@ -61,7 +61,11 @@ if [ -d "$LOG_DIR" ]; then
     fi
     echo "$STATUS (${AGE}s ago): $BASENAME"
 
-    FAIL_LINE=$(tail -n 20 "$f" | grep -iE "error|exit code [1-9]|failed" | tail -n 1 || true)
+    # Word-boundary anchored: a naive substring match on "error" false-positived
+    # on Rust crate names like "thiserror" (serenity retry9). \b keeps the
+    # check strict without dropping real signal (still catches "ERROR:",
+    # "failed to ...", "exit code 137", etc.)
+    FAIL_LINE=$(tail -n 20 "$f" | grep -iE "\berror\b|exit code [1-9]|\bfailed\b" | tail -n 1 || true)
     if [ -n "$FAIL_LINE" ]; then
       echo "  FAILED_TAIL: ${BASENAME}: ${FAIL_LINE}"
     fi
