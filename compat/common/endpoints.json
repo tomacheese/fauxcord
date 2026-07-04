@@ -228,6 +228,10 @@
     "path": "/guilds/{guild_id}/members/{user_id}"
   },
   {
+    "method": "PATCH",
+    "path": "/guilds/{guild_id}/members/@me"
+  },
+  {
     "method": "GET",
     "path": "/guilds/{guild_id}/members"
   },
