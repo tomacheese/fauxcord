@@ -16,7 +16,11 @@ import {
   executeWebhook,
 } from '../services/webhooks'
 import { getMessage, updateMessage, deleteMessage } from '../services/messages'
-import { validateWebhookExecute } from '../validators/webhook'
+import { getChannel } from '../services/channels'
+import {
+  validateWebhookExecute,
+  validateWebhookUpdate,
+} from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
 
 /**
@@ -78,6 +82,25 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       channel_id?: string
     }>()
 
+    const errors = validateWebhookUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
+
+    // Repointing to a nonexistent channel would leave the webhook in an
+    // inconsistent state, so reject it like the real API.
+    if (
+      payload.channel_id !== undefined &&
+      !getChannel(db, payload.channel_id)
+    ) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_CHANNEL,
+        'Unknown Channel',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
     const updated = updateWebhook(db, webhookId, payload)
     if (!updated) {
       const err = discordError(
@@ -123,6 +146,11 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       name?: string
       avatar?: string | null
     }>()
+
+    const errors = validateWebhookUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
 
     const updated = updateWebhook(db, webhookId, {
       name: payload.name,
@@ -189,6 +217,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
 
     const contentType = c.req.header('content-type') ?? ''
     let payload: Record<string, unknown>
+    let hasAttachments = false
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await c.req.formData()
@@ -196,11 +225,20 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       payload = payloadJson
         ? (JSON.parse(payloadJson as string) as Record<string, unknown>)
         : {}
+      // A file-only message (no content/embeds) is not empty, so detect any
+      // uploaded file entry rather than assuming there are no attachments.
+      for (const [key, value] of formData.entries()) {
+        if (
+          (key === 'file' || key.startsWith('files[')) &&
+          value instanceof File
+        ) {
+          hasAttachments = true
+          break
+        }
+      }
     } else {
       payload = await c.req.json<Record<string, unknown>>()
     }
-
-    const hasAttachments = false // File attachments on webhook execution are a simplified implementation
 
     // Empty message check
     if (isEmptyMessage(payload, hasAttachments)) {

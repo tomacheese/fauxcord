@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createWebhookRoutes } from './webhooks'
 import { initializeDatabase, closeDatabase } from '../db'
+import { createChannelWebhookRoutes } from './channel-webhooks'
 import { seedBot, seedGuild, seedChannel } from '../test-helpers'
 import type { Database } from '../db'
 
@@ -114,5 +115,84 @@ describe('Webhooks API (with token)', () => {
       const body = (await res.json()) as Record<string, unknown>
       expect(body.code).toBe(10_015)
     })
+  })
+
+  describe('PATCH /webhooks/:webhookId (validation and channel checks)', () => {
+    it('rejects an empty name with 400', async () => {
+      const res = await app.request(`/webhooks/${WEBHOOK_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: '' }),
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(50_035)
+    })
+
+    it('returns 404 Unknown Channel when repointing to a nonexistent channel', async () => {
+      const res = await app.request(`/webhooks/${WEBHOOK_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: '999999999999999999' }),
+      })
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(10_003)
+    })
+  })
+
+  describe('POST /webhooks/:webhookId/:token (execute, file-only)', () => {
+    it('accepts a file-only message (not treated as empty)', async () => {
+      const form = new FormData()
+      form.append(
+        'files[0]',
+        new File([new Uint8Array([1, 2, 3])], 'a.bin', {
+          type: 'application/octet-stream',
+        })
+      )
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}?wait=1`,
+        { method: 'POST', body: form }
+      )
+      expect(res.status).not.toBe(400)
+    })
+  })
+})
+
+describe('Channel Webhooks API', () => {
+  let db: Database
+  let app: Hono
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono()
+    app.route('/', createChannelWebhookRoutes(db))
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('returns 404 for GET webhooks of a nonexistent channel', async () => {
+    const res = await app.request('/channels/999999999999999999/webhooks')
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.code).toBe(10_003)
+  })
+
+  it('generates an opaque (non-Snowflake) webhook token', async () => {
+    const token = seedBot(db)
+    const guildId = seedGuild(db, token)
+    const channelId = seedChannel(db, guildId)
+    const res = await app.request(`/channels/${channelId}/webhooks`, {
+      method: 'POST',
+      headers: { Authorization: token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'My Webhook' }),
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { token: string }
+    // A CSPRNG base64url token is not a pure digit string like a Snowflake.
+    expect(/^\d+$/.test(body.token)).toBe(false)
+    expect(body.token.length).toBeGreaterThan(40)
   })
 })

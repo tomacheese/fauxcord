@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 Webhook limits.
  */
 
-import { maxLengthError, type ValidationErrors } from './common'
+import { maxLengthError, typeError, type ValidationErrors } from './common'
 
 /** Webhook limit values */
 export const WEBHOOK_LIMITS = {
@@ -51,6 +51,41 @@ export function validateWebhookCreate(
     }
   } else if (payload.name.length > WEBHOOK_LIMITS.NAME_MAX) {
     errors.name = { _errors: [maxLengthError(WEBHOOK_LIMITS.NAME_MAX)] }
+  }
+
+  return errors
+}
+
+/** Webhook update (PATCH) payload (unknown fields until validated) */
+export interface WebhookUpdatePayload {
+  name?: unknown
+  avatar?: unknown
+  channel_id?: unknown
+}
+
+/**
+ * Validates a webhook update (PATCH) payload. `name`, when present, must be a
+ * non-empty string of at most 80 characters (matching creation constraints).
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateWebhookUpdate(
+  payload: WebhookUpdatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (payload.name !== undefined && payload.name !== null) {
+    if (typeof payload.name !== 'string') {
+      errors.name = { _errors: [typeError('string')] }
+    } else if (payload.name.length < WEBHOOK_LIMITS.NAME_MIN) {
+      errors.name = {
+        _errors: [
+          { code: 'BASE_TYPE_REQUIRED', message: 'This field is required.' },
+        ],
+      }
+    } else if (payload.name.length > WEBHOOK_LIMITS.NAME_MAX) {
+      errors.name = { _errors: [maxLengthError(WEBHOOK_LIMITS.NAME_MAX)] }
+    }
   }
 
   return errors
