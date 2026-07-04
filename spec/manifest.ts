@@ -34,13 +34,15 @@
  *   Bearer token; impractical to exercise in an isolated unit test without significant
  *   test harness work.
  *
- * - `GET /oauth2/applications/@me` and `GET /applications/@me` — The
- *   `PrivateApplicationResponse` schema requires ~20+ fields that the mock intentionally
- *   omits (Fauxcord is not an application hosting platform). Included in drift detection
- *   only (`contractTested: false`).
+ * ## Now contract-tested (previously excluded)
  *
- * - `GET /guilds/{guild_id}` — `GuildWithCountsResponse` → `GuildResponse` requires
- *   ~40 fields the mock does not fully implement. Included in drift detection only.
+ * `GET /guilds/{guild_id}`, `PATCH /guilds/{guild_id}`, `GET /applications/@me`,
+ * and `GET /oauth2/applications/@me` are now mapped in the manifest and
+ * contract-tested. The mock returns fixed null/default values for fields it does
+ * not model (guild: splash/banner/nsfw_level/stickers/incidents_data etc.;
+ * application: verify_key/team/flags/redirect_uris etc.), so their responses
+ * fully satisfy `GuildWithCountsResponse` / `GuildResponse` /
+ * `PrivateApplicationResponse`.
  *
  * ## responseSchemaOverride
  *
