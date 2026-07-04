@@ -197,6 +197,7 @@ export function getApplication(
   bot_public: boolean
   bot_require_code_grant: boolean
   owner: UserObject
+  verify_key: string
 } | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
     | BotRow
@@ -214,5 +215,11 @@ export function getApplication(
     bot_public: true,
     bot_require_code_grant: false,
     owner: user,
+    // ApplicationResponse marks verify_key as required (an Ed25519 public
+    // key hex string used for interaction signature verification). Fauxcord
+    // doesn't implement real interaction signing, so a fixed dummy value is
+    // returned just to satisfy clients (e.g. nextcord) that expect the field
+    // to be present and non-empty.
+    verify_key: '0'.repeat(64),
   }
 }
