@@ -54,6 +54,18 @@ describe('Guilds API', () => {
       expect(body.name).toBe('Test Guild')
     })
 
+    it('treats an empty request body as no changes (does not 500)', async () => {
+      // Some libraries send a PATCH with no body at all; the mock must not crash
+      // on JSON.parse of an empty body.
+      const res = await app.request(`/guilds/${guildId}`, {
+        method: 'PATCH',
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.name).toBe('Test Guild')
+    })
+
     it('returns 404 for a non-existent Guild', async () => {
       const res = await app.request('/guilds/999999999999999999', {
         method: 'PATCH',

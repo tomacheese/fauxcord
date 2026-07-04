@@ -48,7 +48,16 @@ export function createGuildRoutes(db: Database): Hono {
   // PATCH /guilds/:guildId — Update guild information
   app.patch('/guilds/:guildId', async (c) => {
     const { guildId } = c.req.param()
-    const payload = await c.req.json<{ name?: string }>()
+
+    // Tolerate an empty/invalid/non-object JSON body (including a literal
+    // `null` or an array, both of which parse without error): treat it as an
+    // empty (no-op) payload rather than crashing on JSON.parse of an empty
+    // body (same idiom as PATCH /users/@me and POST .../bans).
+    const parsed: unknown = await c.req.json().catch(() => ({}))
+    const payload: { name?: string } =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? parsed
+        : {}
 
     if (payload.name !== undefined) {
       const errors = validateGuildName(payload.name)
