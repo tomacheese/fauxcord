@@ -35,13 +35,37 @@ async function waitHealthy() {
   throw new Error('fauxcord did not become healthy')
 }
 
-/** POST the shared setup payload (idempotent: ignore an existing 409). */
+/**
+ * POST the shared setup payload. 200/201 (created) and 409 (already set up
+ * by a prior run against a reused Fauxcord container) both count as success.
+ * Retries with backoff on network errors or unexpected statuses (see
+ * js-oceanic/verify.mjs's doSetup for the incident that motivated this).
+ * Throws if setup never succeeds so a genuine failure is loud instead of
+ * corrupting every downstream result.
+ */
 async function doSetup() {
-  await fetch(`${ORIGIN}/_test/setup`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(setup),
-  }).catch(() => {})
+  const maxAttempts = 5
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${ORIGIN}/_test/setup`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(setup),
+      })
+      if (res.ok || res.status === 409) return
+      console.error(
+        `doSetup: unexpected status ${res.status} (attempt ${attempt}/${maxAttempts})`
+      )
+    } catch (e) {
+      console.error(
+        `doSetup: request failed: ${e.message} (attempt ${attempt}/${maxAttempts})`
+      )
+    }
+    if (attempt < maxAttempts) {
+      await new Promise((res) => setTimeout(res, 1000 * attempt))
+    }
+  }
+  throw new Error('doSetup: failed to POST /_test/setup after retries')
 }
 
 /**
