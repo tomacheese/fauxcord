@@ -199,12 +199,13 @@ un-run in this environment is recorded in "Known run limitations" below.
   obtainable via `DiscordApiBuilder.login()`, which requires a Gateway
   WebSocket Fauxcord does not implement — either obstacle alone is fatal. No
   verifier/compose service is provided; see `jvm-javacord/README.md`.
-- Verifiers for the remaining languages/libraries in the plan (Python:
-  hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
-  5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
-  Sleepy Discord; plus the DSharpPlus 4.x doc-only blocker entry) have not
-  been scaffolded yet and are tracked as follow-up work per the plan's task
-  breakdown.
+- `cpp-sleepy` (Sleepy Discord): `⛔blocked`. Its REST base URL is a hardcoded
+  `"https://discord.com/api/v10/"` string literal inside the single request
+  dispatch method, with no constructor/setter/env/compile-define override
+  (hardcoded host *and* HTTPS, like Eris/DPP). No verifier/compose service is
+  provided; see `cpp-sleepy/README.md`.
+- The DSharpPlus 4.x doc-only blocker entry is tracked as follow-up work per
+  the plan's task breakdown.
 - `coverage-matrix.md` (the per-endpoint/per-library source-of-truth table)
   has not been created yet; it should be populated from `results/*.json`
   once more verifiers are complete.
