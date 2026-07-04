@@ -20,14 +20,14 @@ Acceptance: no `-` cells remain; every `N/A`/`⛔blocked` has an evidence note b
 | PATCH /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /channels/{channel_id}/messages/bulk-delete | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/messages/pins/{message_id} | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| PUT /channels/{channel_id}/messages/pins/{message_id} | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| PUT /channels/{channel_id}/messages/pins/{message_id} | ❌→fix | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /channels/{channel_id}/messages/pins | ✅ | ⛔blocked | N/A | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ❌→fix | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | POST /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | PUT /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/pins/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
-| PUT /channels/{channel_id}/pins/{message_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
+| PUT /channels/{channel_id}/pins/{message_id} | ❌→fix | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /channels/{channel_id}/pins | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | DELETE /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | ✅ | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
 | GET /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | - | - | - | - | - | - | N/A | - | ⛔blocked | - | - | - | - | - | - | ⛔blocked | - | ⛔blocked |
