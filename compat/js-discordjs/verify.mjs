@@ -19,7 +19,9 @@ const BOT = setup.user.id
 const GUILD = setup.guilds[0].id
 const CH = setup.guilds[0].channels[0].id
 
-const rest = new REST({ version: '10', api: `${ORIGIN}/api` }).setToken('compat-token')
+const rest = new REST({ version: '10', api: `${ORIGIN}/api` }).setToken(
+  'compat-token'
+)
 
 /** Wait until the SUT health endpoint responds ok. */
 async function waitHealthy() {
@@ -82,25 +84,73 @@ async function bootstrap() {
     '{overwrite_id}': BOT,
     '{emoji_name}': encodeURIComponent('👍'),
   }
+  // Banning the bot's own {user_id} would kick it from the guild (matches
+  // real Discord: banning implies removal from guild_members), which then
+  // 404s every subsequent guild-member endpoint with "Unknown Member" —
+  // a verifier bootstrap bug, not a Fauxcord bug (Fauxcord allows banning an
+  // arbitrary/non-member user id, so a dedicated dummy id is a safe target).
+  ctx.banUserId = '900000000000000001'
+  // endpoints.json orders `GET /guilds/{guild_id}/bans/{user_id}` before the
+  // `PUT` that creates it (see the array order in compat/common/endpoints.json),
+  // so create the ban up front here rather than relying on the main loop's
+  // own PUT to have run first.
   try {
-    const msg = await rest.post(`/channels/${CH}/messages`, { body: { content: 'compat' } })
+    await rest.put(`/guilds/${GUILD}/bans/${ctx.banUserId}`, { body: {} })
+  } catch {
+    // ignore; the main loop's own PUT test will surface any real failure
+  }
+  try {
+    const msg = await rest.post(`/channels/${CH}/messages`, {
+      body: { content: 'compat' },
+    })
     ctx['{message_id}'] = msg.id
   } catch {
     ctx['{message_id}'] = '400000000000000001'
   }
   try {
-    const role = await rest.post(`/guilds/${GUILD}/roles`, { body: { name: 'compat-role' } })
+    const role = await rest.post(`/guilds/${GUILD}/roles`, {
+      body: { name: 'compat-role' },
+    })
     ctx['{role_id}'] = role.id
   } catch {
     ctx['{role_id}'] = GUILD // @everyone role id == guild id in fauxcord
   }
   try {
-    const wh = await rest.post(`/channels/${CH}/webhooks`, { body: { name: 'compat-wh' } })
+    const wh = await rest.post(`/channels/${CH}/webhooks`, {
+      body: { name: 'compat-wh' },
+    })
     ctx['{webhook_id}'] = wh.id
     ctx['{webhook_token}'] = wh.token
   } catch {
     ctx['{webhook_id}'] = '500000000000000001'
     ctx['{webhook_token}'] = 'compat-token-xyz'
+  }
+  // A second, dedicated webhook for the id-only-form DELETE test below.
+  // `DELETE /webhooks/{webhook_id}/{webhook_token}` and
+  // `DELETE /webhooks/{webhook_id}` both target the SAME webhook by id
+  // underneath; running both against ctx['{webhook_id}'] means whichever
+  // runs first deletes it out from under the other ("Unknown Webhook").
+  try {
+    const wh2 = await rest.post(`/channels/${CH}/webhooks`, {
+      body: { name: 'compat-wh2-idonly' },
+    })
+    ctx.webhookIdOnlyDeleteId = wh2.id
+  } catch {
+    ctx.webhookIdOnlyDeleteId = '500000000000000002'
+  }
+  // A webhook-authored message, for the /webhooks/{id}/{token}/messages/{id}
+  // family. Sharing ctx['{message_id}'] with the plain channel-message
+  // endpoints would let `DELETE /channels/{channel_id}/messages/{message_id}`
+  // (which runs earlier in the DELETE pass) delete it out from under the
+  // webhook-message DELETE test ("Unknown Message").
+  try {
+    const whMsg = await rest.post(
+      `/webhooks/${ctx['{webhook_id}']}/${ctx['{webhook_token}']}?wait=true`,
+      { body: { content: 'compat-webhook-msg' } }
+    )
+    ctx.webhookMessageId = whMsg.id
+  } catch {
+    ctx.webhookMessageId = '400000000000000004'
   }
   try {
     const inv = await rest.post(`/channels/${CH}/invites`, { body: {} })
@@ -124,10 +174,45 @@ async function bootstrap() {
   // Ensure a reaction exists so reaction GET/DELETE have something to act on.
   try {
     await rest.put(
-      `/channels/${CH}/messages/${ctx['{message_id}']}/reactions/${ctx['{emoji_name}']}/@me`,
+      `/channels/${CH}/messages/${ctx['{message_id}']}/reactions/${ctx['{emoji_name}']}/@me`
     )
   } catch {
     // ignore
+  }
+  // Bootstrap a real thread (like role/webhook above) so the thread-members
+  // endpoints below operate on an actual thread instead of falling back to
+  // the plain text channel (same pattern as dotnet-discordnet/Program.cs).
+  // endpoints.json reuses the `{channel_id}` placeholder for these paths
+  // (a thread IS a channel in the Discord model), so we don't add a new
+  // placeholder here — main() substitutes THREAD_ID for CH specifically for
+  // thread-members endpoints instead. Uses a dedicated message (not
+  // ctx['{message_id}']) since the main loop separately exercises
+  // `POST .../messages/{message_id}/threads` itself, and Discord only
+  // allows one thread per message ("A thread has already been created for
+  // this message").
+  try {
+    const threadSourceMsg = await rest.post(`/channels/${CH}/messages`, {
+      body: { content: 'compat-thread-source' },
+    })
+    const thread = await rest.post(
+      `/channels/${CH}/messages/${threadSourceMsg.id}/threads`,
+      { body: { name: 'compat-thread' } }
+    )
+    ctx.threadId = thread.id
+  } catch {
+    ctx.threadId = CH
+  }
+  // A second, throwaway message pair for bulk-delete (needs 2+ distinct ids).
+  try {
+    const m1 = await rest.post(`/channels/${CH}/messages`, {
+      body: { content: 'bulk-1' },
+    })
+    const m2 = await rest.post(`/channels/${CH}/messages`, {
+      body: { content: 'bulk-2' },
+    })
+    ctx.bulkDeleteIds = [m1.id, m2.id]
+  } catch {
+    ctx.bulkDeleteIds = ['400000000000000002', '400000000000000003']
   }
   return ctx
 }
@@ -138,22 +223,89 @@ function resolve(path, ctx) {
 }
 
 /** Minimal request bodies for endpoints that require them. */
-function bodyFor(method, path) {
-  if (method === 'POST' && path === '/channels/{channel_id}/messages') return { content: 'compat' }
-  if (method === 'PATCH' && path === '/channels/{channel_id}/messages/{message_id}')
+function bodyFor(method, path, ctx) {
+  if (method === 'POST' && path === '/channels/{channel_id}/messages')
+    return { content: 'compat' }
+  if (
+    method === 'PATCH' &&
+    path === '/channels/{channel_id}/messages/{message_id}'
+  )
     return { content: 'compat-edit' }
   if (method === 'POST' && path.endsWith('/messages/{message_id}/threads'))
     return { name: 'compat-thread' }
-  if (method === 'POST' && path === '/guilds/{guild_id}/roles/{role_id}') return [{ id: GUILD, position: 1 }]
-  if (method === 'PATCH' && path === '/guilds/{guild_id}/roles/{role_id}') return { name: 'renamed' }
-  if (method === 'PATCH' && path === '/guilds/{guild_id}/channels') return [{ id: CH, position: 0 }]
-  if (method === 'POST' && path === '/guilds/{guild_id}/members') return { access_token: 'x' }
-  if (method === 'PATCH' && path === '/guilds/{guild_id}/members/{user_id}') return { nick: 'compat' }
-  if (method === 'PUT' && path === '/guilds/{guild_id}/bans/{user_id}') return {}
-  if (method === 'PATCH' && (path === '/users/{user_id}' || path === '/users/@me'))
+  if (method === 'POST' && path === '/channels/{channel_id}/threads')
+    return { name: 'compat-thread2', type: 11 }
+  if (method === 'POST' && path === '/guilds/{guild_id}/roles/{role_id}')
+    return [{ id: GUILD, position: 1 }]
+  if (method === 'PATCH' && path === '/guilds/{guild_id}/roles/{role_id}')
+    return { name: 'renamed' }
+  if (method === 'PATCH' && path === '/guilds/{guild_id}/channels')
+    return [{ id: CH, position: 0 }]
+  if (method === 'POST' && path === '/guilds/{guild_id}/channels')
+    return { name: 'compat-channel' }
+  if (method === 'POST' && path === '/guilds/{guild_id}/emojis')
+    return {
+      name: 'compat2',
+      image:
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+    }
+  if (method === 'POST' && path === '/guilds/{guild_id}/members')
+    return { access_token: 'x' }
+  if (method === 'PATCH' && path === '/guilds/{guild_id}/members/{user_id}')
+    return { nick: 'compat' }
+  if (method === 'PUT' && path === '/guilds/{guild_id}/bans/{user_id}')
+    return {}
+  if (
+    method === 'PATCH' &&
+    (path === '/users/{user_id}' || path === '/users/@me')
+  )
     return { username: 'CompatBot' }
-  if (method.match(/^(POST|PATCH|PUT)$/) && path.includes('webhooks')) return { name: 'compat' }
+  // Webhook execute (no trailing sub-path) needs a message body, unlike the
+  // webhook CRUD endpoints below which need { name }.
+  if (method === 'POST' && path === '/webhooks/{webhook_id}/{webhook_token}')
+    return { content: 'compat' }
+  if (method.match(/^(POST|PATCH|PUT)$/) && path.includes('webhooks'))
+    return { name: 'compat' }
+  if (
+    method === 'POST' &&
+    path === '/channels/{channel_id}/messages/bulk-delete'
+  )
+    return { messages: ctx.bulkDeleteIds }
+  if (
+    method === 'PUT' &&
+    path === '/channels/{channel_id}/permissions/{overwrite_id}'
+  )
+    return { type: 1, allow: '0', deny: '0' }
   return undefined
+}
+
+// Endpoints that destroy a shared fixture other rows in this same run still
+// depend on, so they are recorded as n-a instead of actually invoked (same
+// precedent as js-oceanic/verify.mjs's `calls` table entries for these
+// paths). `DELETE /guilds/{guild_id}` is not even in spec/openapi.json's
+// `/guilds/{guild_id}` path (no `delete` operation) — real bots cannot
+// delete a guild (owner-only, user-token action) — so calling it here would
+// only test a mock-only convenience route while cascading destruction onto
+// every other guild-scoped result (roles, channels, invites, webhooks) that
+// runs afterward.
+const SKIP = {
+  'DELETE /channels/{channel_id}':
+    'not exercised: would delete the shared test channel other rows depend on',
+  'DELETE /guilds/{guild_id}':
+    'not exercised: bots cannot delete guilds in the real Discord API (owner-only), and doing so would cascade-destroy every other guild-scoped fixture this run still needs',
+  // These require an OAuth2 bearer/authorization-code or client-credentials
+  // flow, which a raw REST client instance configured with a single Bot
+  // token (rest.setToken()) cannot produce — this is a semantic mismatch
+  // with how discord.js apps actually call these endpoints in practice, not
+  // a Fauxcord bug (e.g. GET /oauth2/@me requires the bearer token obtained
+  // via the authorization the endpoint is inspecting, and the two POST
+  // /oauth2/token* endpoints are form-urlencoded grant requests, not JSON).
+  'GET /oauth2/@me':
+    'not exercised: requires an OAuth2 bearer token from a completed authorization, not a Bot token',
+  'POST /oauth2/token':
+    'not exercised: requires a form-urlencoded authorization-code/client-credentials grant request, not a Bot-token JSON call',
+  'POST /oauth2/token/revoke':
+    'not exercised: requires a form-urlencoded token-revocation request, not a Bot-token JSON call',
 }
 
 async function main() {
@@ -164,12 +316,35 @@ async function main() {
 
   // Run non-DELETE endpoints first, then DELETEs, so deletions don't remove
   // resources that GET/PATCH rows still need.
-  const ordered = [...endpoints].sort((a, b) => (a.method === 'DELETE') - (b.method === 'DELETE'))
+  const ordered = [...endpoints].sort(
+    (a, b) => (a.method === 'DELETE') - (b.method === 'DELETE')
+  )
 
   for (const { method, path } of ordered) {
     const key = `${method} ${path}`
-    const url = resolve(path, ctx)
-    const body = bodyFor(method, path)
+    if (SKIP[key]) {
+      results.push({ endpoint: key, status: 'n-a', note: SKIP[key] })
+      continue
+    }
+    // thread-members/* reuses the `{channel_id}` placeholder, but must
+    // resolve to the bootstrapped thread's id, not the parent text channel
+    // (see bootstrap()'s ctx.threadId comment). Likewise, bans/* and the
+    // webhook-message / id-only-webhook-delete families need dedicated
+    // fixture ids instead of the shared `{user_id}`/`{message_id}`/
+    // `{webhook_id}` placeholders (see the matching bootstrap() comments).
+    const url = path.includes('/thread-members')
+      ? resolve(path, { ...ctx, '{channel_id}': ctx.threadId })
+      : path.includes('/bans/')
+        ? resolve(path, { ...ctx, '{user_id}': ctx.banUserId })
+        : path.includes('/webhooks/{webhook_id}/{webhook_token}/messages/')
+          ? resolve(path, { ...ctx, '{message_id}': ctx.webhookMessageId })
+          : method === 'DELETE' && path === '/webhooks/{webhook_id}'
+            ? resolve(path, {
+                ...ctx,
+                '{webhook_id}': ctx.webhookIdOnlyDeleteId,
+              })
+            : resolve(path, ctx)
+    const body = bodyFor(method, path, ctx)
     const opts = body === undefined ? undefined : { body }
     try {
       switch (method) {
@@ -189,28 +364,53 @@ async function main() {
           await rest.delete(url)
           break
         default:
-          results.push({ endpoint: key, status: 'n-a', note: `unsupported method ${method}` })
+          results.push({
+            endpoint: key,
+            status: 'n-a',
+            note: `unsupported method ${method}`,
+          })
           continue
       }
       results.push({ endpoint: key, status: 'pass', note: '' })
     } catch (err) {
       const status = err?.status ?? ''
       const raw = err?.rawError ? JSON.stringify(err.rawError) : String(err)
-      results.push({ endpoint: key, status: 'lib-issue', http: status, note: raw.slice(0, 300) })
+      results.push({
+        endpoint: key,
+        status: 'lib-issue',
+        http: status,
+        note: raw.slice(0, 300),
+      })
+    } finally {
+      // @discordjs/rest's handleErrors() calls manager.setToken(null) on ANY
+      // 401 response (e.g. from the oauth2 endpoints below, which legitimately
+      // require a bearer token rather than a Bot token). Left unchecked, this
+      // permanently clears the shared REST instance's token and cascades a
+      // client-side "Expected token to be set" error into every subsequent
+      // call, masking their real per-endpoint results. Reassert after every
+      // attempt so a single 401 can't contaminate the rest of the run.
+      rest.setToken('compat-token')
     }
   }
 
   // Re-key results back to endpoints.json order for a stable matrix.
   const byKey = new Map(results.map((r) => [r.endpoint, r]))
-  const ordered2 = endpoints.map(({ method, path }) => byKey.get(`${method} ${path}`))
+  const ordered2 = endpoints.map(({ method, path }) =>
+    byKey.get(`${method} ${path}`)
+  )
 
   writeFileSync(
-    '/results/discordjs.json',
+    process.env.RESULTS_PATH ?? '/results/discordjs.json',
     JSON.stringify(
-      { library: 'discord.js', version: '@discordjs/rest 2.x', baseUrlOverridable: true, results: ordered2 },
+      {
+        library: 'discord.js',
+        version: '@discordjs/rest 2.x',
+        baseUrlOverridable: true,
+        results: ordered2,
+      },
       null,
-      2,
-    ),
+      2
+    )
   )
   const pass = results.filter((r) => r.status === 'pass').length
   console.log(`discordjs done: ${pass}/${results.length} pass`)
