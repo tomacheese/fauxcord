@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createChannelPinRoutes } from './channel-pins'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
 import type { Database } from '../db'
 
 const BASE_URL = 'http://localhost:3000'
@@ -35,6 +35,26 @@ describe('Channel Pins API', () => {
       expect(res.status).toBe(200)
       const body = await res.json()
       expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
+  describe('PUT /channels/:channelId/pins/:messageId', () => {
+    it('is idempotent: pinning an already-pinned message returns 204, not an error', async () => {
+      const messageId = seedMessage(db, channelId, '111111111111111111', token)
+
+      const first = await app.request(
+        `/channels/${channelId}/pins/${messageId}`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(first.status).toBe(204)
+
+      // Real Discord's pin endpoint is idempotent (matches discord.js/discord.py
+      // client expectations); repeating the same pin must not error.
+      const second = await app.request(
+        `/channels/${channelId}/pins/${messageId}`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(second.status).toBe(204)
     })
   })
 })
