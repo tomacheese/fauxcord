@@ -138,6 +138,18 @@ services:
     volumes:
       - ./results:/results
 
+  verify-interactions:
+    build:
+      context: .
+      dockerfile: ./python-interactions/Dockerfile
+    depends_on:
+      fauxcord:
+        condition: service_healthy
+    environment:
+      FAUXCORD_BASE: "http://fauxcord:3000/api/v10"
+    volumes:
+      - ./results:/results
+
 # Verifier services for the remaining languages (JVM (JDA is documented as
 # blocked; Discord4J/Javacord/Kord not yet scaffolded) / C / C++, plus Rust's
 # second library Twilight, and Python's interactions.py) are added

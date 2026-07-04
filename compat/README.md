@@ -137,6 +137,17 @@ un-run in this environment is recorded in "Known run limitations" below.
   (`discord`, shared with discord.py itself), so `python-pycord/requirements.txt`
   is kept strictly single-library to avoid an unpredictable `import discord`
   resolution.
+- `python-interactions`: base URL is overridable via
+  `interactions.api.http.route.Route.BASE` (a shared `ClassVar[str]`,
+  reassigned once at module scope) and the verifier runs for real against the
+  library's gateway-free `HTTPClient` (imported directly from
+  `interactions.api.http.http_client`, bypassing the gateway `Client`). Every
+  method used was source-verified against the pinned `5.16.0` git tag, so
+  there are no by-analogy guesses; a handful of rows are `n-a` (the
+  new-format `/messages/pins*` API, the single-member thread-member GET,
+  thread search, both OAuth2 grant-flow endpoints — the library has none —
+  and the shared-resource-destroying DELETEs) with evidence notes in
+  `python-interactions/verify.py`.
 - Verifiers for the remaining languages/libraries in the plan (Python:
   hikari, interactions.py; Go: discordgo; .NET: Discord.Net, DSharpPlus
   5.x; JVM: Discord4J, Javacord, Kord; Rust: Twilight; C/C++: Concord,
