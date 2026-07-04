@@ -100,7 +100,7 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
     mfa_level: 0,
     explicit_content_filter: row.explicit_content_filter,
     max_presences: null,
-    max_members: 500000,
+    max_members: 500_000,
     max_stage_video_channel_users: 50,
     max_video_channel_users: 25,
     vanity_url_code: null,
