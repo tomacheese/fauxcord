@@ -37,6 +37,56 @@ export function getPinnedMessages(
     .filter((m): m is MessageObject => m !== null)
 }
 
+/** A pinned message paired with the timestamp it was pinned at. */
+export interface PinnedMessageEntry {
+  /** The pinned message object */
+  message: MessageObject
+  /** ISO-8601 UTC timestamp of when the message was pinned */
+  pinnedAt: string
+}
+
+/**
+ * Converts SQLite's naive "YYYY-MM-DD HH:MM:SS" UTC timestamp into an ISO-8601
+ * UTC string. The space separator is normalized to "T" and a "Z" suffix is
+ * appended so the value is parsed as UTC rather than the host's local timezone.
+ * @param value - Naive UTC timestamp string from SQLite
+ * @returns ISO-8601 UTC timestamp string
+ */
+function sqliteUtcToIso(value: string): string {
+  return new Date(`${value.replace(' ', 'T')}Z`).toISOString()
+}
+
+/**
+ * Retrieves pinned messages together with their pin timestamps using a single
+ * joined query (avoiding a separate lookup of the `pins` table).
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param baseUrl - Base URL
+ * @returns Array of pinned message entries ordered by pin time (ascending)
+ */
+export function getPinnedMessageEntries(
+  db: Database,
+  channelId: string,
+  baseUrl: string
+): PinnedMessageEntry[] {
+  const rows = db
+    .prepare(
+      `SELECT m.*, p.pinned_at AS pinned_at FROM messages m
+       JOIN pins p ON p.message_id = m.id
+       WHERE p.channel_id = ?
+       ORDER BY p.pinned_at ASC`
+    )
+    .all(channelId) as (MessageRow & { pinned_at: string })[]
+
+  const entries: PinnedMessageEntry[] = []
+  for (const row of rows) {
+    const message = hydrateMessageRow(db, row, baseUrl)
+    if (message === null) continue
+    entries.push({ message, pinnedAt: sqliteUtcToIso(row.pinned_at) })
+  }
+  return entries
+}
+
 /**
  * Pins a message.
  * @param db - Database

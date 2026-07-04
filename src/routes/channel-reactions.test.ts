@@ -111,5 +111,26 @@ describe('Channel Reactions API', () => {
       const body = (await res.json()) as { code: number }
       expect(body.code).toBe(10_008)
     })
+
+    it('returns 400 for a malformed percent-encoded emoji', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'react')
+
+      // "%E0%A4%A" is invalid percent-encoding and makes decodeURIComponent throw.
+      const res = await app.request(
+        `/channels/${channelId}/messages/${messageId}/reactions/%E0%A4%A/@me`,
+        {
+          method: 'PUT',
+          headers: { Authorization: token },
+        }
+      )
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(50_035)
+    })
   })
 })

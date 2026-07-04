@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createChannelPinRoutes } from './channel-pins'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
 import type { Database } from '../db'
 
 const BASE_URL = 'http://localhost:3000'
@@ -35,6 +35,48 @@ describe('Channel Pins API', () => {
       expect(res.status).toBe(200)
       const body = await res.json()
       expect(Array.isArray(body)).toBe(true)
+    })
+  })
+
+  describe('GET /channels/:channelId/messages/pins (new format)', () => {
+    it('returns the {items, has_more} shape with a valid ISO pinned_at', async () => {
+      const authorId = '222222222222222222'
+      db.prepare(
+        "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'Author')"
+      ).run(authorId)
+      const messageId = seedMessage(db, channelId, authorId, token)
+      const pinRes = await app.request(
+        `/channels/${channelId}/messages/pins/${messageId}`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(pinRes.status).toBe(204)
+
+      const res = await app.request(`/channels/${channelId}/messages/pins`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        items: { pinned_at: string; message: { id: string } }[]
+        has_more: boolean
+      }
+      expect(body.has_more).toBe(false)
+      expect(body.items).toHaveLength(1)
+      expect(body.items[0].message.id).toBe(messageId)
+      // pinned_at must be a valid ISO-8601 UTC timestamp (ends with Z).
+      expect(body.items[0].pinned_at).toMatch(/Z$/)
+      expect(Number.isNaN(Date.parse(body.items[0].pinned_at))).toBe(false)
+    })
+  })
+
+  describe('PUT /channels/:channelId/messages/pins/:messageId', () => {
+    it('returns 404 for an unknown message', async () => {
+      const res = await app.request(
+        `/channels/${channelId}/messages/pins/999999999999999999`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(10_008)
     })
   })
 })
