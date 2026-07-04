@@ -30,7 +30,9 @@ describe('validateCurrentUserUpdate', () => {
   })
 
   it('accepts null avatar/banner', () => {
-    expect(validateCurrentUserUpdate({ avatar: null, banner: null })).toEqual({})
+    expect(validateCurrentUserUpdate({ avatar: null, banner: null })).toEqual(
+      {}
+    )
   })
 
   it('flags a non-string avatar', () => {

@@ -61,8 +61,8 @@ describe('isChannelWebhookLimitReached', () => {
   })
 
   it('is true at or above the limit', () => {
-    expect(isChannelWebhookLimitReached(WEBHOOK_LIMITS.CHANNEL_WEBHOOKS_MAX)).toBe(
-      true
-    )
+    expect(
+      isChannelWebhookLimitReached(WEBHOOK_LIMITS.CHANNEL_WEBHOOKS_MAX)
+    ).toBe(true)
   })
 })

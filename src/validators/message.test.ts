@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { validateMessageCreate, isEmptyMessage, MESSAGE_LIMITS } from './message'
+import {
+  validateMessageCreate,
+  isEmptyMessage,
+  MESSAGE_LIMITS,
+} from './message'
 
 describe('validateMessageCreate', () => {
   it('accepts a normal message with no errors', () => {
@@ -15,9 +19,12 @@ describe('validateMessageCreate', () => {
   })
 
   it('flags too many embeds', () => {
-    const embeds = Array.from({ length: MESSAGE_LIMITS.EMBEDS_MAX + 1 }, () => ({
-      title: 't',
-    }))
+    const embeds = Array.from(
+      { length: MESSAGE_LIMITS.EMBEDS_MAX + 1 },
+      () => ({
+        title: 't',
+      })
+    )
     const errors = validateMessageCreate({ embeds })
     expect(errors.embeds).toBeDefined()
   })
@@ -55,7 +62,9 @@ describe('validateMessageCreate', () => {
     const errors = validateMessageCreate({
       embeds: [
         {
-          footer: { text: 'a'.repeat(MESSAGE_LIMITS.EMBED_FOOTER_TEXT_MAX + 1) },
+          footer: {
+            text: 'a'.repeat(MESSAGE_LIMITS.EMBED_FOOTER_TEXT_MAX + 1),
+          },
         },
       ],
     })

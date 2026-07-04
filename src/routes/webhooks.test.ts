@@ -169,11 +169,14 @@ describe('Webhooks API (with token)', () => {
     })
 
     it('returns 204 when wait is not set', async () => {
-      const res = await app.request(`/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: 'async' }),
-      })
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: 'async' }),
+        }
+      )
       expect(res.status).toBe(204)
     })
 

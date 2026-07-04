@@ -122,7 +122,9 @@ describe('Channel Reactions API', () => {
       ).user_id
       const messageId = seedMessage(db, channelId, botUserId, token, 'r')
       const reactor = '777777777777777777'
-      db.prepare("INSERT INTO users (id, username) VALUES (?, 'R')").run(reactor)
+      db.prepare("INSERT INTO users (id, username) VALUES (?, 'R')").run(
+        reactor
+      )
       db.prepare(
         'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
       ).run(messageId, reactor, '👍')

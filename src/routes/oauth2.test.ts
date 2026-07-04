@@ -3,7 +3,10 @@ import { Hono } from 'hono'
 import { createOAuth2Routes } from './oauth2'
 import { initializeDatabase, closeDatabase } from '../db'
 import { seedBot } from '../test-helpers'
-import { createAuthCode, createClientCredentialsToken } from '../services/oauth2'
+import {
+  createAuthCode,
+  createClientCredentialsToken,
+} from '../services/oauth2'
 import type { Database } from '../db'
 
 describe('OAuth2 API', () => {
