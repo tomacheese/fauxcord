@@ -258,6 +258,18 @@ beforeAll(() => {
   const memberId = seedMember(db, guildId)
   const emojiId = seedEmoji(db, guildId, BOT_USER_ID)
   const inviteCode = seedInvite(db, channelId, guildId, BOT_USER_ID)
+  // A separate invite consumed only by the destructive DELETE contract test.
+  // Must use an explicit, distinct code: seedInvite's default code is the
+  // same for every call, and INSERT OR REPLACE would silently overwrite the
+  // GET fixture above (inviteCode) with this row, making DELETE destroy data
+  // the GET tests still depend on.
+  const deletableInviteCode = seedInvite(
+    db,
+    channelId,
+    guildId,
+    BOT_USER_ID,
+    'deletablecode'
+  )
   const bannedUserId = seedBan(db, guildId, undefined, 'Contract test ban')
 
   // Seed an archived public thread (type 11) with the bot as a member so the
@@ -286,6 +298,7 @@ beforeAll(() => {
     memberId,
     emojiId,
     inviteCode,
+    deletableInviteCode,
     bannedUserId,
     threadId,
   }
