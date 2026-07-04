@@ -139,4 +139,40 @@ describe('Channel Messages API', () => {
       expect(deleteRes.status).toBe(204)
     })
   })
+
+  describe('POST /channels/:channelId/messages/bulk-delete', () => {
+    it('does not delete messages that belong to a different channel', async () => {
+      const otherChannelId = seedChannel(db, seedGuild(db, token), 'other')
+
+      // Post one message in each channel.
+      const postTo = async (cid: string, content: string): Promise<string> => {
+        const res = await app.request(`/channels/${cid}/messages`, {
+          method: 'POST',
+          headers: { Authorization: token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content }),
+        })
+        const { id } = (await res.json()) as { id: string }
+        return id
+      }
+      const msgA = await postTo(channelId, 'in target channel')
+      const msgB = await postTo(otherChannelId, 'in other channel')
+
+      // Bulk-delete both IDs via the target channel; msgB must survive.
+      const res = await app.request(
+        `/channels/${channelId}/messages/bulk-delete`,
+        {
+          method: 'POST',
+          headers: { Authorization: token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [msgA, msgB] }),
+        }
+      )
+      expect(res.status).toBe(204)
+
+      const survivor = await app.request(
+        `/channels/${otherChannelId}/messages/${msgB}`,
+        { headers: { Authorization: token } }
+      )
+      expect(survivor.status).toBe(200)
+    })
+  })
 })

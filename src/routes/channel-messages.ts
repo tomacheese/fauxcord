@@ -194,8 +194,12 @@ export function createChannelMessageRoutes(
             f.data
           )
         }
-      } catch {
-        // Ignore if the upload directory does not exist (e.g. in-memory test env)
+      } catch (err) {
+        // Ignore a missing upload directory (e.g. in-memory test env), but
+        // surface any other failure instead of silently discarding it.
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw err
+        }
       }
     }
 
@@ -237,9 +241,12 @@ export function createChannelMessageRoutes(
   })
 
   // DELETE /channels/:channelId/messages/:messageId — Delete a message
+  // Unlike PATCH (which enforces authorship), deletion is intentionally not
+  // ownership-guarded: the mock does not model MANAGE_MESSAGES, and real
+  // Discord permits deleting other users' messages with that permission.
   app.delete('/channels/:channelId/messages/:messageId', (c) => {
-    const { messageId } = c.req.param()
-    const deleted = deleteMessage(db, messageId)
+    const { channelId, messageId } = c.req.param()
+    const deleted = deleteMessage(db, messageId, channelId)
     if (!deleted) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,
@@ -253,6 +260,7 @@ export function createChannelMessageRoutes(
 
   // POST /channels/:channelId/messages/bulk-delete — Bulk delete messages
   app.post('/channels/:channelId/messages/bulk-delete', async (c) => {
+    const { channelId } = c.req.param()
     // JSON.parse converts 19-digit Snowflake integers to floating point and
     // loses precision (JavaScript number behavior). Libraries like discord.py
     // send Snowflakes as raw numbers, so extract them from the raw text with
@@ -284,7 +292,9 @@ export function createChannelMessageRoutes(
     }
 
     for (const msgId of messages) {
-      deleteMessage(db, msgId)
+      // Scope deletion to this channel so IDs belonging to other channels are
+      // not removed by a bulk-delete targeting a different channel.
+      deleteMessage(db, msgId, channelId)
     }
 
     return c.body(null, 204)
