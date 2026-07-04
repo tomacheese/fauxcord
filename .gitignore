@@ -12,5 +12,7 @@ coverage/
 spec/openapi.upstream.json
 # library-compat harness run outputs (keep dir, ignore generated results)
 compat/results/*.json
+# run-verify.sh flock lock files (runtime-only, never a build artifact)
+compat/results/_locks/
 __pycache__/
 *.pyc
