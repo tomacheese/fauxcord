@@ -65,7 +65,10 @@ export interface WebhookUpdatePayload {
 
 /**
  * Validates a webhook update (PATCH) payload. `name`, when present, must be a
- * non-empty string of at most 80 characters (matching creation constraints).
+ * non-empty string of at most `WEBHOOK_LIMITS.NAME_MAX` characters (matching
+ * creation constraints). `avatar`, when present, must be a string or null;
+ * `channel_id`, when present, must be a string. Fields are untrusted JSON, so
+ * each is type-checked at runtime.
  * @param payload - Payload to validate
  * @returns Validation error map (empty when valid)
  */

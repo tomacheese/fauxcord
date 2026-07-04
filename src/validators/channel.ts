@@ -99,8 +99,10 @@ export interface ChannelUpdatePayload {
 
 /**
  * Validates a channel update (PATCH) payload. When present: `name` must be a
- * non-empty string of at most 100 characters, `topic` a string of at most 1024
- * characters, `rate_limit_per_user` an integer in [0, 21600], and `position` a
+ * non-empty string of at most `CHANNEL_LIMITS.NAME_MAX` characters, `topic` a
+ * string of at most `CHANNEL_LIMITS.TOPIC_MAX` characters,
+ * `rate_limit_per_user` an integer in
+ * `[0, CHANNEL_LIMITS.RATE_LIMIT_PER_USER_MAX]`, and `position` a
  * non-negative integer. Fields are untrusted JSON, so each is type-checked at
  * runtime.
  * @param payload - Payload to validate

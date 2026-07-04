@@ -30,8 +30,8 @@ export function generateSnowflake(): string {
     if (increment === 0n) {
       while (BigInt(Date.now()) - DISCORD_EPOCH <= lastTimestamp) {
         // Busy-wait until the clock advances to the next millisecond.
-        // This only triggers after 4096 IDs in one millisecond and blocks
-        // for up to ~1ms in the worst case.
+        // Blocks for up to ~1ms in the worst case (see the jsdoc above for
+        // when this triggers).
       }
       timestamp = BigInt(Date.now()) - DISCORD_EPOCH
     }
