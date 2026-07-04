@@ -70,6 +70,33 @@ describe('Test Control API', () => {
       expect(body.guilds[0].channels[0].id).toBeTruthy()
     })
 
+    it('registers the bot as a member of every created guild', async () => {
+      // Real Discord API: a bot present in a guild always appears in that
+      // guild's member list. Without a guild_members row, GET/PATCH/PUT/DELETE
+      // /guilds/{id}/members/{bot_id}* all 404 for the bot itself, breaking
+      // any client library that manages its own guild member (e.g. self
+      // role assignment) — confirmed via a real Discord.Net compat run
+      // (compat/dotnet-discordnet) where RestGuild.GetUserAsync(botId)
+      // silently returned null because of exactly this gap.
+      const res = await app.request('/_test/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: 'Bot membertoken',
+          user: { id: '111111111111111111', username: 'TestBot' },
+          guilds: [{ id: '222222222222222222', name: 'Test Guild' }],
+        }),
+      })
+      expect(res.status).toBe(201)
+
+      const memberRow = db
+        .prepare(
+          'SELECT * FROM guild_members WHERE guild_id = ? AND user_id = ?'
+        )
+        .get('222222222222222222', '111111111111111111')
+      expect(memberRow).toBeTruthy()
+    })
+
     it('returns 409 for a duplicate token', async () => {
       const setupBody = JSON.stringify({
         token: 'Bot duplicatetoken',

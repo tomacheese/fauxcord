@@ -14,6 +14,7 @@ import {
   deleteChannel,
   type ChannelUpdatePayload,
 } from '../services/channels'
+import { getThread } from '../services/threads'
 import type { AppEnv } from '../middleware/auth'
 import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import { createChannelPinRoutes } from './channel-pins'
@@ -42,9 +43,13 @@ export function createChannelRoutes(
   // GET /channels/:channelId — Retrieve channel information
   app.get('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
+    // Threads (types 10/11/12) must include `thread_metadata` (and message/
+    // member counts) here — real Discord always does, and object-model
+    // client libraries (e.g. Discord.Net) use its presence, not just `type`,
+    // to decide whether to construct a thread-shaped model.
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getThread(db, channelId) ?? getChannel(db, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )

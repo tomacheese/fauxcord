@@ -41,7 +41,10 @@ export interface ThreadMemberRow {
 /** Thread metadata sub-object (ThreadMetadataResponse). */
 export interface ThreadMetadataObject {
   archived: boolean
-  archive_timestamp: string | null
+  // Discord's spec (discord-api-types APIThreadMetadata) declares this a
+  // non-nullable string: it is set at thread creation time and only updated
+  // when the archived state changes, never left null.
+  archive_timestamp: string
   auto_archive_duration: number
   locked: boolean
   create_timestamp: string
@@ -121,9 +124,12 @@ export function toThreadObject(db: Database, row: ThreadRow): ThreadObject {
     total_message_sent: messageCount,
     thread_metadata: {
       archived: row.archived === 1,
-      archive_timestamp: row.archive_timestamp
-        ? new Date(row.archive_timestamp).toISOString()
-        : null,
+      // Falls back to the creation timestamp when never explicitly archived
+      // (matches real Discord: archive_timestamp starts at creation time and
+      // is never null — confirmed via discord-api-types' APIThreadMetadata).
+      archive_timestamp: new Date(
+        row.archive_timestamp ?? row.created_at
+      ).toISOString(),
       auto_archive_duration: normalizeAutoArchiveDuration(
         row.auto_archive_duration
       ),
