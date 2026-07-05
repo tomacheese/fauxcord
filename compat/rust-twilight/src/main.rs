@@ -99,6 +99,13 @@ struct Report {
 /// target instead of a synthetic id that would 404.
 struct Ctx {
     bot: Id<UserMarker>,
+    /// A throwaway user id used only as the target of the ban endpoints. It is
+    /// deliberately NOT the bot: Fauxcord's ban implies a kick (it deletes the
+    /// target's `guild_members` row), so banning `bot` would evict the bot from
+    /// the guild and make every later member/role probe 404 with "Unknown
+    /// Member". Mirrors rust-serenity's `ban_target` / go-discordgo's
+    /// `BAN_TARGET` (same id, same reason).
+    ban_target: Id<UserMarker>,
     guild: Id<GuildMarker>,
     channel: Id<ChannelMarker>,
     message: Id<MessageMarker>,
@@ -346,6 +353,14 @@ async fn main() {
     // failure below.
     let _ = client.create_reaction(channel, message, &reaction).await;
 
+    // Ban target: a throwaway user id that is never the bot (see the `Ctx`
+    // field comment). Pre-ban it so the `GET /guilds/{id}/bans/{user_id}` probe
+    // — which the canonical order runs before the `PUT` that creates a ban —
+    // has an existing ban to read instead of 404ing (mirrors rust-serenity's
+    // bootstrap ban).
+    let ban_target = Id::<UserMarker>::new(700_000_000_000_000_001);
+    let _ = client.create_ban(guild, ban_target).await;
+
     // Capture a webhook-authored message id for the webhook-message
     // endpoints (mirrors rust-serenity's/go-discordgo's webhook-message-id
     // capture). `.wait()` (no args) converts `ExecuteWebhook` into
@@ -365,6 +380,7 @@ async fn main() {
 
     let ctx = Ctx {
         bot,
+        ban_target,
         guild,
         channel,
         message,
@@ -568,10 +584,12 @@ async fn run_one(
         "GET /gateway/bot" => call!(client.gateway().authed()),
         "GET /gateway" => call!(client.gateway()),
         "DELETE /guilds/{guild_id}/bans/{user_id}" => {
-            call!(client.delete_ban(ctx.guild, ctx.bot))
+            call!(client.delete_ban(ctx.guild, ctx.ban_target))
         }
-        "GET /guilds/{guild_id}/bans/{user_id}" => call!(client.ban(ctx.guild, ctx.bot)),
-        "PUT /guilds/{guild_id}/bans/{user_id}" => call!(client.create_ban(ctx.guild, ctx.bot)),
+        "GET /guilds/{guild_id}/bans/{user_id}" => call!(client.ban(ctx.guild, ctx.ban_target)),
+        "PUT /guilds/{guild_id}/bans/{user_id}" => {
+            call!(client.create_ban(ctx.guild, ctx.ban_target))
+        }
         "GET /guilds/{guild_id}/bans" => call!(client.bans(ctx.guild)),
         "GET /guilds/{guild_id}/channels" => call!(client.guild_channels(ctx.guild)),
         "POST /guilds/{guild_id}/channels" => {
