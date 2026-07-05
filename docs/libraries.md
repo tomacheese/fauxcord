@@ -221,7 +221,7 @@ The summary below reflects the latest state of that matrix.
 | Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                    |
 | Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (68/87 pass, 17 n/a, 2 lib-issue) |
 | Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | ✅ Verified (71/87 pass, 16 n/a, 0 lib-issue) |
-| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | ✅ Verified (50/87 pass, 16 n/a, 21 lib-issue) |
+| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | ✅ Verified (55/87 pass, 16 n/a, 16 lib-issue) |
 | DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                    |
 | Concord                   | C        | `struct discord_config.base_url`                         | ✅ Verified (53/86 pass, 16 n/a, 17 lib-issue) |
 | Sleepy Discord            | C++      | ❌ Not possible (hardcoded host + scheme literal)        | ⛔ Blocked                                    |
