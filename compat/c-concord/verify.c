@@ -81,6 +81,27 @@
  *    itself is built assuming that curl capability is present. See the
  *    Dockerfile for the exact build recipe mirroring upstream CI.
  *
+ * 8. CONFIRMED Concord bug (upstream master @ 02fff9a7): discord_execute_webhook
+ *    SIGSEGVs before sending any request. CCORD_DATA_TO_JSON(client,
+ *    discord_execute_webhook, ...) (src/webhook.c:163) resolves the WRONG
+ *    reflection template — discord_emoji (8 members) instead of
+ *    discord_execute_webhook (11 fields) — then serializes the params memory
+ *    as if it were an emoji. At the emoji's `roles` snowflake-list field it
+ *    reads the execute-webhook `content` pointer as a list `array` and
+ *    dereferences the string bytes as u64 snowflakes
+ *    (discord-data-wrap.c:367, _jsonb_write_list_element), faulting on a
+ *    non-canonical address (the ASCII bytes of "...ebhook-m..."). Verified
+ *    under gdb against a debug build: frame shows tmpl->name="discord_emoji",
+ *    members.length=8. This is purely client-side (no HTTP is ever issued) so
+ *    it is a Concord defect, unrelated to Fauxcord. Every other body-carrying
+ *    call in this verifier (create_message, create_webhook, create_emoji,
+ *    modify_*, edit_webhook_message, ...) serializes correctly — only
+ *    execute_webhook mis-resolves. Because the crash aborts the entire
+ *    process, discord_execute_webhook is NOT invoked here: the single
+ *    "POST /webhooks/{id}/{token}" row is recorded as a lib-issue with this
+ *    root cause, and the webhook-authored-message rows become n-a (no message
+ *    id can be captured). This keeps the remaining ~87 endpoints verifiable.
+ *
  * ============================================================================
  * ENDPOINT COVERAGE NOTES (n-a entries, all confirmed by reading the public
  * headers include/channel.h, include/guild.h, include/webhook.h,
@@ -128,24 +149,41 @@
 
 #include "discord.h"
 
-/* ---- Fixed test fixture, mirrors compat/common/setup.json verbatim -------
+/* discord_config.token must NOT include the "Bot " prefix (see CONFIRMED
+ * FACT #3 above); Concord prepends "Bot " itself.
+ *
+ * The value must be a *format-valid* Discord token: discord_from_config()
+ * calls _discord_token_is_valid() (src/discord-client.c) BEFORE any network
+ * activity and aborts client construction with "Invalid token format" if it
+ * fails. That validator requires len 50-80, exactly two '.'-separated parts
+ * of lengths 24/6/40, so the other verifiers' bare "compat-token" cannot be
+ * used here. This is Concord's own upstream test dummy (test/test-client.h's
+ * TEST_DUMMY_TOKEN); its first segment base64-decodes to the bot user id
+ * 100000000000000001, matching the fixture below. Fauxcord accepts any token
+ * value (it only matches the registered string), so using a Concord-shaped
+ * token changes nothing on the Fauxcord side. */
+#define BOT_TOKEN                                                            \
+    "MTAwMDAwMDAwMDAwMDAwMDAx.G4bZ9X."                                       \
+    "c29tZS1mYWtlLXRva2VuLXNlY3JldC1wYWRkaW5n"
+
+/* ---- Fixed test fixture, mirrors compat/common/setup.json -----------------
  * (hardcoded per task instructions rather than parsed at runtime, since
- * plain C has no JSON parser available in this build without adding an
- * extra dependency; the string below is the exact byte-for-byte payload of
- * common/setup.json, kept in sync by hand). */
+ * plain C has no JSON parser available in this build without adding an extra
+ * dependency). Kept in sync with common/setup.json by hand EXCEPT for the
+ * token: this verifier deliberately registers BOT_TOKEN (a format-valid
+ * Discord token, see above) instead of the shared "compat-token", because
+ * Concord rejects the latter at client boot. Referencing BOT_TOKEN here
+ * rather than repeating the literal keeps the registered token and the token
+ * Concord sends structurally identical. The "Bot " prefix is the wire format
+ * /_test/setup expects. */
 #define SETUP_JSON                                                           \
     "{"                                                                      \
-    "\"token\":\"Bot compat-token\","                                        \
+    "\"token\":\"Bot " BOT_TOKEN "\","                                       \
     "\"user\":{\"id\":\"100000000000000001\",\"username\":\"CompatBot\"},"   \
     "\"guilds\":[{\"id\":\"200000000000000001\",\"name\":\"Compat Guild\","  \
     "\"channels\":[{\"id\":\"300000000000000001\",\"name\":\"general\","     \
     "\"type\":0}]}]"                                                         \
     "}"
-
-/* discord_config.token must NOT include the "Bot " prefix (see CONFIRMED
- * FACT #3 above); Fauxcord's setup token above does include it because
- * that's the wire format /_test/setup expects. */
-#define BOT_TOKEN "compat-token"
 #define GUILD_ID 200000000000000001ULL
 #define CHANNEL_ID 300000000000000001ULL
 #define BOT_USER_ID 100000000000000001ULL
@@ -199,6 +237,23 @@ record_na(const char *endpoint, const char *note)
     struct result *r = &g_results[g_nresults++];
     r->endpoint = endpoint;
     r->status = "n-a";
+    snprintf(r->note, sizeof r->note, "%s", note);
+}
+
+/**
+ * @brief Record an endpoint as a confirmed library-side defect that cannot be
+ *      exercised in-process because invoking it crashes the client (so no
+ *      CCORDcode is ever returned to grade via record_call).
+ *
+ * @param endpoint canonical "METHOD /path" string from common/endpoints.json
+ * @param note the concrete root cause of the library defect
+ */
+static void
+record_lib_issue(const char *endpoint, const char *note)
+{
+    struct result *r = &g_results[g_nresults++];
+    r->endpoint = endpoint;
+    r->status = "lib-issue";
     snprintf(r->note, sizeof r->note, "%s", note);
 }
 
@@ -502,20 +557,14 @@ main(void)
         struct discord_ret ret = { .sync = true };
         discord_create_reaction(client, CHANNEL_ID, MSG, 0, EMOJI_NAME, &ret);
     }
-    /* Capture a webhook-authored message id for the webhook-message
-     * endpoints; wait=true is required for Concord to receive the created
-     * message body back synchronously (discord_execute_webhook's `wait`
-     * field, confirmed in src/api/webhook.recipe.h). */
-    {
-        struct discord_message msg_ret = { 0 };
-        struct discord_ret_message ret = { .sync = &msg_ret };
-        struct discord_execute_webhook params = {
-            .wait = true,
-            .content = "compat-webhook-msg",
-        };
-        if (discord_execute_webhook(client, WEBHOOK_ID, WEBHOOK_TOKEN, &params, (struct discord_ret *)&ret) == CCORD_OK)
-            WEBHOOK_MSG_ID = msg_ret.id;
-    }
+    /* Would capture a webhook-authored message id for the webhook-message
+     * endpoints, but discord_execute_webhook() SIGSEGVs inside Concord's
+     * reflection JSON codec before any request is sent (see the
+     * CONFIRMED FACT #8 write-up in the header). The crash kills the whole
+     * process, so this call is intentionally not made: WEBHOOK_MSG_ID stays
+     * 0, and the dependent webhook-message rows fall through to their "no
+     * message id captured" n-a branch. The POST execute-webhook row itself
+     * is recorded as a lib-issue further below without invoking the call. */
 
     /* ---- Endpoint calls, in the canonical order from
      * compat/common/endpoints.json with non-DELETE methods first and
@@ -1002,13 +1051,19 @@ main(void)
         record_call("PATCH /webhooks/{webhook_id}/{webhook_token}",
                     discord_modify_webhook_with_token(client, WEBHOOK_ID, WEBHOOK_TOKEN, &params, &ret), client);
     }
-    /* POST /webhooks/{webhook_id}/{webhook_token} */
-    {
-        struct discord_ret ret = { .sync = true };
-        struct discord_execute_webhook params = { .content = "compat" };
-        record_call("POST /webhooks/{webhook_id}/{webhook_token}",
-                    discord_execute_webhook(client, WEBHOOK_ID, WEBHOOK_TOKEN, &params, &ret), client);
-    }
+    /* POST /webhooks/{webhook_id}/{webhook_token} — NOT invoked: calling
+     * discord_execute_webhook() crashes the client (SIGSEGV) inside Concord's
+     * reflection JSON serializer, before any HTTP request is built, so it
+     * cannot be graded via record_call without killing the process. Recorded
+     * as a confirmed library-side defect instead (see CONFIRMED FACT #8). */
+    record_lib_issue("POST /webhooks/{webhook_id}/{webhook_token}",
+                     "SIGSEGV in Concord's reflection JSON codec: "
+                     "CCORD_DATA_TO_JSON(discord_execute_webhook) resolves the "
+                     "wrong reflection template (discord_emoji, 8 members) and "
+                     "walks the params as an emoji, dereferencing the content "
+                     "string bytes as a snowflake array (discord-data-wrap.c "
+                     "_jsonb_write_list_element). Concord bug, not Fauxcord: "
+                     "the crash is client-side, before any request is sent.");
     /* GET /webhooks/{webhook_id} */
     {
         struct discord_webhook wh_ret = { 0 };
