@@ -208,18 +208,18 @@ The summary below reflects the latest state of that matrix.
 | Eris                      | JS/TS    | ❌ Not possible (hardcodes HTTPS on port 443)            | ⛔ Blocked                                    |
 | Oceanic.js                | JS/TS    | Fully overridable client option                          | ✅ Verified, some findings pending triage     |
 | discord.py                | Python   | `Route.BASE = "..."`                                     | ✅ Verified (63/87 pass, 18 n/a, 6 lib-issue) |
-| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | ✅ Verified (51/87 pass, 18 n/a, 18 lib-issue) |
+| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | ✅ Verified (61/87 pass, 18 n/a, 8 lib-issue) |
 | Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | ✅ Verified (49/87 pass, 18 n/a, 20 lib-issue) |
-| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | ✅ Verified (60/87 pass, 12 n/a, 15 lib-issue) |
+| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | ✅ Verified (66/87 pass, 11 n/a, 10 lib-issue) |
 | interactions.py           | Python   | `interactions.api.http.route.Route.BASE`                 | ✅ Verified (66/87 pass, 14 n/a, 7 lib-issue) |
 | discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | ✅ Verified (73/86 pass, 13 n/a, 0 lib-issue) |
 | Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (62/86 pass, 24 n/a, 0 lib-issue) |
 | DSharpPlus 5.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
 | DSharpPlus 4.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
 | JDA                       | JVM      | ❌ Not usable without a real Gateway WebSocket handshake | ⛔ Blocked                                    |
-| Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | 🧪 Scaffolded, run pending                    |
+| Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | ✅ Verified (60/87 pass, 25 n/a, 2 lib-issue) |
 | Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                    |
-| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (65/87 pass, 17 n/a, 5 lib-issue) |
+| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (68/87 pass, 17 n/a, 2 lib-issue) |
 | Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | ✅ Verified (71/87 pass, 16 n/a, 0 lib-issue) |
 | Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | ✅ Verified (50/87 pass, 16 n/a, 21 lib-issue) |
 | DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                    |
