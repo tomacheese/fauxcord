@@ -163,6 +163,8 @@ and destructive shared-resource deletes that would break later rows in the
 same run. Exact per-row reasoning is in each verifier's own evidence notes
 (`verify.*`).
 
-`coverage-matrix.md` (the per-endpoint/per-library source-of-truth table)
-exists and is kept up to date as verifiers complete; several rows remain `-`
-pending outstanding Docker runs — see the matrix's own evidence notes.
+`coverage-matrix.md` is the per-endpoint/per-library source of truth and is
+fully populated; the only `-` (not-yet-run) cells are the
+`PATCH /guilds/{guild_id}/members/@me` row for discord.js/Oceanic/discordgo/
+Concord, whose result files predate that endpoint's addition to
+`common/endpoints.json` — see the matrix's own header note.
