@@ -124,7 +124,7 @@ export async function createTestGatewayServer(): Promise<{
   close: () => Promise<void>
 }> {
   const db = initializeDatabase(':memory:') // 既存の createTestApp と同じ DB 初期化処理
-  const { app, wss, sessionManager } = buildApp(db, {
+  const { app, wss, sessionManager, unsubscribeGateway } = buildApp(db, {
     baseUrl: 'http://localhost:0',
     disableAuth: false,
   })
@@ -150,13 +150,17 @@ export async function createTestGatewayServer(): Promise<{
     db,
     url: `ws://127.0.0.1:${port}`,
     sessionManager,
-    close: () =>
-      new Promise<void>((resolve, reject) => {
+    close: () => {
+      // Always unsubscribe from gatewayBus to prevent listener leaks across
+      // repeated createTestGatewayServer() calls in the test suite.
+      unsubscribeGateway()
+      return new Promise<void>((resolve, reject) => {
         server.close((err) => {
           if (err) reject(err)
           else resolve()
         })
-      }),
+      })
+    },
   }
 }
 

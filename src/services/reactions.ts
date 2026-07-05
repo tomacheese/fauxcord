@@ -6,6 +6,24 @@
 
 import type { Database } from '../db'
 import type { UserRow } from './messages'
+import { gatewayBus } from '../gateway/bus'
+import { getGuildIdForChannel } from './messages'
+
+/**
+ * メッセージ ID からそのメッセージが属するチャンネル ID を取得する。
+ * @param db - データベース
+ * @param messageId - メッセージ ID
+ * @returns チャンネル ID。メッセージが存在しなければ undefined
+ */
+function getChannelIdForMessage(
+  db: Database,
+  messageId: string
+): string | undefined {
+  const row = db
+    .prepare('SELECT channel_id FROM messages WHERE id = ?')
+    .get(messageId) as { channel_id: string } | undefined
+  return row?.channel_id
+}
 
 /**
  * Adds a reaction.
@@ -25,10 +43,24 @@ export function addReaction(
     db.prepare(
       'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
     ).run(messageId, userId, emoji)
-    return true
   } catch {
     return false
   }
+
+  // Gateway emission happens outside the try/catch so a listener throwing
+  // synchronously cannot make this function incorrectly report a DB failure.
+  const channelId = getChannelIdForMessage(db, messageId)
+  if (channelId !== undefined) {
+    gatewayBus.emit('message.reaction.add', {
+      guildId: getGuildIdForChannel(db, channelId),
+      channelId,
+      messageId,
+      userId,
+      emoji: { id: null, name: emoji },
+    })
+  }
+
+  return true
 }
 
 /**
@@ -47,6 +79,17 @@ export function removeReaction(
   db.prepare(
     'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
   ).run(messageId, userId, emoji)
+
+  const channelId = getChannelIdForMessage(db, messageId)
+  if (channelId !== undefined) {
+    gatewayBus.emit('message.reaction.remove', {
+      guildId: getGuildIdForChannel(db, channelId),
+      channelId,
+      messageId,
+      userId,
+      emoji: { id: null, name: emoji },
+    })
+  }
 }
 
 /**

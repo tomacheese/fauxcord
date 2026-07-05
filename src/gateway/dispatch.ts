@@ -53,3 +53,28 @@ export function broadcastToBot(
     sendDispatch(manager, session, eventName, data)
   }
 }
+
+/**
+ * 接続中の全セッションへ Dispatch イベントをブロードキャストする。
+ * requiredIntent が指定された場合、その Intent を持つセッションにのみ送信する。
+ * @param manager - セッションマネージャ
+ * @param eventName - Dispatch イベント名
+ * @param data - イベントデータ
+ * @param requiredIntent - 送信に必要な Intent ビット（省略時は無条件で送信）
+ */
+export function broadcastToAll(
+  manager: SessionManager,
+  eventName: string,
+  data: unknown,
+  requiredIntent?: number
+): void {
+  for (const session of manager.getAll()) {
+    if (
+      requiredIntent !== undefined &&
+      !hasIntent(session.intents, requiredIntent)
+    ) {
+      continue
+    }
+    sendDispatch(manager, session, eventName, data)
+  }
+}

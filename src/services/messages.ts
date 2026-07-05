@@ -7,6 +7,7 @@
 
 import type { Database } from '../db'
 import { snowflakeToTimestamp } from '../snowflake'
+import { gatewayBus } from '../gateway/bus'
 // Used for compile-time type drift detection.
 // When Renovate bumps discord-api-types, `pnpm lint:tsc` will fail if the
 // safe-field subset of MessageResponse is renamed or retyped upstream.
@@ -172,6 +173,23 @@ export interface AttachmentObject {
   url: string
   proxy_url: string
   content_type: string
+}
+
+/**
+ * チャンネル ID からそのチャンネルが属する Guild ID を取得する。
+ * DM 相当のデータで guild_id が存在しない場合は undefined を返す。
+ * @param db - データベース
+ * @param channelId - チャンネル ID
+ * @returns Guild ID。存在しなければ undefined
+ */
+export function getGuildIdForChannel(
+  db: Database,
+  channelId: string
+): string | undefined {
+  const row = db
+    .prepare('SELECT guild_id FROM channels WHERE id = ?')
+    .get(channelId) as { guild_id: string | null } | undefined
+  return row?.guild_id ?? undefined
 }
 
 /**
@@ -446,6 +464,13 @@ export function createMessage(
 
   const msg = getMessage(db, params.messageId, baseUrl)
   if (!msg) throw new Error('Failed to create message')
+
+  gatewayBus.emit('message.create', {
+    guildId: getGuildIdForChannel(db, params.channelId),
+    channelId: params.channelId,
+    message: msg as unknown as Record<string, unknown>,
+  })
+
   return msg
 }
 
@@ -485,7 +510,15 @@ export function updateMessage(
     }
   }
 
-  return getMessage(db, messageId, baseUrl)
+  const updated = getMessage(db, messageId, baseUrl)
+  if (updated) {
+    gatewayBus.emit('message.update', {
+      guildId: getGuildIdForChannel(db, row.channel_id),
+      channelId: row.channel_id,
+      message: updated as unknown as Record<string, unknown>,
+    })
+  }
+  return updated
 }
 
 /**
@@ -502,12 +535,26 @@ export function deleteMessage(
   messageId: string,
   channelId?: string
 ): boolean {
+  // DELETE 実行後は行が失われるため、削除前に channel_id を確定させておく
+  const target = db
+    .prepare('SELECT channel_id FROM messages WHERE id = ?')
+    .get(messageId) as { channel_id: string } | undefined
+
   const result =
     channelId === undefined
       ? db.prepare('DELETE FROM messages WHERE id = ?').run(messageId)
       : db
           .prepare('DELETE FROM messages WHERE id = ? AND channel_id = ?')
           .run(messageId, channelId)
+
+  if (result.changes > 0 && target) {
+    gatewayBus.emit('message.delete', {
+      guildId: getGuildIdForChannel(db, target.channel_id),
+      channelId: target.channel_id,
+      messageId,
+    })
+  }
+
   return result.changes > 0
 }
 

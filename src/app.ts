@@ -25,6 +25,7 @@ import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { createGatewayWebSocketHandler } from './gateway/server'
+import { registerGatewaySubscriptions } from './gateway/subscribe'
 import type { SessionManager } from './gateway/session'
 
 /** buildApp に渡す設定の必要最小サブセット */
@@ -45,12 +46,18 @@ export interface BuildAppConfig {
  * @param db - データベース
  * @param config - baseUrl・uploadPath・disableAuth・latencyMs
  * @returns 組み立て済みアプリと、`serve()` の `websocket` オプションに渡す `WebSocketServer`、
- * および Gateway 配信に使う `SessionManager`
+ * Gateway 配信に使う `SessionManager`、および `gatewayBus` の購読解除関数
  */
 export function buildApp(
   db: Database,
   config: BuildAppConfig
-): { app: Hono<AppEnv>; wss: WebSocketServer; sessionManager: SessionManager } {
+): {
+  app: Hono<AppEnv>
+  wss: WebSocketServer
+  sessionManager: SessionManager
+  /** registerGatewaySubscriptions が登録したリスナーを解除する関数 */
+  unsubscribeGateway: () => void
+} {
   const app = new Hono<AppEnv>()
   // `noServer: true` が必須（`@hono/node-server` の `serve({ websocket: { server: wss } })`
   // が upgrade イベントのハンドリングを引き受けるため）
@@ -84,6 +91,10 @@ export function buildApp(
     baseUrl: config.baseUrl,
     disableAuth: config.disableAuth,
   })
+  // gatewayBus 経由のリソース変更イベントを、接続中の Gateway セッションへ配信する
+  const unsubscribeGateway = registerGatewaySubscriptions(
+    gatewayHandler.sessionManager
+  )
   app.get(
     '/',
     upgradeWebSocket(() => gatewayHandler.upgrade)
@@ -128,5 +139,10 @@ export function buildApp(
     return c.json({ message: '404: Not Found', code: 0 }, 404)
   })
 
-  return { app, wss, sessionManager: gatewayHandler.sessionManager }
+  return {
+    app,
+    wss,
+    sessionManager: gatewayHandler.sessionManager,
+    unsubscribeGateway,
+  }
 }
