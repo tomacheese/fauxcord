@@ -12,11 +12,13 @@ It lets you automate testing of bots and apps without connecting to the real Dis
 - Guild / channel / member / role operations
 - OAuth2 flows (Authorization Code / Client Credentials)
 - File attachments
+- Gateway (WebSocket): Identify / Heartbeat / Resume, and Dispatch events for
+  messages, reactions, guilds, channels, members, and roles
 
 **What it cannot do:**
 
-- WebSocket (Gateway / real-time notifications)
 - Voice / video
+- Sharding, ETF/zlib compression, privileged intents
 
 ---
 
@@ -197,6 +199,32 @@ DISABLE_AUTH=true pnpm start
 
 > Tokens that have been set up continue to work with their registered user information.  
 > Unregistered tokens are treated as a dummy Bot (`MockBot`).
+
+---
+
+## 8. Gateway (WebSocket) に接続する
+
+`/gateway/bot` が返す URL（`ws://localhost:3000`）に接続すると、HELLO → IDENTIFY → READY の
+ハンドシェイクを経て Dispatch イベント（`MESSAGE_CREATE` など）を受信できます。
+
+```javascript
+import WebSocket from 'ws'
+
+const ws = new WebSocket('ws://localhost:3000')
+ws.on('message', (raw) => {
+  const payload = JSON.parse(raw.toString())
+  if (payload.op === 10) {
+    // HELLO -> IDENTIFY
+    ws.send(
+      JSON.stringify({
+        op: 2,
+        d: { token: 'Bot mytoken', intents: 513 },
+      })
+    )
+  }
+  console.log(payload)
+})
+```
 
 ---
 

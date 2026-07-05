@@ -11,6 +11,7 @@ Run integration tests for Discord bots and applications without connecting to th
 - **Rate Limit headers** — Discord-compatible headers attached to responses (dummy values)
 - **Snowflake IDs** — Automatically generates Discord-compatible IDs
 - **File attachments** — Supports file uploads via multipart/form-data
+- **Gateway (WebSocket)** — Identify / Heartbeat / Resume handshake and Dispatch events for messages, reactions, guilds, channels, members, and roles
 
 ## Verified Library Compatibility
 
