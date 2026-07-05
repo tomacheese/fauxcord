@@ -57,15 +57,20 @@ docker compose -f compat/compose.yaml up --build --abort-on-container-exit
 All `docker compose build` invocations in this harness must target a
 dedicated buildx builder, not the host's `default` one.
 
-**Why**: `default` is a reserved name tied to the current Docker context —
-it cannot be removed or recreated (`docker buildx rm default` and
-`docker buildx create --name default` both fail). During this harness's
-development, a `default`-builder buildkit crash (`frontend grpc server
-closed unexpectedly`, triggered by a verifier double-launch — see
-`scripts/run-verify.sh`'s header comment) could not be recovered by tearing
-down and recreating the builder, since `default` itself is not a normal,
-disposable buildx object. Relying on `default` for a harness that expects
-to survive occasional buildkit crashes was a dead end.
+**Why**: primarily isolation, not crash-recovery. This harness's builds
+(images, layer cache, buildkit state) stay fully separate from anything
+else running on the same host, instead of sharing the host's single
+`default` builder/cache with unrelated Docker workloads.
+
+(History: during this harness's development, a `default`-builder buildkit
+crash — `frontend grpc server closed unexpectedly`, triggered by a verifier
+double-launch — could not be recovered by tearing down and recreating the
+builder, since `default` is a reserved name tied to the current Docker
+context and cannot be removed or recreated. That specific double-launch
+cause is now structurally prevented by the `flock` in
+`scripts/run-verify.sh`'s header comment, so this is no longer the main
+argument for avoiding `default` — but the host-isolation benefit below
+still holds independently of that history.)
 
 **What we use instead**: a separate, disposable builder named
 `fauxcord-compat`, using the `docker-container` driver (an isolated buildkit
@@ -164,7 +169,5 @@ same run. Exact per-row reasoning is in each verifier's own evidence notes
 (`verify.*`).
 
 `coverage-matrix.md` is the per-endpoint/per-library source of truth and is
-fully populated; the only `-` (not-yet-run) cells are the
-`PATCH /guilds/{guild_id}/members/@me` row for discord.js/Oceanic/discordgo/
-Concord, whose result files predate that endpoint's addition to
-`common/endpoints.json` — see the matrix's own header note.
+fully populated; no `-` (not-yet-run) cells remain — see the matrix's own
+header note.
