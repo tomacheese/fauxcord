@@ -7,6 +7,7 @@
  */
 
 import { Hono } from 'hono'
+import { serve } from '@hono/node-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
 import { createAuthMiddleware, type AppEnv } from './middleware/auth'
@@ -22,6 +23,8 @@ import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { generateSnowflake } from './snowflake'
+import { buildApp } from './app'
+import type { SessionManager } from './gateway/session'
 
 const TEST_BASE_URL = 'http://localhost:3000'
 const TEST_UPLOAD_PATH = '/tmp/fauxcord-test-uploads'
@@ -106,6 +109,54 @@ export function createFullTestApp(): FullTestContext {
     cleanup: () => {
       closeDatabase(db)
     },
+  }
+}
+
+/**
+ * 実ソケットで WebSocket アップグレードを扱えるテスト用サーバーを起動する。
+ * インメモリ DB を使い、port 0 で OS にポートを割り当てさせる。
+ * @returns db・接続用 URL・後始末用 close 関数
+ */
+export async function createTestGatewayServer(): Promise<{
+  db: Database
+  url: string
+  sessionManager: SessionManager
+  close: () => Promise<void>
+}> {
+  const db = initializeDatabase(':memory:') // 既存の createTestApp と同じ DB 初期化処理
+  const { app, wss, sessionManager } = buildApp(db, {
+    baseUrl: 'http://localhost:0',
+    disableAuth: false,
+  })
+
+  const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
+    const s = serve(
+      {
+        fetch: app.fetch,
+        port: 0,
+        hostname: '127.0.0.1',
+        websocket: { server: wss },
+      },
+      () => {
+        resolve(s)
+      }
+    )
+  })
+
+  const address = server.address()
+  const port = typeof address === 'object' && address ? address.port : 0
+
+  return {
+    db,
+    url: `ws://127.0.0.1:${port}`,
+    sessionManager,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) reject(err)
+          else resolve()
+        })
+      }),
   }
 }
 
