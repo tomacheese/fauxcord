@@ -13,6 +13,9 @@
 # mirrors the official CI recipe instead of relying on the distro package.
 FROM debian:stable-slim AS build
 
+# Build tools, so version pinning isn't meaningful here (same rationale as
+# the root Dockerfile's `hadolint ignore=DL3018` for apk).
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     autoconf \
@@ -32,9 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # any system copy).
 WORKDIR /tmp/curl-build
 RUN curl -LO https://curl.se/download/curl-8.7.1.tar.gz \
-    && tar -xzf curl-8.7.1.tar.gz \
-    && cd curl-8.7.1 \
-    && ./configure --with-openssl --enable-websockets \
+    && tar -xzf curl-8.7.1.tar.gz
+WORKDIR /tmp/curl-build/curl-8.7.1
+RUN ./configure --with-openssl --enable-websockets \
     && make -j"$(nproc)" \
     && make install \
     && ldconfig
@@ -60,6 +63,7 @@ RUN gcc -O2 -Wall -I/usr/local/include/concord -o /verify verify.c \
     -ldiscord -lcurl -lpthread -lm
 
 FROM debian:stable-slim
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*

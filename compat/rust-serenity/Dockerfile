@@ -13,7 +13,10 @@ WORKDIR /app
 
 # Minimal C toolchain for linking. `rustls_backend` (see Cargo.toml) avoids
 # needing OpenSSL/pkg-config dev headers, but a linker (cc) is still required
-# and is not guaranteed to be present in the "slim" base image variant.
+# and is not guaranteed to be present in the "slim" base image variant. Build
+# tools, so version pinning isn't meaningful here (same rationale as the root
+# Dockerfile's `hadolint ignore=DL3018` for apk).
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libc6-dev \
@@ -22,10 +25,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the manifest first and pre-fetch/build dependencies as their own layer,
 # so editing src/main.rs alone doesn't invalidate the (slow) dependency build.
 COPY rust-serenity/Cargo.toml rust-serenity/Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo fetch
-RUN cargo build
-RUN rm -rf src
+RUN mkdir src && echo "fn main() {}" > src/main.rs \
+    && cargo fetch \
+    && cargo build \
+    && rm -rf src
 
 COPY rust-serenity/src ./src
 COPY common ./common

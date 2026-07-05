@@ -14,7 +14,10 @@ WORKDIR /app
 # Minimal C toolchain for linking. twilight-http's default backend (hyper +
 # rustls, like serenity's rustls_backend) avoids needing OpenSSL/pkg-config
 # dev headers, but a linker (cc) is still required and is not guaranteed to
-# be present in the "slim" base image variant.
+# be present in the "slim" base image variant. Build tools, so version
+# pinning isn't meaningful here (same rationale as the root Dockerfile's
+# `hadolint ignore=DL3018` for apk).
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libc6-dev \
@@ -25,10 +28,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Cargo.lock is committed (same as rust-serenity) so the dependency graph is
 # reproducible across builds instead of re-resolving to latest each time.
 COPY rust-twilight/Cargo.toml rust-twilight/Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo fetch
-RUN cargo build
-RUN rm -rf src
+RUN mkdir src && echo "fn main() {}" > src/main.rs \
+    && cargo fetch \
+    && cargo build \
+    && rm -rf src
 
 COPY rust-twilight/src ./src
 COPY common ./common
