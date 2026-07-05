@@ -41,7 +41,7 @@ secrecy = "0.10"
 # role fetch() plays in the JS verifiers) — kept independent of whatever
 # internal HTTP client serenity's "http" feature pulls in. rustls-tls matches
 # serenity's own rustls_backend choice so the image doesn't need OpenSSL.
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
