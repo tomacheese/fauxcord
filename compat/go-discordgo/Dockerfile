@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context is compat/ (see compose.yaml), so COPY paths are prefixed
 # with the library directory and the shared common/ dir.
-FROM golang:1.22-alpine
+FROM golang:1.26-alpine
 WORKDIR /app
 COPY go-discordgo/go.mod ./
 COPY go-discordgo/verify.go ./
