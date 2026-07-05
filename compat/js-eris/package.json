@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "eris": "^0.18.0"
+    "eris": "0.18.0"
   }
 }

@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "oceanic.js": "^1.11.0"
+    "oceanic.js": "1.14.0"
   }
 }
