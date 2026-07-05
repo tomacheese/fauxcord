@@ -58,7 +58,7 @@ const hostname = config.host
 
 console.info(`Discord Mock Server starting on ${hostname}:${port}`)
 
-serve({
+const server = serve({
   fetch: app.fetch,
   port,
   hostname,
@@ -66,12 +66,18 @@ serve({
 })
 
 // Gracefully reconnect all Gateway sessions before exiting on termination signals
+/** Max time (ms) to wait for a graceful shutdown before forcing exit */
+const SHUTDOWN_TIMEOUT_MS = 5000
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {
   process.on(signal, () => {
     for (const session of sessionManager.getAll()) {
       sendReconnect(session)
     }
-    process.exit(0)
+    // Close the HTTP server before exiting so the RECONNECT frames and close
+    // handshakes have a chance to flush; exit once it drains, with a timeout
+    // fallback so a hung connection cannot block shutdown indefinitely.
+    server.close(() => process.exit(0))
+    setTimeout(() => process.exit(0), SHUTDOWN_TIMEOUT_MS).unref()
   })
 }
 

@@ -384,13 +384,15 @@ export function addMemberRole(
     'INSERT OR IGNORE INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
   ).run(guildId, userId, roleId)
 
-  gatewayBus.emit('guild.member.update', {
-    guildId,
-    member: getGuildMember(db, guildId, userId) as unknown as Record<
-      string,
-      unknown
-    >,
-  })
+  // getGuildMember can return null on inconsistent DB state; skip the Dispatch
+  // emit in that case so subscribers never spread a null member payload.
+  const memberObject = getGuildMember(db, guildId, userId)
+  if (memberObject) {
+    gatewayBus.emit('guild.member.update', {
+      guildId,
+      member: memberObject as unknown as Record<string, unknown>,
+    })
+  }
   return true
 }
 
@@ -417,12 +419,14 @@ export function removeMemberRole(
     'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
   ).run(guildId, userId, roleId)
 
-  gatewayBus.emit('guild.member.update', {
-    guildId,
-    member: getGuildMember(db, guildId, userId) as unknown as Record<
-      string,
-      unknown
-    >,
-  })
+  // getGuildMember can return null on inconsistent DB state; skip the Dispatch
+  // emit in that case so subscribers never spread a null member payload.
+  const memberObject = getGuildMember(db, guildId, userId)
+  if (memberObject) {
+    gatewayBus.emit('guild.member.update', {
+      guildId,
+      member: memberObject as unknown as Record<string, unknown>,
+    })
+  }
   return true
 }

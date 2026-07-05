@@ -25,7 +25,14 @@ export function sendDispatch(
     d: data,
   }
   manager.pushToReplayBuffer(session, payload)
-  session.ws.send(encodePayload(payload))
+  try {
+    session.ws.send(encodePayload(payload))
+  } catch {
+    // `ws.send` can throw synchronously when the socket is not OPEN (e.g. a
+    // transient disconnect). The event is already in the replay buffer, so it
+    // will be delivered on RESUME; swallow the error so delivery to the other
+    // sessions is not interrupted.
+  }
 }
 
 /**

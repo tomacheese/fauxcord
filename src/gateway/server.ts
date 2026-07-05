@@ -107,7 +107,14 @@ function armHeartbeatTimeout(
   if (!session) return
   if (session.heartbeatTimer) clearTimeout(session.heartbeatTimer)
   session.heartbeatTimer = setTimeout(() => {
-    ws.close(GatewayCloseCode.SessionTimedOut, 'Session timed out')
+    try {
+      ws.close(GatewayCloseCode.SessionTimedOut, 'Session timed out')
+    } catch {
+      // The socket may already be closed (e.g. `onClose` no longer removes
+      // the session immediately, see the missing `onClose` handler below),
+      // in which case `ws.close` can throw synchronously. Swallow it so the
+      // session is still reaped below.
+    }
     sessionManager.remove(sessionId)
   }, HEARTBEAT_TIMEOUT_MS)
 }
@@ -295,10 +302,12 @@ export function createGatewayWebSocketHandler(
         }
       }
     },
-    onClose: (_event, ws) => {
-      const sessionId = sessionIdByWs.get(ws)
-      if (sessionId) sessionManager.remove(sessionId)
-    },
+    // No onClose handler: a closed socket must not immediately remove the
+    // session, otherwise a transient disconnect could never be resumed (the
+    // session and its replay buffer would be gone before the client can send
+    // RESUME). The Heartbeat timeout (armed on IDENTIFY/RESUME) removes
+    // sessions whose clients never return within the timeout window, which
+    // bounds the lifetime of orphaned sessions.
   }
 
   return { upgrade, sessionManager }
@@ -312,6 +321,12 @@ export function createGatewayWebSocketHandler(
  * @param session - Target session
  */
 export function sendReconnect(session: Session): void {
-  session.ws.send(encodePayload({ op: GatewayOp.Reconnect, d: null }))
-  session.ws.close(1000, 'Reconnect requested')
+  try {
+    session.ws.send(encodePayload({ op: GatewayOp.Reconnect, d: null }))
+    session.ws.close(1000, 'Reconnect requested')
+  } catch {
+    // The socket may already be closed or errored, in which case `ws` throws
+    // synchronously. Swallow it so the shutdown/reconnect loop continues for
+    // the remaining sessions.
+  }
 }

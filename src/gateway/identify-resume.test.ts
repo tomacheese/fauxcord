@@ -167,11 +167,13 @@ describe('RESUME payload validation', () => {
     })
     const messageCreate = await messageCreatePromise
     expect(messageCreate.t).toBe('MESSAGE_CREATE')
-    // Intentionally keep ws1 open: the server currently removes a session as
-    // soon as its socket closes (see onClose in server.ts), so a genuine
-    // disconnect-then-resume flow is not resumable yet. This test exercises
-    // the RESUME success path itself (replay + RESUMED) against the still
-    // live session, independent of that disconnect-handling behavior.
+
+    // Genuinely disconnect ws1: the server no longer removes a session when
+    // its socket closes (see server.ts), so the session and its replay buffer
+    // survive a transient disconnect and remain resumable on a new socket.
+    const ws1ClosePromise = nextClose(ws1)
+    ws1.close()
+    await ws1ClosePromise
 
     const ws2 = new WebSocket(url)
     await nextMessage(ws2) // HELLO

@@ -82,7 +82,12 @@ export function registerGatewaySubscriptions(
   const onGuildCreate: Parameters<typeof gatewayBus.on<'guild.create'>>[1] = (
     payload
   ) => {
-    broadcastToAll(manager, 'GUILD_CREATE', payload.guild)
+    broadcastToAll(
+      manager,
+      'GUILD_CREATE',
+      payload.guild,
+      GatewayIntentBits.Guilds
+    )
   }
   const onChannelCreate: Parameters<
     typeof gatewayBus.on<'channel.create'>

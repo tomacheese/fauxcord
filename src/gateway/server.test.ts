@@ -1,7 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import WebSocket from 'ws'
 import { createTestGatewayServer } from '../test-helpers'
 import { GatewayOp } from './opcodes'
+import { sendReconnect } from './server'
+import { SessionManager } from './session'
 
 describe('Gateway WebSocket handshake', () => {
   let close: (() => Promise<void>) | undefined
@@ -63,5 +65,28 @@ describe('sendReconnect', () => {
 
     const reconnect = await reconnectPromise
     expect(reconnect.op).toBe(GatewayOp.Reconnect)
+  })
+
+  it('does not throw when the socket send/close throws (already closed socket)', () => {
+    const manager = new SessionManager()
+    const ws = {
+      send: vi.fn(() => {
+        throw new Error('socket is not open')
+      }),
+      close: vi.fn(() => {
+        throw new Error('socket is not open')
+      }),
+    }
+    const session = manager.create({
+      botId: 'b1',
+      token: 'Bot x',
+      intents: 0,
+      ws: ws as never,
+    })
+
+    expect(() => {
+      sendReconnect(session)
+    }).not.toThrow()
+    expect(ws.send).toHaveBeenCalledTimes(1)
   })
 })
