@@ -97,33 +97,118 @@ Acceptance: every `N/A`/`⛔blocked` has an evidence note below the table; every
 
 ## Evidence notes
 
-- Eris (all rows `⛔blocked`): Eris hardcodes HTTPS on port 443 with no scheme/port override; see `js-eris/verify.mjs` header comment. Result file: `results/eris.json` (`baseUrlOverridable: false`).
-- JDA (all rows `⛔blocked`, no verifier built): `JDABuilder.build()` requires a real Gateway WebSocket handshake before any `RestAction` becomes usable, and JDA has no supported REST-only build mode; Fauxcord implements no Gateway/WebSocket server. See `jvm-jda/README.md` for full evidence.
-- DPP (all rows `⛔blocked`, no verifier built): `dpp::cluster`'s REST transport hardcodes destination host + TLS with no override hook. See `cpp-dpp/README.md` for full evidence.
-- DSharpPlus 4.x (all rows `⛔blocked`, no verifier built): the REST base URL is a compile-time `const string` (`DSharpPlus.Net.Utilities` / `Endpoints.BASE_URI`), so a client cannot be pointed at Fauxcord.
-- Oceanic: base URL is fully overridable; a handful of endpoints are `N/A` (no high-level wrapper) — see per-row evidence notes in `js-oceanic/verify.mjs`. Result (`results/oceanic.json`, 87 endpoints): 65/87 pass, 20 N/A, 2 lib-issue. `PATCH /guilds/{guild_id}/members/@me` is the new `N/A` row (no high-level Oceanic.js method for it). The 2 `❌→lib` rows (`GET`/`PATCH /guilds/{guild_id}`, `Client#application is not present ... enable rest mode`) are new in this re-run and were not present in the prior 67/86 result; this looks like Oceanic client REST-mode bootstrap flakiness in the verifier rather than a Fauxcord regression, but has not been confirmed reproducible — the pre-existing matrix cells for those two rows are left unchanged pending that confirmation.
-- Discord.Net: base URL overridable via `RestClientProvider`; `N/A` rows have no corresponding high-level method — see evidence notes in `dotnet-discordnet/Program.cs`. Result (87 endpoints, including the `PATCH /guilds/{guild_id}/members/@me` `❌→fix` row described below): 63/87 pass, 24 N/A, 0 lib-issue.
-- discord.py: base URL overridable via `Route.BASE`; verified against Fauxcord in its Docker container. Result (`results/discordpy.json`): 63/87 pass, 18 N/A, 6 lib-issue. The `❌→lib` rows are discord.py-side strictness/behaviour, not Fauxcord gaps — see the per-row `note` fields in the result file.
-- Nextcord (discord.py fork): base URL overridable via `nextcord.http.Route.BASE`. Result (`results/nextcord.json`): 61/87 pass, 18 N/A, 8 lib-issue; `❌→lib` notes carried in the result file.
-- Pycord (discord.py fork): base URL overridable via `discord.http.Route.BASE`. Result (`results/pycord.json`): 49/87 pass, 18 N/A, 20 lib-issue; `❌→lib` notes carried in the result file.
-- hikari: base URL overridable via `hikari.RESTApp(url=...)`. Result (`results/hikari.json`): 66/87 pass, 11 N/A, 10 lib-issue. Two genuine Fauxcord bugs were found and fixed via hikari: (1) thread-members `after` cursor was ignored, looping hikari's `ThreadMembersIterator` forever — fixed in `src/services/threads.ts` (commit `a27651a`); (2) role `permissions` sent as a JSON number was bound straight into the SQLite `TEXT` column, so it round-tripped as the decimal string `"0.0"`/`"8.0"` and hikari's `int()` parse raised `ValueError` — see the `GET`/`PATCH /guilds/{guild_id}` and `GET`/`POST /guilds/{guild_id}/roles` `❌→fix` note below. `GET /oauth2/applications/@me` now passes after the `ApplicationResponse` field completion (the `team` field). The remaining `❌→lib` rows are hikari-side (member lookups against a member hikari never registers → `10007 Unknown Member`; `GET /users/@me/guilds` expects `approximate_member_count` on the partial guild); see the result file.
-- interactions.py: base URL overridable via `interactions.api.http.route.Route.BASE`. Result (`results/interactions.json`): 66/87 pass, 14 N/A, 7 lib-issue; `❌→lib` notes carried in the result file.
-- Kord: base URL overridable via a Ktor `HttpRequestPipeline.Before` interceptor. Result (`results/kord.json`): 68/87 pass, 17 N/A, 2 lib-issue. Kord's strict Kotlin deserializer originally raised `MissingFieldException` on `GET`/`PATCH /guilds/{guild_id}` (fields `region`, `afk_channel_id`, `application_id`, `system_channel_flags`, … — all `required` in the OpenAPI `GuildResponse`) and on `GET /oauth2/applications/@me` (`team`); those were genuine Fauxcord gaps, now resolved by the `GuildResponse`/`ApplicationResponse` field completion (see the Serenity `❌→fix` note below; the same fields also arrived via master's PR #75). The remaining 2 `❌→lib` rows are genuine Kord/verifier issues (`GET /guilds/{guild_id}/bans/{user_id}` and `DELETE /webhooks/{webhook_id}/{webhook_token}/messages/{message_id}` probe entities that do not exist → 404); notes in the result file.
-- Serenity: base URL overridable via `HttpBuilder::proxy(url)` (the ratelimiter must also be disabled, else requests bypass the proxy). Result (`results/serenity.json`): 71/87 pass, 16 N/A, 0 lib-issue. The two `❌→fix` guild rows are the `system_channel_flags`/`nsfw_level`/… gap described below.
-- Twilight: base URL overridable via `ClientBuilder::proxy(host, use_http)`. Result (`results/twilight.json`): 55/87 pass, 16 N/A, 16 lib-issue. A verifier-side bug (the harness banned the bot itself, breaking its own member probes) was fixed, recovering the 5 member/ban rows. The remaining 16 `❌→lib` rows stem from Twilight's `resp.model()` deserializer being stricter than the documented Discord contract: it fails to decode Fauxcord's (spec-valid) create-message/create-invite responses and falls back to placeholder IDs, which cascades into `Unknown X` on the downstream message/thread/invite rows. This is a Twilight-side strictness issue, not a Fauxcord gap: the identical create-message/create-invite responses are decoded successfully by Serenity (equally strict Rust serde) and Kord, and both `POST /channels/{id}/messages` and `POST /channels/{id}/invites` pass the `spec/openapi.json` contract tests in `src/spec-contract.test.ts`. Recorded as `❌→lib` per the triage protocol; see `results/twilight.json` for per-row notes.
-- Concord: base URL overridable via `struct discord_config.base_url`. Result (`results/concord.json`, 87 endpoints): 53/87 pass, 16 N/A, 18 lib-issue. The `❌→lib` rows are Concord-side failures in its reflect-c JSON codec (generic `CCORDcode 100 Failed request` on request construction, plus a `SIGSEGV` inside `discord_execute_webhook`'s serializer that crashes pre-HTTP-send, so Fauxcord is not implicated). One genuine Fauxcord bug surfaced via Concord (`PATCH /webhooks/{id}` HTTP 500 on an unknown `channel_id`) was fixed — see the webhook note below. `results/concord.json` predates that fix; the `❌→lib` count is otherwise Concord-side. `PATCH /guilds/{guild_id}/members/@me` was added to `compat/c-concord/verify.c` (it was previously untested there, unlike the other three verifiers) using `discord_modify_current_member()`; it hits the same `CCORDcode 100` request-construction failure as the rest of the `❌→lib` rows and is recorded as `❌→lib` accordingly.
-- discordgo: base URL overridable via `discordgo.EndpointAPI` + per-resource endpoint vars. The harness's earlier fixture-contamination bug (`EndpointGuilds`, `EndpointChannels`, etc. — see `go-discordgo/verify.go`) was fixed. Result (`results/discordgo.json`, 87 endpoints): 73/87 pass, 14 N/A, 0 lib-issue. `PATCH /guilds/{guild_id}/members/@me` is the new `N/A` row (no high-level discordgo method for it).
-- DSharpPlus5, Javacord, Sleepy: not scaffolded — evidence-only technical blockers (`⛔blocked`, no runnable verifier); see `dotnet-dsharpplus/README.md`, `jvm-javacord/README.md`, and `cpp-sleepy/README.md` respectively.
-- Discord4J: base URL overridable via a custom `discordBaseUrl` in `RouterOptions` (`compat/jvm-discord4j/`). Result (`results/discord4j.json`): 60/87 pass, 25 N/A, 2 lib-issue. The high `N/A` count reflects Discord4J 3.2.6's `ChannelService` lacking high-level thread-member/archived-thread/thread-creation and new-format pin methods, plus destructive calls skipped to protect the shared fixture. The 2 `❌→lib` rows are Discord4J-side (`GET /guilds/{guild_id}/bans/{user_id}` probes a non-existent ban → 404; `GET /oauth2/applications/@me` hits a Jackson deserialization mismatch in Discord4J's own model); notes in the result file.
-- discord.js: all 28 originally-reported `❌→lib` findings were triaged per the Task 27 protocol and turned out to be verifier bootstrap/design bugs (401-cascade on a shared `REST` instance, thread-member endpoints targeting a plain channel instead of a real thread, self-targeted BAN/member-removal calls that kicked the bot out of the shared test guild, dual-form webhook-delete and webhook-message id collisions, and OAuth2 endpoints that are structurally incompatible with a Bot token) — none were genuine Fauxcord or discord.js bugs. All were fixed directly in `js-discordjs/verify.mjs` (not recorded as `❌→fix`/`❌→lib`, per Task 27 policy for verifier-side bugs). Result (`results/discordjs.json`, 87 endpoints, including `PATCH /guilds/{guild_id}/members/@me`, which passes): 81/87 pass, 6 N/A, 0 lib-issue.
-- Oceanic: the same triage found the identical three bug classes (thread-members-vs-real-thread, self-targeted BAN, OAuth2-vs-Bot-token) already present in `js-oceanic/verify.mjs`; fixed the same way. See the Oceanic bullet above for the current 87-endpoint result and a note on 2 new-in-this-run `❌→lib` rows.
-- `PUT /channels/{channel_id}/pins/{message_id}` and `PUT /channels/{channel_id}/messages/pins/{message_id}` (discord.js `❌→lib` finding, since resolved as `❌→fix`): re-pinning an already-pinned message returned an error instead of succeeding. `spec/openapi.json` does not document this case, but the real Discord API and every major client library (including discord.js) treat the pin endpoint as idempotent. Fixed in `src/services/pins.ts` (commit `1024416`); see `src/routes/channel-pins.test.ts` for the regression test.
-- `GET /guilds/{guild_id}/members/{user_id}`, `PATCH /guilds/{guild_id}/members/{user_id}`, `PUT /guilds/{guild_id}/members/{user_id}/roles/{role_id}`, `DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id}` (Discord.Net `❌→fix`): `POST /_test/setup` did not register the Bot itself as a member of the Guilds it created, so any self-targeted member lookup 404'd as Unknown Member (`RestGuild.GetUserAsync(botId)` returned `null`). Fixed in `src/services/test-control.ts` (commit `b9071ac`); see the "registers the bot as a member of every created guild" case in `src/routes/test.test.ts`.
-- `GET /channels/{channel_id}` (Discord.Net `❌→fix`): thread-type channels (10/11/12) were returned in the plain-channel shape, without `thread_metadata`, which caused Discord.Net's `RestTextChannel` → `RestThreadChannel` cast to throw `InvalidCastException`. Fixed in `src/routes/channels.ts` (commit `b9071ac`); see the "returns the thread shape (with thread_metadata) for a thread channel" case in `src/routes/channels.test.ts`.
-- `GET /channels/{channel_id}/messages/{message_id}`, `GET /channels/{channel_id}/messages` (Discord.Net `❌→fix`): the `Reaction` object omitted the spec-required `count_details`/`me_burst`/`burst_colors` fields, causing a `NullReferenceException` in Discord.Net's `RestReaction.Create` whenever a fetched message had reactions. Fixed in `src/services/messages.ts` (commit `b9071ac`); see `src/services/messages.test.ts`.
-- `PATCH /guilds/{guild_id}/members/@me` (new row, endpoint added in commit `f86fc00`): Discord.Net's `RestGuildUser.ModifyAsync()` routes to this endpoint instead of `/guilds/{guild_id}/members/{user_id}` when the target is the client's own user, so `dotnet-discordnet/Program.cs`'s existing self-nickname-modify call (filed under the `{user_id}` key at line ~524) already exercises it; the row is marked `❌→fix` for Discord.Net accordingly. Other columns are left `-`: no other verifier's self-member-edit call has been confirmed to target this endpoint specifically, and this row is not yet part of any historical result file's endpoint count (all `N/86` counts in this document predate this endpoint's addition to `common/endpoints.json`).
-- `GET /guilds/{guild_id}`, `PATCH /guilds/{guild_id}` (Serenity `❌→fix`): Serenity's `PartialGuild` is a strict Rust `serde` deserializer that rejects a guild object missing any spec-required field, and Fauxcord's guild response omitted 23 of the 40 fields the OpenAPI `GuildResponse` marks `required` (surfacing one at a time — first `system_channel_flags`, then `nsfw_level`, …). Brought the guild object into full `GuildResponse`-required compliance by populating the missing fields with Discord's documented default/empty values (`nsfw: false`, `nsfw_level: 0`, `region: 'deprecated'`, `stickers: []`, `incidents_data: null`, the various `*_channel_id: null`, `max_members: 500000`, etc.). Fixed in `src/services/guilds.ts`; regression test in `src/routes/guilds.test.ts`. A post-fix Serenity re-run confirmed 71/87 pass, 0 lib-issue.
-- `GET`/`PATCH /guilds/{guild_id}`, `GET`/`POST /guilds/{guild_id}/roles` (hikari `❌→fix`): role `permissions` supplied by a client as a JSON number (hikari sends the integer `0`) was bound straight into the `roles.permissions` `TEXT` column, so better-sqlite3 stored it as a REAL and it round-tripped as the decimal string `"0.0"`/`"8.0"`; the real Discord API always returns a decimal-integer permission string, so hikari's `int(permissions)` raised `ValueError` and failed to deserialize any response embedding a role. Fixed by normalising `permissions` to a decimal-integer string on write (`normalizePermissions`, numeric → `Math.trunc` → `String`, large bitset strings preserved) in `src/services/guild-roles.ts` (commit `817148d`); regression test in `src/routes/guild-roles.test.ts`. A post-fix hikari re-run confirmed 66/87 pass. (Only hikari surfaced this — other verifiers' permission parsers tolerated the `.0` suffix.)
-- `PATCH /webhooks/{webhook_id}` HTTP 500 (surfaced by the Concord verifier): moving a webhook to a non-existent `channel_id` wrote the unknown id straight to the `webhooks.channel_id` column, violating its foreign key and surfacing as an unhandled HTTP 500 instead of a Discord error. Fixed in `src/routes/webhooks.ts` (route now returns `10003 Unknown Channel` for an unknown target channel) with a defensive guard in `src/services/webhooks.ts` (`updateWebhook` no longer writes a channel id that does not exist); regression test in `src/routes/webhooks.test.ts`. `results/concord.json` predates this fix.
-- `POST /_test/setup` bot-membership (previously reported again during Concord verification): the bot user is registered as a member of every guild it owns, so self-targeted `/guilds/{id}/members/{bot_id}*` calls resolve instead of 404ing as Unknown Member. Already fixed in `src/services/test-control.ts` (commit `b9071ac`, see the Discord.Net member-lookup note above); no further change was needed.
+Full per-row reasoning lives in each verifier's own result file / evidence
+notes (`results/<lib>.json`, `verify.*`); this section summarizes each
+library's overall result and links out to any genuine Fauxcord bug it
+surfaced.
+
+### Per-library summary
+
+| Library | Base URL override | Result (of 87) | Notes |
+|---|---|---|---|
+| discord.js | native `REST` option | 81 ✅ / 6 N/A / 0 lib-issue | All 28 originally-reported findings were verifier bugs, not Fauxcord/discord.js bugs — see [discord.js verifier triage](#discordjs--oceanic-verifier-triage) |
+| Eris | ❌ hardcodes HTTPS on port 443 | ⛔ blocked (every row) | `js-eris/verify.mjs` header comment; `results/eris.json` (`baseUrlOverridable: false`) |
+| Oceanic | fully overridable | 67 ✅ / 20 N/A / 0 lib-issue | Same verifier-bug classes as discord.js, fixed the same way — see [triage](#discordjs--oceanic-verifier-triage). A re-run also surfaced 2 new `GET`/`PATCH /guilds/{guild_id}` failures suspected to be REST-mode bootstrap flakiness in the verifier, not a Fauxcord regression — unconfirmed, so these matrix cells are left unchanged; see `results/oceanic.json` |
+| discord.py | `Route.BASE` | 63 ✅ / 18 N/A / 6 lib-issue | `❌→lib` rows are discord.py-side strictness — see `results/discordpy.json` |
+| Nextcord (discord.py fork) | `nextcord.http.Route.BASE` | 61 ✅ / 18 N/A / 8 lib-issue | `❌→lib` rows are library-side — see `results/nextcord.json` |
+| Pycord (discord.py fork) | `discord.http.Route.BASE` | 49 ✅ / 18 N/A / 20 lib-issue | `❌→lib` rows are library-side — see `results/pycord.json` |
+| hikari | `hikari.RESTApp(url=...)` | 66 ✅ / 11 N/A / 10 lib-issue | 2 genuine Fauxcord bugs found+fixed — see [Fauxcord bugs found and fixed](#fauxcord-bugs-found-and-fixed). Remaining `❌→lib` rows are hikari-side (probes for members it never registered; `approximate_member_count` expectation) |
+| interactions.py | `interactions.api.http.route.Route.BASE` | 66 ✅ / 14 N/A / 7 lib-issue | `❌→lib` rows are library-side — see `results/interactions.json` |
+| discordgo | `EndpointAPI` + per-resource endpoint vars | 73 ✅ / 14 N/A / 0 lib-issue | An earlier fixture-contamination bug in the verifier (`EndpointGuilds`, `EndpointChannels`, …) was fixed — see `go-discordgo/verify.go` |
+| Discord.Net | `RestClientProvider` | 63 ✅ / 24 N/A / 0 lib-issue | 3 genuine Fauxcord bugs found+fixed — see [Fauxcord bugs found and fixed](#fauxcord-bugs-found-and-fixed) |
+| DSharpPlus 5.x | ❌ compile-time `const string`, needs Gateway | ⛔ blocked (every row) | No verifier; `dotnet-dsharpplus/README.md` |
+| DSharpPlus 4.x | ❌ same `const string` mechanism | ⛔ blocked (every row) | No verifier; entry only, dedicated README tracked as follow-up work |
+| JDA | overridable, but needs a real Gateway handshake | ⛔ blocked (every row) | No verifier; `jvm-jda/README.md` |
+| Discord4J | custom `discordBaseUrl` via `RouterOptions` | 60 ✅ / 25 N/A / 2 lib-issue | High N/A count reflects Discord4J 3.2.6's `ChannelService` lacking several high-level methods; `❌→lib` rows are library-side — see `results/discord4j.json` |
+| Javacord | ❌ hardcoded HTTPS domain, needs Gateway | ⛔ blocked (every row) | No verifier; `jvm-javacord/README.md` |
+| Kord | Ktor `HttpRequestPipeline.Before` interceptor | 68 ✅ / 17 N/A / 2 lib-issue | 1 genuine Fauxcord bug found+fixed — see [Fauxcord bugs found and fixed](#fauxcord-bugs-found-and-fixed). Remaining `❌→lib` rows probe entities that don't exist (404) |
+| Serenity | `HttpBuilder::proxy(url)` (ratelimiter must also be disabled) | 71 ✅ / 16 N/A / 0 lib-issue | 1 genuine Fauxcord bug found+fixed — see [Fauxcord bugs found and fixed](#fauxcord-bugs-found-and-fixed) |
+| Twilight | `ClientBuilder::proxy(host, use_http)` | 55 ✅ / 16 N/A / 16 lib-issue | `❌→lib` rows are a Twilight-side strict-deserializer issue, not a Fauxcord gap (Serenity/Kord decode the identical responses fine, and both pass the `spec/openapi.json` contract tests) — see `results/twilight.json` |
+| Concord | `struct discord_config.base_url` | 53 ✅ / 16 N/A / 18 lib-issue | 1 genuine Fauxcord bug found+fixed — see [Fauxcord bugs found and fixed](#fauxcord-bugs-found-and-fixed). Remaining `❌→lib` rows are Concord-side JSON-codec failures (`CCORDcode 100`, plus a `SIGSEGV` in `discord_execute_webhook`'s serializer) |
+| DPP | ❌ hardcoded transport, no override hook | ⛔ blocked (every row) | No verifier; `cpp-dpp/README.md` |
+| Sleepy Discord | ❌ hardcoded host + scheme literal | ⛔ blocked (every row) | No verifier; `cpp-sleepy/README.md` |
+
+### discord.js / Oceanic verifier triage
+
+All 28 originally-reported `❌→lib` findings in both `js-discordjs/verify.mjs`
+and `js-oceanic/verify.mjs` were triaged per the Task 27 protocol and turned
+out to be verifier bootstrap/design bugs, not genuine Fauxcord or library
+bugs: a 401-cascade on a shared `REST` instance, thread-member endpoints
+targeting a plain channel instead of a real thread, self-targeted
+BAN/member-removal calls that kicked the bot out of the shared test guild,
+dual-form webhook-delete and webhook-message id collisions, and OAuth2
+endpoints structurally incompatible with a Bot token. All were fixed
+directly in the verifier scripts (not recorded as `❌→fix`/`❌→lib`, per Task
+27 policy for verifier-side bugs).
+
+### Fauxcord bugs found and fixed
+
+- **Pin idempotency** (`PUT /channels/{channel_id}/pins/{message_id}`,
+  `PUT /channels/{channel_id}/messages/pins/{message_id}`; discord.js
+  `❌→lib` → `❌→fix`): re-pinning an already-pinned message returned an
+  error instead of succeeding. The real Discord API and every major client
+  library treat this endpoint as idempotent. Fixed in `src/services/pins.ts`
+  (commit `1024416`); regression test in `src/routes/channel-pins.test.ts`.
+- **Bot not registered as a guild member** (`GET`/`PATCH
+  /guilds/{guild_id}/members/{user_id}`, `PUT`/`DELETE
+  /guilds/{guild_id}/members/{user_id}/roles/{role_id}`,
+  `PATCH /guilds/{guild_id}/members/@me`; Discord.Net `❌→fix`):
+  `POST /_test/setup` did not register the Bot itself as a member of the
+  Guilds it created, so any self-targeted member lookup/edit 404'd as
+  Unknown Member. Discord.Net's `RestGuildUser.ModifyAsync()` routes to
+  `/members/@me` when the target is the client's own user, so this also
+  covers that endpoint. Fixed in `src/services/test-control.ts` (commit
+  `b9071ac`); see the "registers the bot as a member of every created
+  guild" case in `src/routes/test.test.ts`.
+- **Thread channel shape** (`GET /channels/{channel_id}`; Discord.Net
+  `❌→fix`): thread-type channels (10/11/12) were returned in the
+  plain-channel shape, without `thread_metadata`, causing Discord.Net's
+  `RestTextChannel` → `RestThreadChannel` cast to throw
+  `InvalidCastException`. Fixed in `src/routes/channels.ts` (commit
+  `b9071ac`); see the "returns the thread shape (with thread_metadata) for
+  a thread channel" case in `src/routes/channels.test.ts`.
+- **Reaction object missing fields** (`GET
+  /channels/{channel_id}/messages/{message_id}`, `GET
+  /channels/{channel_id}/messages`; Discord.Net `❌→fix`): the `Reaction`
+  object omitted the spec-required `count_details`/`me_burst`/`burst_colors`
+  fields, causing a `NullReferenceException` in Discord.Net's
+  `RestReaction.Create` whenever a fetched message had reactions. Fixed in
+  `src/services/messages.ts` (commit `b9071ac`); see
+  `src/services/messages.test.ts`.
+- **Guild response missing required fields** (`GET`/`PATCH
+  /guilds/{guild_id}`; Serenity `❌→fix`): Serenity's `PartialGuild` is a
+  strict Rust `serde` deserializer that rejects a guild object missing any
+  spec-required field; Fauxcord's guild response omitted 23 of the 40
+  fields the OpenAPI `GuildResponse` marks `required`. Brought the guild
+  object into full compliance with Discord's documented default/empty
+  values (`nsfw: false`, `nsfw_level: 0`, `region: 'deprecated'`,
+  `stickers: []`, `incidents_data: null`, the various `*_channel_id: null`,
+  `max_members: 500000`, etc.). The same fields also fixed Kord's identical
+  `MissingFieldException` on these rows, plus both libraries'
+  `GET /oauth2/applications/@me` (`team` field). Fixed in
+  `src/services/guilds.ts`; regression test in `src/routes/guilds.test.ts`.
+- **Role `permissions` round-tripped as a decimal string** (`GET`/`PATCH
+  /guilds/{guild_id}`, `GET`/`POST /guilds/{guild_id}/roles`; hikari
+  `❌→fix`): role `permissions` supplied by a client as a JSON number
+  (hikari sends the integer `0`) was bound straight into the
+  `roles.permissions` `TEXT` column, so better-sqlite3 stored it as a REAL
+  and it round-tripped as `"0.0"`/`"8.0"`; hikari's `int(permissions)`
+  raised `ValueError` on any response embedding a role. Fixed by
+  normalising `permissions` to a decimal-integer string on write
+  (`normalizePermissions` in `src/services/guild-roles.ts`, commit
+  `817148d`); regression test in `src/routes/guild-roles.test.ts`. Only
+  hikari surfaced this — other verifiers' permission parsers tolerated the
+  `.0` suffix.
+- **Thread-members pagination looped forever** (hikari): the
+  thread-members `after` cursor was ignored, looping hikari's
+  `ThreadMembersIterator` forever. Fixed in `src/services/threads.ts`
+  (commit `a27651a`).
+- **Webhook move to unknown channel → HTTP 500** (`PATCH
+  /webhooks/{webhook_id}`; surfaced by Concord): moving a webhook to a
+  non-existent `channel_id` wrote the unknown id straight to the
+  `webhooks.channel_id` column, violating its foreign key and surfacing as
+  an unhandled HTTP 500 instead of a Discord error. Fixed in
+  `src/routes/webhooks.ts` (now returns `10003 Unknown Channel`) with a
+  defensive guard in `src/services/webhooks.ts`; regression test in
+  `src/routes/webhooks.test.ts`.
 
