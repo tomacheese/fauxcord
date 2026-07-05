@@ -77,6 +77,20 @@ describe('Guild Roles API', () => {
       })
       expect(res.status).toBe(400)
     })
+
+    it('normalizes numeric permissions to an integer string (hikari sends 0)', async () => {
+      // hikari serializes permissions as a JSON number; binding a number into
+      // the TEXT column round-trips as "0.0", which int()-parsing clients fail
+      // on. The response must be a decimal integer string like Discord returns.
+      const res = await app.request(`/guilds/${guildId}/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'compat-role', permissions: 0 }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { permissions: string }
+      expect(body.permissions).toBe('0')
+    })
   })
 
   describe('PATCH /guilds/:guildId/roles/:roleId', () => {
@@ -103,6 +117,21 @@ describe('Guild Roles API', () => {
       expect(body.color).toBe(0xff_00_00)
       expect(body.hoist).toBe(true)
       expect(body.mentionable).toBe(true)
+      expect(body.permissions).toBe('8')
+    })
+
+    it('normalizes numeric permissions to an integer string', async () => {
+      const roleId = seedRole('444444444444444444')
+      const res = await app.request(`/guilds/${guildId}/roles/${roleId}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ permissions: 8 }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as { permissions: string }
       expect(body.permissions).toBe('8')
     })
 

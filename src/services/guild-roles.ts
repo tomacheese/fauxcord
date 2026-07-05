@@ -121,10 +121,29 @@ export interface RoleCreateParams {
   roleId: string
   guildId: string
   name?: string
-  permissions?: string
+  permissions?: string | number
   color?: number
   hoist?: boolean
   mentionable?: boolean
+}
+
+/**
+ * permissions を Discord API 準拠の 10 進整数文字列へ正規化する。
+ *
+ * クライアントは permissions を文字列でも数値でも送ってくる(例: hikari は
+ * JSON 数値の 0 を送る)。数値を TEXT カラムへそのままバインドすると
+ * better-sqlite3 が REAL として格納し、往復後に "0.0" のような小数文字列で
+ * 返ってしまい、int() で解釈するクライアント(hikari など)がデシリアライズに
+ * 失敗する。ここで整数文字列へ揃える。巨大な bitset を壊さないよう文字列入力は
+ * 桁をそのまま保持し、小数点以下のみ切り捨てる。
+ * @param value - クライアントから受け取った permissions(文字列 / 数値 / 未指定)
+ * @returns 10 進整数の文字列(未指定時は "0")
+ */
+function normalizePermissions(value: string | number | undefined): string {
+  if (value === undefined) return '0'
+  if (typeof value === 'number') return Math.trunc(value).toString()
+  const dotIndex = value.indexOf('.')
+  return dotIndex === -1 ? value : value.slice(0, dotIndex)
 }
 
 /**
@@ -152,7 +171,7 @@ export function createRole(db: Database, params: RoleCreateParams): RoleObject {
     params.color ?? 0,
     params.hoist ? 1 : 0,
     maxPosition + 1,
-    params.permissions ?? '0',
+    normalizePermissions(params.permissions),
     params.mentionable ? 1 : 0
   )
 
@@ -214,7 +233,7 @@ export function updateRole(
   if (payload.color !== undefined) updates.color = payload.color
   if (payload.hoist !== undefined) updates.hoist = payload.hoist ? 1 : 0
   if (payload.permissions !== undefined) {
-    updates.permissions = payload.permissions
+    updates.permissions = normalizePermissions(payload.permissions)
   }
   if (payload.mentionable !== undefined) {
     updates.mentionable = payload.mentionable ? 1 : 0
