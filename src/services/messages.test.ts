@@ -49,7 +49,14 @@ describe('toMessageObject', () => {
   })
 
   it('omits the reactions field entirely when there are no reactions', () => {
-    const obj = toMessageObject(row, author, [], [], [], 'http://localhost:3000')
+    const obj = toMessageObject(
+      row,
+      author,
+      [],
+      [],
+      [],
+      'http://localhost:3000'
+    )
     expect(obj.reactions).toBeUndefined()
   })
 })
