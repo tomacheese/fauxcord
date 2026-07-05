@@ -115,4 +115,30 @@ describe('Webhooks API (with token)', () => {
       expect(body.code).toBe(10_015)
     })
   })
+
+  describe('PATCH /webhooks/:webhookId (by ID)', () => {
+    it('updates the Webhook name', async () => {
+      const res = await app.request(`/webhooks/${WEBHOOK_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Renamed' }),
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.name).toBe('Renamed')
+    })
+
+    it('returns 404 (10003) instead of 500 when channel_id is unknown', async () => {
+      // A move to a non-existent channel used to hit the webhooks.channel_id
+      // foreign key and surface as an HTTP 500 (found via the Concord verifier).
+      const res = await app.request(`/webhooks/${WEBHOOK_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: '999999999999999999' }),
+      })
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.code).toBe(10_003)
+    })
+  })
 })

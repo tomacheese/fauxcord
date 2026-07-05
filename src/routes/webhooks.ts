@@ -16,6 +16,7 @@ import {
   executeWebhook,
 } from '../services/webhooks'
 import { getMessage, updateMessage, deleteMessage } from '../services/messages'
+import { getChannel } from '../services/channels'
 import { validateWebhookExecute } from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
 import { parseJsonBody } from '../lib/route-helpers'
@@ -77,6 +78,31 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     const payload = (await parseJsonBody(c)) as {
       name?: string
       channel_id?: string
+    }
+
+    // An unknown webhook takes precedence over an unknown target channel,
+    // matching Discord's error ordering.
+    if (!getWebhook(db, webhookId)) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_WEBHOOK,
+        'Unknown Webhook',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    // Reject a move to a non-existent channel with Discord's Unknown Channel
+    // error instead of letting the foreign-key write fail as an HTTP 500.
+    if (
+      payload.channel_id !== undefined &&
+      !getChannel(db, payload.channel_id)
+    ) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_CHANNEL,
+        'Unknown Channel',
+        404
+      )
+      return c.json(err.body, 404)
     }
 
     const updated = updateWebhook(db, webhookId, payload)
