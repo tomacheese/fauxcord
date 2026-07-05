@@ -296,7 +296,10 @@ fun main() {
         try {
             val wh = rest.webhook.createWebhook(channelId, "compat-wh") {}
             webhookId = wh.id
-            webhookToken = wh.token ?: webhookToken
+            // Kord models the webhook token as its own `Optional<String>`
+            // (distinct from a Kotlin nullable), so unwrap with `.value`
+            // before the elvis fallback.
+            webhookToken = wh.token.value ?: webhookToken
         } catch (_: Exception) {
             // fall back to placeholder ids
         }
@@ -316,7 +319,9 @@ fun main() {
             // fall back to placeholder code
         }
         try {
-            emojiId = rest.emoji.createEmoji(guildId, "compat", Image.raw(pngBytes, Image.Format.PNG)).id
+            // createEmoji returns an emoji whose `id` is nullable
+            // (`Snowflake?`); keep the placeholder id when it is absent.
+            emojiId = rest.emoji.createEmoji(guildId, "compat", Image.raw(pngBytes, Image.Format.PNG)).id ?: emojiId
         } catch (_: Exception) {
             // fall back to placeholder id
         }

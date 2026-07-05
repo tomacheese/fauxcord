@@ -25,13 +25,15 @@ confirmed against discord.py's actual 2.7.1 source in the same session --
 Pycord's source was not directly inspected here; these are informed
 assessments based on Pycord being a REST-plumbing-preserving fork:
 
-* Base URL override (confidence: high): Pycord kept discord.py's `Route`
-  class shape, including its `BASE` class attribute (default
-  `https://discord.com/api/v{version}`), under `discord.http.Route` (Pycord
-  did not rename its top-level package away from `discord`). This is
-  low-level REST plumbing a fork focused on adding application-command/UI
-  features would have little reason to touch, so we point it at Fauxcord
-  the same way as discord.py: `discord.http.Route.BASE = FAUXCORD_BASE`.
+* Base URL override (verified against Pycord 2.6.1): Pycord kept the
+  `discord.http.Route` class (it did not rename its top-level package away
+  from `discord`), but — unlike discord.py — it does NOT expose a mutable
+  `Route.BASE` class attribute. Instead `Route.__init__` builds the URL from
+  a read-only `Route.base` *property* that hardcodes
+  `https://discord.com/api/v{version}`. Assigning `Route.BASE` is therefore
+  a no-op that leaves all traffic pointed at the real Discord, so we
+  override the property itself: `Route.base = property(lambda self:
+  FAUXCORD_BASE)`.
 * Login (confidence: high): per the same reasoning, `discord.Client.login()`
   is assumed to take the bot token *without* the `"Bot "` prefix, matching
   discord.py's convention. Pycord also offers `discord.Bot` (a `Client`
@@ -134,7 +136,12 @@ PNG_BYTES = base64.b64decode(
 )
 
 # Point Pycord's REST layer at Fauxcord instead of the real Discord API.
-Route.BASE = FAUXCORD_BASE
+# Unlike discord.py's mutable `Route.BASE` class attribute, Pycord 2.6.x
+# builds every request URL from a read-only `Route.base` *property* that
+# hardcodes `https://discord.com/api/v{version}`, so assigning `Route.BASE`
+# has no effect and all traffic would still hit the real Discord (which
+# rejects the fake token with 401). Override the property itself instead.
+Route.base = property(lambda self: FAUXCORD_BASE)
 
 
 # --- bootstrap helpers ---------------------------------------------------
