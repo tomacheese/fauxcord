@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { initializeDatabase, closeDatabase } from '../db'
 import type { Database } from '../db'
 import { addMemberRole, removeMemberRole } from './guild-members'
+import { gatewayBus } from '../gateway/bus'
 
 describe('Guilds Service', () => {
   let db: Database
@@ -81,6 +82,38 @@ describe('Guilds Service', () => {
         .get(guildId, userId, '999999999999999999')
       expect(row).toBeUndefined()
     })
+
+    it('emits guild.member.update with the updated member on success', () => {
+      const listener = vi.fn()
+      gatewayBus.on('guild.member.update', listener)
+      try {
+        addMemberRole(db, guildId, userId, roleId)
+        expect(listener).toHaveBeenCalledTimes(1)
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId })
+        )
+      } finally {
+        gatewayBus.off('guild.member.update', listener)
+      }
+    })
+
+    it('does not emit guild.member.update when getGuildMember returns null (inconsistent DB state)', () => {
+      // Simulate a member row whose user record has gone missing, which makes
+      // getGuildMember() return null even though the initial membership check
+      // (which only looks at guild_members) passes.
+      db.pragma('foreign_keys = OFF')
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+
+      const listener = vi.fn()
+      gatewayBus.on('guild.member.update', listener)
+      try {
+        const result = addMemberRole(db, guildId, userId, roleId)
+        expect(result).toBe(true)
+        expect(listener).not.toHaveBeenCalled()
+      } finally {
+        gatewayBus.off('guild.member.update', listener)
+      }
+    })
   })
 
   describe('removeMemberRole', () => {
@@ -133,6 +166,38 @@ describe('Guilds Service', () => {
     it('returns false when the member does not exist', () => {
       const result = removeMemberRole(db, guildId, '999999999999999999', roleId)
       expect(result).toBe(false)
+    })
+
+    it('emits guild.member.update with the updated member on success', () => {
+      const listener = vi.fn()
+      gatewayBus.on('guild.member.update', listener)
+      try {
+        removeMemberRole(db, guildId, userId, roleId)
+        expect(listener).toHaveBeenCalledTimes(1)
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({ guildId })
+        )
+      } finally {
+        gatewayBus.off('guild.member.update', listener)
+      }
+    })
+
+    it('does not emit guild.member.update when getGuildMember returns null (inconsistent DB state)', () => {
+      // Simulate a member row whose user record has gone missing, which makes
+      // getGuildMember() return null even though the initial membership check
+      // (which only looks at guild_members) passes.
+      db.pragma('foreign_keys = OFF')
+      db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+
+      const listener = vi.fn()
+      gatewayBus.on('guild.member.update', listener)
+      try {
+        const result = removeMemberRole(db, guildId, userId, roleId)
+        expect(result).toBe(true)
+        expect(listener).not.toHaveBeenCalled()
+      } finally {
+        gatewayBus.off('guild.member.update', listener)
+      }
     })
   })
 })
