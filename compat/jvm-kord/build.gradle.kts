@@ -18,7 +18,7 @@ dependencies {
     // kord-rest is the gateway-free, standalone REST client module of Kord —
     // see the header comment in src/main/kotlin/Verify.kt for why this makes
     // Kord (unlike JDA, see ../jvm-jda/README.md) NOT gateway-blocked.
-    implementation("dev.kord:kord-rest:0.14.0")
+    implementation("dev.kord:kord-rest:0.18.1")
 
     // CIO is a pure-JVM/coroutine Ktor engine with no native dependencies,
     // matching the ktor version kord-rest:0.14.0 was compiled against.
