@@ -39,6 +39,7 @@ use serenity::http::{Http, HttpBuilder};
 use serenity::model::channel::{PermissionOverwrite, PermissionOverwriteType, ReactionType};
 use serenity::model::id::{ChannelId, EmojiId, GuildId, MessageId, RoleId, UserId, WebhookId};
 use serenity::model::permissions::Permissions;
+use secrecy::ExposeSecret;
 use serde_json::{json, Map, Value};
 use std::fs;
 use std::time::Duration;
@@ -76,11 +77,13 @@ struct Ctx {
     guild: GuildId,
     channel: ChannelId,
     message: MessageId,
+    thread_msg: MessageId,
     bulk_a: MessageId,
     bulk_b: MessageId,
     thread: ChannelId,
     role: RoleId,
     emoji: EmojiId,
+    ban_target: UserId,
     webhook_id: WebhookId,
     webhook_token: String,
     webhook_msg: Option<MessageId>,
@@ -225,9 +228,18 @@ async fn main() {
         .timeout(request_timeout)
         .build()
         .expect("build reqwest client for serenity Http");
+    // `ratelimiter_disabled(true)` is REQUIRED alongside `.proxy()`: serenity
+    // only honors the proxy on its non-ratelimited request path
+    // (`Http::request`'s `else` branch). The default ratelimiter's `perform()`
+    // rebuilds every request with `proxy = None`, sending it to the real
+    // `https://discord.com` instead of Fauxcord — which returns a genuine 401
+    // for the fake token and makes every authenticated call fail. Disabling
+    // the ratelimiter routes all traffic through the proxied path. serenity's
+    // own `HttpBuilder` docs pair these two settings for exactly this reason.
     let http: Http = HttpBuilder::new(&token)
         .client(http_client)
         .proxy(proxy_url)
+        .ratelimiter_disabled(true)
         .build();
 
     // Reaction emoji: pass the raw unicode character, not a pre-encoded
@@ -245,6 +257,22 @@ async fn main() {
         .await
     {
         message = m.id;
+    }
+
+    // Dedicated message for the in-loop POST .../threads probe. The bootstrap
+    // below starts a thread from `message`, and both Discord and Fauxcord
+    // allow only one thread per message (error 160004), so reusing `message`
+    // would make that probe fail with "a thread has already been created".
+    let mut thread_msg = MessageId::new(400_000_000_000_000_004);
+    if let Ok(m) = http
+        .send_message(
+            channel,
+            Vec::new(),
+            &jmap(json!({ "content": "compat-thread-src" })),
+        )
+        .await
+    {
+        thread_msg = m.id;
     }
 
     let mut bulk_a = MessageId::new(400_000_000_000_000_002);
@@ -302,7 +330,12 @@ async fn main() {
         .await
     {
         webhook_id = wh.id;
-        webhook_token = wh.token.unwrap_or(webhook_token);
+        // `wh.token` is `Option<SecretString>`; expose it to recover the raw
+        // token string the webhook-with-token endpoints below need.
+        webhook_token = wh
+            .token
+            .map(|t| t.expose_secret().clone())
+            .unwrap_or(webhook_token);
     }
 
     let mut invite_code = "compat".to_string();
@@ -314,10 +347,10 @@ async fn main() {
     if let Ok(e) = http
         .create_emoji(
             guild,
-            &jmap(json!({
+            &json!({
                 "name": "compat",
                 "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
-            })),
+            }),
             None,
         )
         .await
@@ -325,9 +358,21 @@ async fn main() {
         emoji = e.id;
     }
 
+    // A throwaway ban target distinct from the bot. Banning a user removes
+    // their guild membership (Discord — and Fauxcord — kick on ban), so
+    // banning the bot itself would make every later /guilds/{id}/members/
+    // {bot_id} probe 404. Banning a separate synthetic user keeps the bot's
+    // own membership intact (mirrors go-discordgo's BAN_TARGET).
+    let ban_target = UserId::new(700_000_000_000_000_001);
+
+    // Bootstrap the ban so GET /guilds/{id}/bans/{user_id} finds it even when
+    // that probe runs before the in-loop PUT ban (the runner defers DELETEs
+    // but not GET/PUT ordering).
+    let _ = http.ban_user(guild, ban_target, 0, None).await;
+
     // Best-effort: reaction endpoints still exercise the wire format on
     // failure below.
-    let _ = http.add_reaction(channel, message, &reaction).await;
+    let _ = http.create_reaction(channel, message, &reaction).await;
 
     // Capture a webhook-authored message id for the webhook-message
     // endpoints (mirrors go-discordgo's WEBHOOK_MSG capture).
@@ -350,11 +395,13 @@ async fn main() {
         guild,
         channel,
         message,
+        thread_msg,
         bulk_a,
         bulk_b,
         thread,
         role,
         emoji,
+        ban_target,
         webhook_id,
         webhook_token,
         webhook_msg,
@@ -446,16 +493,16 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
             call!(http.create_invite(ctx.channel, &jmap(json!({})), None))
         }
         "DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}" => {
-            call!(http.delete_reaction(ctx.channel, ctx.message, Some(ctx.bot), reaction))
+            call!(http.delete_reaction(ctx.channel, ctx.message, ctx.bot, reaction))
         }
         "DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me" => {
-            call!(http.delete_reaction_confirmation(ctx.channel, ctx.message, reaction))
+            call!(http.delete_reaction_me(ctx.channel, ctx.message, reaction))
         }
         "PUT /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me" => {
-            call!(http.add_reaction(ctx.channel, ctx.message, reaction))
+            call!(http.create_reaction(ctx.channel, ctx.message, reaction))
         }
         "GET /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}" => {
-            call!(http.get_reaction_users(ctx.channel, ctx.message, reaction, Some(100), None))
+            call!(http.get_reaction_users(ctx.channel, ctx.message, reaction, 100, None))
         }
         "DELETE /channels/{channel_id}/messages/{message_id}/reactions" => {
             call!(http.delete_message_reactions(ctx.channel, ctx.message))
@@ -463,7 +510,7 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
         "POST /channels/{channel_id}/messages/{message_id}/threads" => call!(
             http.create_thread_from_message(
                 ctx.channel,
-                ctx.message,
+                ctx.thread_msg,
                 &jmap(json!({ "name": "compat-thread2", "auto_archive_duration": 60 })),
                 None,
             )
@@ -481,7 +528,11 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
             Vec::new(),
         )),
         "POST /channels/{channel_id}/messages/bulk-delete" => {
-            call!(http.delete_messages(ctx.channel, &[ctx.bulk_a, ctx.bulk_b], None))
+            call!(http.delete_messages(
+                ctx.channel,
+                &json!({ "messages": [ctx.bulk_a.to_string(), ctx.bulk_b.to_string()] }),
+                None,
+            ))
         }
         "DELETE /channels/{channel_id}/messages/pins/{message_id}" => Outcome::NotApplicable(
             "serenity's unpin_message targets the legacy /channels/{id}/pins endpoint, not the new /messages/pins API",
@@ -492,7 +543,7 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
         "GET /channels/{channel_id}/messages/pins" => Outcome::NotApplicable(
             "serenity's get_pins targets the legacy /channels/{id}/pins endpoint, not the new /messages/pins API",
         ),
-        "GET /channels/{channel_id}/messages" => call!(http.get_messages(ctx.channel, None)),
+        "GET /channels/{channel_id}/messages" => call!(http.get_messages(ctx.channel, None, None)),
         "POST /channels/{channel_id}/messages" => {
             call!(http.send_message(ctx.channel, Vec::new(), &jmap(json!({ "content": "compat" }))))
         }
@@ -505,7 +556,7 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
                 deny: Permissions::empty(),
                 kind: PermissionOverwriteType::Member(ctx.bot),
             };
-            call!(http.create_permission(ctx.channel, &overwrite, None))
+            call!(http.create_permission(ctx.channel, ctx.bot.into(), &overwrite, None))
         }
         "DELETE /channels/{channel_id}/pins/{message_id}" => {
             call!(http.unpin_message(ctx.channel, ctx.message, None))
@@ -515,18 +566,22 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
         }
         "GET /channels/{channel_id}/pins" => call!(http.get_pins(ctx.channel)),
         "DELETE /channels/{channel_id}/thread-members/{user_id}" => {
-            call!(http.remove_thread_member(ctx.thread, ctx.bot))
+            call!(http.remove_thread_channel_member(ctx.thread, ctx.bot))
         }
         "GET /channels/{channel_id}/thread-members/{user_id}" => {
-            call!(http.get_thread_member(ctx.thread, ctx.bot, false))
+            call!(http.get_thread_channel_member(ctx.thread, ctx.bot, false))
         }
         "PUT /channels/{channel_id}/thread-members/{user_id}" => {
-            call!(http.add_thread_member(ctx.thread, ctx.bot))
+            call!(http.add_thread_channel_member(ctx.thread, ctx.bot))
         }
-        "DELETE /channels/{channel_id}/thread-members/@me" => call!(http.leave_thread(ctx.thread)),
-        "PUT /channels/{channel_id}/thread-members/@me" => call!(http.join_thread(ctx.thread)),
+        "DELETE /channels/{channel_id}/thread-members/@me" => {
+            call!(http.leave_thread_channel(ctx.thread))
+        }
+        "PUT /channels/{channel_id}/thread-members/@me" => {
+            call!(http.join_thread_channel(ctx.thread))
+        }
         "GET /channels/{channel_id}/thread-members" => {
-            call!(http.get_thread_members(ctx.thread))
+            call!(http.get_channel_thread_members(ctx.thread))
         }
         "GET /channels/{channel_id}/threads/archived/private" => {
             call!(http.get_channel_archived_private_threads(ctx.channel, None, None))
@@ -561,11 +616,11 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
             "requires serenity's \"gateway\" feature, intentionally excluded from this HTTP-only build",
         ),
         "DELETE /guilds/{guild_id}/bans/{user_id}" => {
-            call!(http.remove_ban(ctx.guild, ctx.bot, None))
+            call!(http.remove_ban(ctx.guild, ctx.ban_target, None))
         }
-        "GET /guilds/{guild_id}/bans/{user_id}" => call!(http.get_ban(ctx.guild, ctx.bot)),
+        "GET /guilds/{guild_id}/bans/{user_id}" => call!(http.get_ban(ctx.guild, ctx.ban_target)),
         "PUT /guilds/{guild_id}/bans/{user_id}" => {
-            call!(http.ban_user(ctx.guild, ctx.bot, 0, None))
+            call!(http.ban_user(ctx.guild, ctx.ban_target, 0, None))
         }
         "GET /guilds/{guild_id}/bans" => call!(http.get_bans(ctx.guild, None, None)),
         "GET /guilds/{guild_id}/channels" => call!(http.get_channels(ctx.guild)),
@@ -581,16 +636,16 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
         "PATCH /guilds/{guild_id}/emojis/{emoji_id}" => call!(http.edit_emoji(
             ctx.guild,
             ctx.emoji,
-            &jmap(json!({ "name": "compat2" })),
+            &json!({ "name": "compat2" }),
             None,
         )),
         "GET /guilds/{guild_id}/emojis" => call!(http.get_emojis(ctx.guild)),
         "POST /guilds/{guild_id}/emojis" => call!(http.create_emoji(
             ctx.guild,
-            &jmap(json!({
+            &json!({
                 "name": "compat3",
                 "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
-            })),
+            }),
             None,
         )),
         "DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id}" => {
@@ -648,7 +703,7 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
         }
         "DELETE /webhooks/{webhook_id}/{webhook_token}/messages/{message_id}" => {
             webhook_msg_call(ctx, || {
-                http.delete_webhook_message(ctx.webhook_id, &ctx.webhook_token, ctx.webhook_msg.unwrap(), None)
+                http.delete_webhook_message(ctx.webhook_id, None, &ctx.webhook_token, ctx.webhook_msg.unwrap())
             })
             .await
         }
@@ -659,13 +714,16 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
             .await
         }
         "PATCH /webhooks/{webhook_id}/{webhook_token}/messages/{message_id}" => {
+            // Bind the body here (not inside the closure) so it outlives the
+            // future the closure returns; `edit_webhook_message` borrows it.
+            let body = jmap(json!({ "content": "compat-edit" }));
             webhook_msg_call(ctx, || {
                 http.edit_webhook_message(
                     ctx.webhook_id,
                     None,
                     &ctx.webhook_token,
                     ctx.webhook_msg.unwrap(),
-                    &jmap(json!({ "content": "compat-edit" })),
+                    &body,
                     Vec::new(),
                 )
             })
@@ -681,6 +739,7 @@ async fn run_one(http: &Http, ctx: &Ctx, reaction: &ReactionType, key: &str) -> 
             ctx.webhook_id,
             &ctx.webhook_token,
             &jmap(json!({ "name": "compat-renamed" })),
+            None,
         )),
         "POST /webhooks/{webhook_id}/{webhook_token}" => call!(http.execute_webhook(
             ctx.webhook_id,

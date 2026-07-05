@@ -31,6 +31,12 @@ serenity = { version = "0.12", default-features = false, features = [
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
+# serenity 0.12 exposes `Webhook.token` as `Option<secrecy::SecretString>` and
+# does NOT publicly re-export `secrecy`, so extracting the raw token string
+# (needed to drive the token-authenticated webhook endpoints below) requires
+# the `ExposeSecret` trait directly. Pinned to the exact 0.8.0 that serenity
+# itself resolves, so this adds no new distinct version to the dependency tree.
+secrecy = "0.8"
 # Used directly for the health-check poll and the /_test/setup POST (the same
 # role fetch() plays in the JS verifiers) — kept independent of whatever
 # internal HTTP client serenity's "http" feature pulls in. rustls-tls matches

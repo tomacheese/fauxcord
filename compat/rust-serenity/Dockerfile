@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy the manifest first and pre-fetch/build dependencies as their own layer,
 # so editing src/main.rs alone doesn't invalidate the (slow) dependency build.
-COPY rust-serenity/Cargo.toml ./
+COPY rust-serenity/Cargo.toml rust-serenity/Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo fetch
 RUN cargo build
@@ -29,5 +29,16 @@ RUN rm -rf src
 
 COPY rust-serenity/src ./src
 COPY common ./common
+
+# Force a real rebuild of the actual verifier at image-build time. buildkit's
+# COPY preserves the real source's mtime, which can predate the dummy
+# deps-layer binary built above from `fn main() {}`; cargo's staleness check
+# then considers the stub already up to date and `cargo run` silently executes
+# the stale dummy binary (rc=0, no output, no results file). This was the
+# confirmed root cause of the sibling rust-twilight verifier producing no
+# result. Touching the source and building here guarantees the real binary is
+# compiled before the runtime `cargo run`, and surfaces any compile error at
+# build time.
+RUN touch src/main.rs && cargo build --offline
 
 CMD ["cargo", "run", "--offline"]
