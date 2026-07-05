@@ -31,4 +31,12 @@ RUN rm -rf src
 COPY rust-twilight/src ./src
 COPY common ./common
 
+# Force a real build of the copied source. buildkit's COPY preserves the source
+# mtime, which can be older than the dummy binary produced by the dependency
+# caching step above; without this `touch`, cargo considers the stale dummy
+# `fn main() {}` binary up to date and `cargo run` silently runs it (exit 0, no
+# output, no result JSON). Touching invalidates that fingerprint and also
+# surfaces any real compile errors at image-build time.
+RUN touch src/main.rs && cargo build --offline
+
 CMD ["cargo", "run", "--offline"]
