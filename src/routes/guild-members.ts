@@ -67,6 +67,14 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
     const payload = (await parseJsonBody(c)) as GuildMemberUpdatePayload
     const errors = validateGuildMemberUpdate(payload)
     if (Object.keys(errors).length > 0) {

@@ -491,4 +491,18 @@ describe('PATCH /guilds/:guildId/members/@me', () => {
     const body = (await res.json()) as Record<string, unknown>
     expect(body.code).toBe(10_007)
   })
+
+  it('returns 404 (10004) Unknown Guild for a nonexistent guild', async () => {
+    const res = await app.request(
+      '/api/v10/guilds/999999999999999999/members/@me',
+      {
+        method: 'PATCH',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: 'compat' }),
+      }
+    )
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.code).toBe(10_004)
+  })
 })
