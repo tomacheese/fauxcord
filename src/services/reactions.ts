@@ -10,10 +10,10 @@ import { gatewayBus } from '../gateway/bus'
 import { getGuildIdForChannel } from './messages'
 
 /**
- * メッセージ ID からそのメッセージが属するチャンネル ID を取得する。
- * @param db - データベース
- * @param messageId - メッセージ ID
- * @returns チャンネル ID。メッセージが存在しなければ undefined
+ * Gets the channel ID that a message belongs to, given its message ID.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @returns Channel ID, or undefined if the message doesn't exist
  */
 function getChannelIdForMessage(
   db: Database,

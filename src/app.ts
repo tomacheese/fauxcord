@@ -1,9 +1,9 @@
 /**
- * Hono アプリの組み立てロジック
+ * Hono app assembly logic.
  *
- * ミドルウェア登録・ルート登録・Gateway WebSocket ハンドラのマウントを担う。
- * 本番起動（src/index.ts）とテスト起動（src/test-helpers.ts）の両方から
- * 共有される。
+ * Handles middleware registration, route registration, and mounting the
+ * Gateway WebSocket handler. Shared by both the production entry point
+ * (src/index.ts) and the test harness (src/test-helpers.ts).
  */
 
 import { Hono } from 'hono'
@@ -28,25 +28,27 @@ import { createGatewayWebSocketHandler } from './gateway/server'
 import { registerGatewaySubscriptions } from './gateway/subscribe'
 import type { SessionManager } from './gateway/session'
 
-/** buildApp に渡す設定の必要最小サブセット */
+/** Minimal subset of config required by buildApp */
 export interface BuildAppConfig {
-  /** 添付ファイル URL 生成等に使う baseUrl */
+  /** baseUrl used for generating attachment URLs, etc. */
   baseUrl: string
-  /** 添付ファイル保存先ディレクトリ */
+  /** Directory where attachments are stored */
   uploadPath?: string
-  /** true の場合、任意のトークンを許可する */
+  /** If true, any token is accepted */
   disableAuth: boolean
-  /** 全レスポンスに付与する疑似レイテンシ (ms) */
+  /** Artificial latency (ms) applied to all responses */
   latencyMs?: number
 }
 
 /**
- * Hono アプリを組み立てる（起動処理は含まない）。
- * index.ts の本番起動と test-helpers.ts のテスト起動の両方から共有される。
- * @param db - データベース
- * @param config - baseUrl・uploadPath・disableAuth・latencyMs
- * @returns 組み立て済みアプリと、`serve()` の `websocket` オプションに渡す `WebSocketServer`、
- * Gateway 配信に使う `SessionManager`、および `gatewayBus` の購読解除関数
+ * Builds the Hono app (does not start it).
+ * Shared by both the production entry point (index.ts) and the test harness
+ * (test-helpers.ts).
+ * @param db - Database
+ * @param config - baseUrl, uploadPath, disableAuth, latencyMs
+ * @returns The assembled app, the `WebSocketServer` to pass to `serve()`'s
+ * `websocket` option, the `SessionManager` used for Gateway dispatch, and a
+ * function that unsubscribes from `gatewayBus`
  */
 export function buildApp(
   db: Database,
@@ -55,12 +57,13 @@ export function buildApp(
   app: Hono<AppEnv>
   wss: WebSocketServer
   sessionManager: SessionManager
-  /** registerGatewaySubscriptions が登録したリスナーを解除する関数 */
+  /** Function that unsubscribes the listeners registered by registerGatewaySubscriptions */
   unsubscribeGateway: () => void
 } {
   const app = new Hono<AppEnv>()
-  // `noServer: true` が必須（`@hono/node-server` の `serve({ websocket: { server: wss } })`
-  // が upgrade イベントのハンドリングを引き受けるため）
+  // `noServer: true` is required because `@hono/node-server`'s
+  // `serve({ websocket: { server: wss } })` takes over handling the
+  // upgrade event.
   const wss = new WebSocketServer({ noServer: true })
 
   // Configure middleware (applied to all requests)
@@ -83,15 +86,17 @@ export function buildApp(
     app.route(oauth2Prefix, createOAuth2Routes(db))
   }
 
-  // Gateway WebSocket は "/" にマウントする（実 Discord の Gateway URL 構造に合わせ、
-  // パス自体には意味を持たせずクエリパラメータで v=10&encoding=json を受け取る）。
-  // 認証は WebSocket 接続確立後の IDENTIFY メッセージ内で行う（Discord 本家と同様）ため、
-  // HTTP レベルの Bot トークン認証ミドルウェアより前にマウントし、認証不要とする。
+  // The Gateway WebSocket is mounted at "/" (matching real Discord's Gateway
+  // URL structure, where the path itself carries no meaning and
+  // v=10&encoding=json is passed as query parameters). Authentication
+  // happens inside the IDENTIFY message after the WebSocket connection is
+  // established (as with real Discord), so this is mounted before the
+  // HTTP-level Bot token auth middleware and requires no authentication.
   const gatewayHandler = createGatewayWebSocketHandler(db, {
     baseUrl: config.baseUrl,
     disableAuth: config.disableAuth,
   })
-  // gatewayBus 経由のリソース変更イベントを、接続中の Gateway セッションへ配信する
+  // Forward resource-change events from gatewayBus to connected Gateway sessions
   const unsubscribeGateway = registerGatewaySubscriptions(
     gatewayHandler.sessionManager
   )

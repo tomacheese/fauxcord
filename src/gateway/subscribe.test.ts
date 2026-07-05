@@ -8,9 +8,9 @@ describe('registerGatewaySubscriptions', () => {
   it('broadcasts message.create to all connected sessions', () => {
     const manager = new SessionManager()
     const ws = { send: vi.fn(), close: vi.fn() }
-    // GuildMessages を持つセッションのみ配信対象となるため、Intent を明示する
-    // （registerGatewaySubscriptions は message.create を GuildMessages Intent で
-    // フィルタして配信する仕様のため）
+    // Only sessions with GuildMessages receive this event, so the Intent is
+    // set explicitly (registerGatewaySubscriptions filters message.create
+    // delivery by the GuildMessages Intent).
     manager.create({
       botId: 'bot1',
       token: 'Bot x',

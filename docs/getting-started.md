@@ -202,10 +202,9 @@ DISABLE_AUTH=true pnpm start
 
 ---
 
-## 8. Gateway (WebSocket) に接続する
+## 8. Connect to the Gateway (WebSocket)
 
-`/gateway/bot` が返す URL（`ws://localhost:3000`）に接続すると、HELLO → IDENTIFY → READY の
-ハンドシェイクを経て Dispatch イベント（`MESSAGE_CREATE` など）を受信できます。
+Connecting to the URL returned by `/gateway/bot` (`ws://localhost:3000`) lets you receive Dispatch events (such as `MESSAGE_CREATE`) after completing the HELLO → IDENTIFY → READY handshake.
 
 ```javascript
 import WebSocket from 'ws'

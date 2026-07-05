@@ -4,11 +4,12 @@ import { hasIntent } from './intents'
 import type { Session, SessionManager } from './session'
 
 /**
- * 単一セッションへ Dispatch (op0) イベントを送信し、seq とリプレイバッファを更新する。
- * @param manager - セッションマネージャ
- * @param session - 送信先セッション
- * @param eventName - Dispatch イベント名（例: "MESSAGE_CREATE"）
- * @param data - イベントデータ
+ * Sends a Dispatch (op0) event to a single session, updating its seq and
+ * replay buffer.
+ * @param manager - Session manager
+ * @param session - Destination session
+ * @param eventName - Dispatch event name (e.g. "MESSAGE_CREATE")
+ * @param data - Event data
  */
 export function sendDispatch(
   manager: SessionManager,
@@ -28,13 +29,14 @@ export function sendDispatch(
 }
 
 /**
- * 指定した Bot に紐づく全セッションへ Dispatch イベントをブロードキャストする。
- * requiredIntent が指定された場合、その Intent を持つセッションにのみ送信する。
- * @param manager - セッションマネージャ
- * @param botId - 配信先 Bot の ID
- * @param eventName - Dispatch イベント名
- * @param data - イベントデータ
- * @param requiredIntent - 送信に必要な Intent ビット（省略時は無条件で送信）
+ * Broadcasts a Dispatch event to all sessions belonging to the given Bot.
+ * If requiredIntent is given, only sessions holding that Intent receive it.
+ * @param manager - Session manager
+ * @param botId - ID of the destination Bot
+ * @param eventName - Dispatch event name
+ * @param data - Event data
+ * @param requiredIntent - Intent bit required to receive the event (sent
+ * unconditionally if omitted)
  */
 export function broadcastToBot(
   manager: SessionManager,
@@ -55,12 +57,13 @@ export function broadcastToBot(
 }
 
 /**
- * 接続中の全セッションへ Dispatch イベントをブロードキャストする。
- * requiredIntent が指定された場合、その Intent を持つセッションにのみ送信する。
- * @param manager - セッションマネージャ
- * @param eventName - Dispatch イベント名
- * @param data - イベントデータ
- * @param requiredIntent - 送信に必要な Intent ビット（省略時は無条件で送信）
+ * Broadcasts a Dispatch event to all connected sessions. If requiredIntent
+ * is given, only sessions holding that Intent receive it.
+ * @param manager - Session manager
+ * @param eventName - Dispatch event name
+ * @param data - Event data
+ * @param requiredIntent - Intent bit required to receive the event (sent
+ * unconditionally if omitted)
  */
 export function broadcastToAll(
   manager: SessionManager,

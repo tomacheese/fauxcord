@@ -1,54 +1,54 @@
-/** Gateway 上でやり取りされる汎用ペイロード形式 */
+/** Generic payload envelope exchanged over the Gateway */
 export interface GatewayPayload<T> {
   /** opcode */
   op: number
-  /** イベント固有のデータ */
+  /** Event-specific data */
   d: T
-  /** Dispatch のシーケンス番号（Dispatch 以外は null/undefined） */
+  /** Dispatch sequence number (null/undefined for non-Dispatch payloads) */
   s?: number | null
-  /** Dispatch イベント名（Dispatch 以外は null/undefined） */
+  /** Dispatch event name (null/undefined for non-Dispatch payloads) */
   t?: string | null
 }
 
-/** HELLO (op10) のデータ */
+/** Data for HELLO (op10) */
 export interface HelloData {
-  /** クライアントが送るべき Heartbeat 間隔 (ms) */
+  /** Heartbeat interval (ms) the client should use */
   heartbeat_interval: number
 }
 
-/** IDENTIFY (op2) のデータ */
+/** Data for IDENTIFY (op2) */
 export interface IdentifyData {
-  /** Bot トークン（"Bot " プレフィックスを含む） */
+  /** Bot token (including the "Bot " prefix) */
   token: string
-  /** Intent ビットフィールド */
+  /** Intent bitfield */
   intents: number
-  /** クライアントのプロパティ情報（未検証のまま許容） */
+  /** Client property info (accepted without validation) */
   properties?: Record<string, unknown>
 }
 
-/** RESUME (op6) のデータ */
+/** Data for RESUME (op6) */
 export interface ResumeData {
-  /** Bot トークン */
+  /** Bot token */
   token: string
-  /** 再開対象のセッション ID */
+  /** ID of the session to resume */
   session_id: string
-  /** 最後に受信したシーケンス番号 */
+  /** Last sequence number received */
   seq: number
 }
 
 /**
- * Gateway ペイロードを JSON テキストへエンコードする。
- * @param payload - エンコード対象のペイロード
- * @returns JSON 文字列
+ * Encodes a Gateway payload as JSON text.
+ * @param payload - Payload to encode
+ * @returns JSON string
  */
 export function encodePayload(payload: GatewayPayload<unknown>): string {
   return JSON.stringify(payload)
 }
 
 /**
- * JSON テキストを Gateway ペイロードへデコードする。
- * @param raw - WebSocket から受信した生テキスト
- * @returns デコードされたペイロード。不正な JSON の場合は undefined
+ * Decodes JSON text into a Gateway payload.
+ * @param raw - Raw text received from the WebSocket
+ * @returns The decoded payload, or undefined if the JSON is invalid
  */
 export function decodePayload(
   raw: string

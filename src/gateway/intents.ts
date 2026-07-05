@@ -1,8 +1,8 @@
 /**
- * 指定した Intent ビットが intents フィールドに含まれるか判定する。
- * @param intents - Identify で受け取った intents ビットフィールド
- * @param bit - 判定対象の Intent ビット（GatewayIntentBits の値）
- * @returns ビットが立っていれば true
+ * Checks whether the given Intent bit is set in the intents field.
+ * @param intents - The intents bitfield received in IDENTIFY
+ * @param bit - The Intent bit to check (a GatewayIntentBits value)
+ * @returns true if the bit is set
  */
 export function hasIntent(intents: number, bit: number): boolean {
   return (intents & bit) === bit

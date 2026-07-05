@@ -2,42 +2,43 @@ import type { WebSocket } from 'ws'
 import { randomUUID } from 'node:crypto'
 import type { GatewayPayload } from './protocol'
 
-/** リプレイバッファに保持するイベント数の上限 */
+/** Maximum number of events retained in the replay buffer */
 const REPLAY_BUFFER_SIZE = 100
 
-/** 単一の Gateway 接続（セッション）を表す */
+/** Represents a single Gateway connection (session) */
 export interface Session {
-  /** セッション ID（Resume 時に使用） */
+  /** Session ID (used when resuming) */
   sessionId: string
-  /** 接続元 Bot の ID（bots.token に対応するユーザー ID） */
+  /** ID of the connecting Bot (the user ID associated with bots.token) */
   botId: string
-  /** Identify で送られた Bot トークン */
+  /** Bot token sent in IDENTIFY */
   token: string
-  /** 直近の Dispatch シーケンス番号 */
+  /** Most recent Dispatch sequence number */
   seq: number
-  /** Identify で受け取った Intent ビットフィールド */
+  /** Intent bitfield received in IDENTIFY */
   intents: number
-  /** 接続中の WebSocket */
+  /** The currently connected WebSocket */
   ws: WebSocket
-  /** Resume 用のリプレイバッファ（直近 REPLAY_BUFFER_SIZE 件） */
+  /** Replay buffer used for Resume (most recent REPLAY_BUFFER_SIZE entries) */
   replayBuffer: { seq: number; event: GatewayPayload<unknown> }[]
-  /** Heartbeat タイムアウト監視用タイマー */
+  /** Timer that monitors the Heartbeat timeout */
   heartbeatTimer: NodeJS.Timeout | undefined
-  /** 直近に Heartbeat を受信した時刻（ms epoch） */
+  /** Timestamp of the last received Heartbeat (ms epoch) */
   lastHeartbeatAt: number
 }
 
 /**
- * Gateway セッションの生成・検索・削除・リプレイバッファ管理を担う。
+ * Manages the creation, lookup, removal, and replay buffer of Gateway
+ * sessions.
  */
 export class SessionManager {
   private readonly sessionsById = new Map<string, Session>()
   private readonly sessionIdsByBotId = new Map<string, Set<string>>()
 
   /**
-   * 新しいセッションを作成し登録する。
-   * @param params - セッション初期化パラメータ
-   * @returns 作成されたセッション
+   * Creates and registers a new session.
+   * @param params - Session initialization parameters
+   * @returns The created session
    */
   create(params: {
     botId: string
@@ -64,18 +65,18 @@ export class SessionManager {
   }
 
   /**
-   * セッション ID からセッションを取得する。
-   * @param sessionId - セッション ID
-   * @returns セッション。存在しない場合は undefined
+   * Looks up a session by its session ID.
+   * @param sessionId - Session ID
+   * @returns The session, or undefined if it doesn't exist
    */
   get(sessionId: string): Session | undefined {
     return this.sessionsById.get(sessionId)
   }
 
   /**
-   * 指定した Bot ID に紐づく全セッションを取得する。
-   * @param botId - Bot の ID
-   * @returns セッションの配列
+   * Gets all sessions belonging to the given Bot ID.
+   * @param botId - Bot ID
+   * @returns Array of sessions
    */
   getByBotId(botId: string): Session[] {
     const ids = this.sessionIdsByBotId.get(botId)
@@ -86,16 +87,16 @@ export class SessionManager {
   }
 
   /**
-   * 現在接続中の全セッションを取得する。
-   * @returns セッションの配列
+   * Gets all currently connected sessions.
+   * @returns Array of sessions
    */
   getAll(): Session[] {
     return [...this.sessionsById.values()]
   }
 
   /**
-   * セッションを削除する。
-   * @param sessionId - 削除対象のセッション ID
+   * Removes a session.
+   * @param sessionId - ID of the session to remove
    */
   remove(sessionId: string): void {
     const session = this.sessionsById.get(sessionId)
@@ -106,9 +107,9 @@ export class SessionManager {
   }
 
   /**
-   * シーケンス番号を1つ進めて返す。
-   * @param session - 対象セッション
-   * @returns 新しいシーケンス番号
+   * Advances the sequence number by one and returns it.
+   * @param session - Target session
+   * @returns The new sequence number
    */
   nextSeq(session: Session): number {
     session.seq += 1
@@ -116,9 +117,10 @@ export class SessionManager {
   }
 
   /**
-   * リプレイバッファにイベントを追加する。上限を超えた古いイベントは破棄する。
-   * @param session - 対象セッション
-   * @param event - 追加するイベント
+   * Appends an event to the replay buffer, discarding the oldest event once
+   * the size limit is exceeded.
+   * @param session - Target session
+   * @param event - Event to append
    */
   pushToReplayBuffer(session: Session, event: GatewayPayload<unknown>): void {
     session.replayBuffer.push({ seq: event.s ?? session.seq, event })
@@ -128,10 +130,11 @@ export class SessionManager {
   }
 
   /**
-   * 指定した seq より後のイベントをリプレイ用に取得する。
-   * @param session - 対象セッション
-   * @param seq - クライアントが最後に受信した seq
-   * @returns リプレイすべきイベント一覧。seq がバッファより古く再現できない場合は undefined
+   * Gets the events after the given seq for replay.
+   * @param session - Target session
+   * @param seq - Last seq the client received
+   * @returns The events to replay, or undefined if seq is older than the
+   * buffer and can no longer be reconstructed
    */
   replayFrom(
     session: Session,

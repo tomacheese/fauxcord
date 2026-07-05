@@ -4,10 +4,11 @@ import { broadcastToAll } from './dispatch'
 import type { SessionManager } from './session'
 
 /**
- * gatewayBus のリソース変更イベントを購読し、接続中の Gateway セッションへ
- * Dispatch イベントとして配信するリスナーを登録する。
- * @param manager - セッションマネージャ
- * @returns 登録した全リスナーを解除する関数（主にテスト用）
+ * Subscribes to resource-change events on gatewayBus and registers listeners
+ * that forward them as Dispatch events to connected Gateway sessions.
+ * @param manager - Session manager
+ * @returns A function that unregisters all registered listeners (mainly for
+ * tests)
  */
 export function registerGatewaySubscriptions(
   manager: SessionManager

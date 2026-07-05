@@ -113,9 +113,9 @@ export function createFullTestApp(): FullTestContext {
 }
 
 /**
- * 実ソケットで WebSocket アップグレードを扱えるテスト用サーバーを起動する。
- * インメモリ DB を使い、port 0 で OS にポートを割り当てさせる。
- * @returns db・接続用 URL・後始末用 close 関数
+ * Starts a test server that handles WebSocket upgrades over a real socket.
+ * Uses an in-memory DB and lets the OS assign a port via port 0.
+ * @returns The db, the connection URL, and a close function for teardown
  */
 export async function createTestGatewayServer(): Promise<{
   db: Database
@@ -123,7 +123,7 @@ export async function createTestGatewayServer(): Promise<{
   sessionManager: SessionManager
   close: () => Promise<void>
 }> {
-  const db = initializeDatabase(':memory:') // 既存の createTestApp と同じ DB 初期化処理
+  const db = initializeDatabase(':memory:') // same DB initialization as the existing createTestApp
   const { app, wss, sessionManager, unsubscribeGateway } = buildApp(db, {
     baseUrl: 'http://localhost:0',
     disableAuth: false,

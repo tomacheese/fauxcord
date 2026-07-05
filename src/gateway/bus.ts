@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 
-/** gatewayBus がやり取りするイベント名とペイロードの対応表 */
+/** Mapping of event names to their payloads exchanged over gatewayBus */
 export interface GatewayBusEvents {
   'message.create': {
     guildId: string | undefined
@@ -48,15 +48,16 @@ export interface GatewayBusEvents {
 }
 
 /**
- * REST サービス層と Gateway 配信層を疎結合にするための型付き内部イベントバス。
+ * Typed internal event bus that decouples the REST service layer from the
+ * Gateway dispatch layer.
  */
 // eslint-disable-next-line unicorn/prefer-event-target -- Node's EventEmitter API (on/emit/off/setMaxListeners) is required here; EventTarget lacks equivalent typed payload ergonomics.
 class TypedGatewayBus extends EventEmitter {
   /**
-   * イベントを発行する。
-   * @param event - イベント名
-   * @param payload - イベントペイロード
-   * @returns リスナーが存在すれば true
+   * Emits an event.
+   * @param event - Event name
+   * @param payload - Event payload
+   * @returns true if a listener existed
    */
   emit<K extends keyof GatewayBusEvents>(
     event: K,
@@ -66,9 +67,9 @@ class TypedGatewayBus extends EventEmitter {
   }
 
   /**
-   * イベントリスナーを登録する。
-   * @param event - イベント名
-   * @param listener - リスナー関数
+   * Registers an event listener.
+   * @param event - Event name
+   * @param listener - Listener function
    * @returns this
    */
   on<K extends keyof GatewayBusEvents>(
@@ -79,9 +80,9 @@ class TypedGatewayBus extends EventEmitter {
   }
 
   /**
-   * イベントリスナーを解除する。
-   * @param event - イベント名
-   * @param listener - リスナー関数
+   * Removes an event listener.
+   * @param event - Event name
+   * @param listener - Listener function
    * @returns this
    */
   off<K extends keyof GatewayBusEvents>(
@@ -92,8 +93,9 @@ class TypedGatewayBus extends EventEmitter {
   }
 }
 
-/** アプリ全体で共有するシングルトンの Gateway 内部バス */
+/** Singleton Gateway internal bus shared across the whole app */
 export const gatewayBus = new TypedGatewayBus()
-// REST 層からの emit が多発してもリスナー数上限警告が出ないようにする
-// (最大同時セッション数に応じて増やせる余地を持たせる)
+// Raise the listener limit so frequent emits from the REST layer don't
+// trigger Node's max-listeners warning (leaves headroom for more concurrent
+// sessions).
 gatewayBus.setMaxListeners(50)

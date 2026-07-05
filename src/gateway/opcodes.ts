@@ -1,5 +1,5 @@
 /**
- * Discord Gateway の opcode 定数。
+ * Discord Gateway opcode constants.
  * @see https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-opcodes
  */
 export const GatewayOp = {
@@ -14,7 +14,7 @@ export const GatewayOp = {
 } as const
 
 /**
- * Gateway 切断時に使用する Close Code 定数。
+ * Close Code constants used when disconnecting the Gateway.
  * @see https://discord.com/developers/docs/topics/opcodes-and-status-codes#gateway-close-event-codes
  */
 export const GatewayCloseCode = {

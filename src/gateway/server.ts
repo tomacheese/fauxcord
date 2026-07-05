@@ -1,8 +1,8 @@
 /**
- * Discord Gateway WebSocket ハンドラ
+ * Discord Gateway WebSocket handler.
  *
- * Hono の `upgradeWebSocket` に渡す `WSEvents` を構築し、Hello/Identify/
- * Heartbeat/Resume/Ready/Invalid Session/Reconnect を処理する。
+ * Builds the `WSEvents` passed to Hono's `upgradeWebSocket` and handles
+ * Hello/Identify/Heartbeat/Resume/Ready/Invalid Session/Reconnect.
  */
 
 import type { WSContext, WSEvents } from 'hono/ws'
@@ -12,18 +12,19 @@ import { GatewayOp, GatewayCloseCode } from './opcodes'
 import { encodePayload, decodePayload } from './protocol'
 import type { IdentifyData, ResumeData } from './protocol'
 
-/** HELLO で通知する Heartbeat 間隔 (ms)。実 Discord のデフォルト値。 */
+/** Heartbeat interval (ms) announced in HELLO; matches real Discord's default. */
 const HEARTBEAT_INTERVAL_MS = 41_250
-/** Heartbeat が届かない場合にセッションを閉じるまでの許容時間 (ms) */
+/** Time (ms) to wait for a Heartbeat before closing the session */
 const HEARTBEAT_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2
 
 /**
- * Identify のトークンから Bot を解決する。DISABLE_AUTH=true の場合は REST と同様に
- * 任意のトークンを許可し、未登録トークンは MockBot として扱う。
- * @param db - データベース
- * @param disableAuth - 認証バイパスフラグ
- * @param token - Identify の token フィールド
- * @returns 解決された Bot 情報。認証失敗時は undefined
+ * Resolves the Bot for an IDENTIFY token. When DISABLE_AUTH=true, any token
+ * is accepted (matching REST behavior) and unregistered tokens are treated
+ * as MockBot.
+ * @param db - Database
+ * @param disableAuth - Auth-bypass flag
+ * @param token - The `token` field from IDENTIFY
+ * @returns The resolved Bot info, or undefined on authentication failure
  */
 function resolveBotForIdentify(
   db: Database,
@@ -39,10 +40,11 @@ function resolveBotForIdentify(
 }
 
 /**
- * Intent ビットフィールドの形式的な妥当性を検証する（負数・非整数を拒否）。
- * Privileged Intent の権限チェックはスコープ外のため常に許可する。
- * @param intents - Identify の intents フィールド
- * @returns 妥当なら true
+ * Validates the structural well-formedness of the Intent bitfield (rejects
+ * negative or non-integer values). Privileged Intent permission checks are
+ * out of scope, so those are always allowed.
+ * @param intents - The `intents` field from IDENTIFY
+ * @returns true if valid
  */
 function isValidIntents(intents: number): boolean {
   return Number.isInteger(intents) && intents >= 0
@@ -78,9 +80,9 @@ function isResumeData(d: unknown): d is ResumeData {
 }
 
 /**
- * http(s) の baseUrl を ws(s) URL へ変換する。
- * @param baseUrl - 変換対象の baseUrl
- * @returns ws(s) URL
+ * Converts an http(s) baseUrl into a ws(s) URL.
+ * @param baseUrl - The baseUrl to convert
+ * @returns The ws(s) URL
  */
 function toWsUrl(baseUrl: string): string {
   if (baseUrl.startsWith('https://'))
@@ -91,10 +93,10 @@ function toWsUrl(baseUrl: string): string {
 }
 
 /**
- * Heartbeat タイムアウト監視タイマーを（再）設定する。
- * @param sessionManager - セッションマネージャ
- * @param ws - 接続中の WebSocket コンテキスト
- * @param sessionId - セッション ID
+ * (Re)arms the Heartbeat timeout timer.
+ * @param sessionManager - Session manager
+ * @param ws - The connected WebSocket context
+ * @param sessionId - Session ID
  */
 function armHeartbeatTimeout(
   sessionManager: SessionManager,
@@ -111,13 +113,13 @@ function armHeartbeatTimeout(
 }
 
 /**
- * IDENTIFY (op2) を処理し、認証成功時に READY (op0) を送る。
- * @param db - データベース
- * @param options - baseUrl・disableAuth
- * @param sessionManager - セッションマネージャ
- * @param sessionIdByWs - WSContext→sessionId のマップ
- * @param ws - 接続中の WebSocket コンテキスト
- * @param data - IDENTIFY のペイロード
+ * Handles IDENTIFY (op2) and sends READY (op0) on successful authentication.
+ * @param db - Database
+ * @param options - baseUrl and disableAuth
+ * @param sessionManager - Session manager
+ * @param sessionIdByWs - Map of WSContext to sessionId
+ * @param ws - The connected WebSocket context
+ * @param data - The IDENTIFY payload
  */
 function handleIdentify(
   db: Database,
@@ -141,7 +143,7 @@ function handleIdentify(
     botId: bot.userId,
     token: data.token,
     intents: data.intents,
-    ws: ws.raw as never, // hono/ws の WSContext.raw は基盤の ws.WebSocket インスタンス
+    ws: ws.raw as never, // hono/ws's WSContext.raw is the underlying ws.WebSocket instance
   })
   sessionIdByWs.set(ws, session.sessionId)
   armHeartbeatTimeout(sessionManager, ws, session.sessionId)
@@ -163,11 +165,11 @@ function handleIdentify(
 }
 
 /**
- * RESUME (op6) を処理する。
- * @param sessionManager - セッションマネージャ
- * @param sessionIdByWs - WSContext→sessionId のマップ
- * @param ws - 接続中の WebSocket コンテキスト
- * @param data - RESUME のペイロード
+ * Handles RESUME (op6).
+ * @param sessionManager - Session manager
+ * @param sessionIdByWs - Map of WSContext to sessionId
+ * @param ws - The connected WebSocket context
+ * @param data - The RESUME payload
  */
 function handleResume(
   sessionManager: SessionManager,
@@ -202,10 +204,11 @@ function handleResume(
 }
 
 /**
- * HEARTBEAT (op1) を処理し、ACK (op11) を返してタイムアウトタイマーを再設定する。
- * @param sessionManager - セッションマネージャ
- * @param sessionIdByWs - WSContext→sessionId のマップ
- * @param ws - 接続中の WebSocket コンテキスト
+ * Handles HEARTBEAT (op1), replying with ACK (op11) and rearming the
+ * timeout timer.
+ * @param sessionManager - Session manager
+ * @param sessionIdByWs - Map of WSContext to sessionId
+ * @param ws - The connected WebSocket context
  */
 function handleHeartbeat(
   sessionManager: SessionManager,
@@ -222,17 +225,19 @@ function handleHeartbeat(
 }
 
 /**
- * Gateway WebSocket ハンドラを構築する。
- * @param db - データベース（Identify のトークン検証・MockBot 生成に使用）
- * @param options - baseUrl・disableAuth
- * @returns Hono の upgradeWebSocket に渡す WSEvents と、Dispatch 配信に使う SessionManager
+ * Builds the Gateway WebSocket handler.
+ * @param db - Database (used for IDENTIFY token validation and MockBot
+ * creation)
+ * @param options - baseUrl and disableAuth
+ * @returns The WSEvents to pass to Hono's upgradeWebSocket, plus the
+ * SessionManager used for Dispatch delivery
  */
 export function createGatewayWebSocketHandler(
   db: Database,
   options: { baseUrl: string; disableAuth: boolean }
 ): { upgrade: WSEvents; sessionManager: SessionManager } {
   const sessionManager = new SessionManager()
-  // ws (WSContext) → sessionId の対応。onClose/onMessage で参照する。
+  // Maps ws (WSContext) to sessionId; referenced from onClose/onMessage.
   const sessionIdByWs = new WeakMap<WSContext, string>()
 
   const upgrade: WSEvents = {
@@ -245,9 +250,9 @@ export function createGatewayWebSocketHandler(
       )
     },
     onMessage: (event, ws) => {
-      // event.data は WSMessageReceive (string | Blob | ArrayBufferLike) だが、
-      // Gateway クライアントは常に JSON テキストフレームを送る想定のため、
-      // 文字列以外は不正なメッセージとして無視する。
+      // event.data is WSMessageReceive (string | Blob | ArrayBufferLike),
+      // but Gateway clients are expected to always send JSON text frames,
+      // so anything non-string is ignored as an invalid message.
       if (typeof event.data !== 'string') return
       const payload = decodePayload(event.data)
       if (!payload) return
@@ -284,7 +289,8 @@ export function createGatewayWebSocketHandler(
           break
         }
         default: {
-          // 未知の opcode は無視する（実 Discord もクライアントからの未知opは無視する）
+          // Unknown opcodes are ignored (real Discord also ignores unknown
+          // opcodes from clients).
           break
         }
       }
@@ -299,10 +305,11 @@ export function createGatewayWebSocketHandler(
 }
 
 /**
- * セッションに RECONNECT (op7) を送信し、クライアントに再接続（再 Identify または
- * Resume）を促したうえで切断する。サーバー都合でセッションを終了させたい場合
- * （プロセス終了時のグレースフルシャットダウン等）に使用する。
- * @param session - 対象セッション
+ * Sends RECONNECT (op7) to a session, prompting the client to reconnect
+ * (either re-IDENTIFY or RESUME) before disconnecting it. Use this when the
+ * server needs to end a session on its own terms (e.g. graceful shutdown on
+ * process exit).
+ * @param session - Target session
  */
 export function sendReconnect(session: Session): void {
   session.ws.send(encodePayload({ op: GatewayOp.Reconnect, d: null }))

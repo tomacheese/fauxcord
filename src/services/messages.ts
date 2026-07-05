@@ -176,11 +176,11 @@ export interface AttachmentObject {
 }
 
 /**
- * チャンネル ID からそのチャンネルが属する Guild ID を取得する。
- * DM 相当のデータで guild_id が存在しない場合は undefined を返す。
- * @param db - データベース
- * @param channelId - チャンネル ID
- * @returns Guild ID。存在しなければ undefined
+ * Gets the Guild ID that a channel belongs to, given its channel ID.
+ * Returns undefined for DM-like data that has no guild_id.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Guild ID, or undefined if it doesn't exist
  */
 export function getGuildIdForChannel(
   db: Database,
@@ -535,7 +535,7 @@ export function deleteMessage(
   messageId: string,
   channelId?: string
 ): boolean {
-  // DELETE 実行後は行が失われるため、削除前に channel_id を確定させておく
+  // The row is gone after DELETE runs, so capture channel_id beforehand
   const target = db
     .prepare('SELECT channel_id FROM messages WHERE id = ?')
     .get(messageId) as { channel_id: string } | undefined

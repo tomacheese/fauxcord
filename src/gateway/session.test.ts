@@ -89,7 +89,7 @@ describe('SessionManager', () => {
     }
     expect(session.seq).toBe(105)
     expect(session.replayBuffer).toHaveLength(100)
-    expect(session.replayBuffer[0]?.seq).toBe(6) // 1..105のうち先頭5件が捨てられている
+    expect(session.replayBuffer[0]?.seq).toBe(6) // first 5 of 1..105 were evicted
   })
 
   it('replays events after the given seq, or returns undefined if evicted', () => {
@@ -111,6 +111,6 @@ describe('SessionManager', () => {
     }
     expect(manager.replayFrom(session, 1)).toHaveLength(2) // seq 2, 3
     expect(manager.replayFrom(session, 0)).toHaveLength(3)
-    expect(manager.replayFrom(session, -1)).toBeUndefined() // バッファに存在しない古いseq
+    expect(manager.replayFrom(session, -1)).toBeUndefined() // seq older than what's in the buffer
   })
 })
