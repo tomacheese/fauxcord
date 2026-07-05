@@ -16,7 +16,7 @@ publish = false
 # which was authored from training data alone. See the CONFIDENCE CAVEAT
 # block at the top of src/main.rs for the residual uncertainties (mainly:
 # no `cargo build` was actually run in this offline session).
-twilight-http = "0.16"
+twilight-http = "0.17"
 twilight-model = "0.16"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
