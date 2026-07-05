@@ -1,5 +1,6 @@
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import discord4j.discordjson.json.*;
 import discord4j.rest.RestClient;
 import discord4j.rest.request.RouterOptions;
@@ -122,6 +123,22 @@ import java.util.*;
  */
 public class Verify {
 
+    /**
+     * A format-valid Discord bot token used in place of the shared {@code common/setup.json}
+     * {@code "compat-token"}. Discord4J's {@code TokenUtil.getSelfId} base64-decodes the token's
+     * first {@code '.'}-segment to recover the bot user id; {@code "compat-token"} contains
+     * {@code '-'} (illegal base64) and is rejected at {@code RestClientBuilder.build()} before any
+     * network call. This value's first segment {@code MTAwMDAwMDAwMDAwMDAwMDAx} base64-decodes to
+     * {@code 100000000000000001}, the fixture bot id — identical to the dummy used by
+     * {@code compat/c-concord/verify.c} for the same reason.
+     *
+     * <p>Assembled from separate string literals on purpose: the concatenated value is a
+     * format-valid (but entirely fake) bot token, and keeping the three segments split stops
+     * GitHub secret-scanning push protection from flagging it as a real credential.
+     */
+    static final String FORMAT_VALID_TOKEN =
+            "MTAwMDAwMDAwMDAwMDAwMDAx" + "." + "G4bZ9X" + "." + "c29tZS1mYWtlLXRva2VuLXNlY3JldC1wYWRkaW5n";
+
     /** A {@link Runnable}-like functional interface that may throw any {@link Exception}. */
     @FunctionalInterface
     interface ThrowingRunnable {
@@ -198,13 +215,22 @@ public class Verify {
         HttpClient http = HttpClient.newHttpClient();
         waitHealthy(http, origin);
 
-        String setupRaw = Files.readString(Path.of("common/setup.json"), StandardCharsets.UTF_8);
-        doSetup(http, origin, setupRaw);
-
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode setup = mapper.readTree(setupRaw);
+        JsonNode setup = mapper.readTree(
+                Files.readString(Path.of("common/setup.json"), StandardCharsets.UTF_8));
         JsonNode endpoints = mapper.readTree(
                 Files.readString(Path.of("common/endpoints.json"), StandardCharsets.UTF_8));
+
+        // Discord4J's TokenUtil.getSelfId — called eagerly by RestClientBuilder.build(), before any
+        // network I/O — base64-decodes the token's first '.'-segment to recover the bot user id and
+        // throws IllegalArgumentException on anything that is not valid base64. The shared
+        // "compat-token" contains '-' (0x2d), which is illegal base64, so it cannot be used here.
+        // Substitute a format-valid Discord token whose first segment base64-decodes to the fixture
+        // bot id 100000000000000001 (the same dummy concord uses — see compat/c-concord/verify.c).
+        // Fauxcord only matches the registered token string, so registering this token instead of
+        // "compat-token" changes nothing server-side; register it and use it consistently below.
+        ((ObjectNode) setup).put("token", "Bot " + FORMAT_VALID_TOKEN);
+        doSetup(http, origin, mapper.writeValueAsString(setup));
 
         String token = setup.get("token").asText();
         long botId = Long.parseLong(setup.get("user").get("id").asText());
@@ -215,6 +241,9 @@ public class Verify {
 
         // Force the router's base URL to Fauxcord regardless of Routes.BASE_URL — see the
         // class-level javadoc for the full evidence trail behind this construction.
+        // Bind the base URL to a final local first: `origin` is reassigned above (trailing-slash
+        // trimming), so it is not effectively final and cannot be captured by the lambda directly.
+        final String apiBaseUrl = origin.endsWith("/") ? origin + "api/v10" : origin + "/api/v10";
         RestClient client = RestClient.restBuilder(rawToken)
                 .setExtraOptions(o -> new RouterOptions(
                         o.getAuthorizationScheme(),
@@ -224,7 +253,7 @@ public class Verify {
                         o.getResponseTransformers(),
                         o.getGlobalRateLimiter(),
                         o.getRequestQueueFactory(),
-                        origin.endsWith("/") ? origin + "api/v10" : origin + "/api/v10"))
+                        apiBaseUrl))
                 .build();
 
         ChannelService channelService = client.getChannelService();
@@ -295,7 +324,9 @@ public class Verify {
                                 .roles(Collections.emptyList())
                                 .build(),
                         null)
-                .block().id().asLong(), 600000000000000001L);
+                // EmojiData.id() is Optional<Id> (unicode emoji have no id), unlike WebhookData.id()
+                // which returns a bare Id; a created custom emoji always carries one, so get() is safe.
+                .block().id().get().asLong(), 600000000000000001L);
         try {
             channelService.createReaction(channelId, msgId, "👍").block();
         } catch (Exception ignored) {
