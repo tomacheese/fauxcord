@@ -224,7 +224,12 @@ fun main() {
         EndpointDef(o.getValue("method").jsonPrimitive.content, o.getValue("path").jsonPrimitive.content)
     }
 
-    val token = setupJson.getValue("token").jsonPrimitive.content
+    // Kord's RequestHandler always prepends "Bot " to the token it is given
+    // (RequestHandler.kt: `unencodedHeader(Authorization, "Bot $token")`), whereas
+    // common/setup.json stores the token WITH the "Bot " prefix already. Pass the
+    // prefix-stripped token so the outgoing header is `Bot compat-token`, not the
+    // doubly-prefixed `Bot Bot compat-token` (which Fauxcord rejects with 401).
+    val token = setupJson.getValue("token").jsonPrimitive.content.removePrefix("Bot ").trim()
     val userObj = setupJson.getValue("user").jsonObject
     val botId = Snowflake(userObj.getValue("id").jsonPrimitive.content)
     val guildObj = setupJson.getValue("guilds").jsonArray[0].jsonObject
