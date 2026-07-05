@@ -9,7 +9,7 @@
 # of this verifier's authoring; nextcord's release cadence is slower than
 # discord.py/py-cord, so if this exact patch version has since been yanked or
 # superseded, `pip install nextcord~=2.6` is a safe fallback.
-nextcord==2.6.0
+nextcord==3.2.0
 aiohttp
 # nextcord's health_check module imports pkg_resources, which python:3.12-slim
 # no longer provides out of the box. Newer setuptools (>=81) dropped pkg_resources
