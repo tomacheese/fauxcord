@@ -825,6 +825,14 @@ main(void)
         record_call("GET /guilds/{guild_id}/members",
                     discord_list_guild_members(client, GUILD_ID, &params, &ret), client);
     }
+    /* PATCH /guilds/{guild_id}/members/@me */
+    {
+        struct discord_guild_member member_ret = { 0 };
+        struct discord_ret_guild_member ret = { .sync = &member_ret };
+        struct discord_modify_current_member params = { .nick = "compat-me" };
+        record_call("PATCH /guilds/{guild_id}/members/@me",
+                    discord_modify_current_member(client, GUILD_ID, &params, &ret), client);
+    }
     /* PATCH /guilds/{guild_id}/roles/{role_id} */
     {
         struct discord_role role_ret = { 0 };
