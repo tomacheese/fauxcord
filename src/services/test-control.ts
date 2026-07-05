@@ -6,6 +6,9 @@
 
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
+import { gatewayBus } from '../gateway/bus'
+import { getGuild } from './guilds'
+import { getGuildMember } from './guild-members'
 
 /** Test setup request type */
 export interface SetupRequest {
@@ -66,6 +69,11 @@ export function setupTestEnvironment(
   const username = request.user?.username ?? 'MockBot'
   const discriminator = request.user?.discriminator ?? '0'
 
+  // Gateway events to broadcast once the transaction below commits. Collecting
+  // them here (instead of emitting inline) avoids broadcasting state that a
+  // later statement in the same transaction could still roll back.
+  const pendingEvents: (() => void)[] = []
+
   // Run inside a transaction so that a partial setup state
   // (e.g. only the Bot registered) is not left behind if an error occurs midway
   const setup = db.transaction((): SetupResponse => {
@@ -93,6 +101,12 @@ export function setupTestEnvironment(
            bot_token = excluded.bot_token`
       ).run(guildId, guildReq.name, userId, request.token)
 
+      pendingEvents.push(() => {
+        gatewayBus.emit('guild.create', {
+          guild: getGuild(db, guildId) as unknown as Record<string, unknown>,
+        })
+      })
+
       // Auto-create the @everyone role (Discord API spec: every guild always has @everyone)
       // The @everyone role ID is identical to the guild ID
       db.prepare(
@@ -108,6 +122,16 @@ export function setupTestEnvironment(
       db.prepare(
         'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
       ).run(guildId, userId)
+
+      pendingEvents.push(() => {
+        gatewayBus.emit('guild.member.add', {
+          guildId,
+          member: getGuildMember(db, guildId, userId) as unknown as Record<
+            string,
+            unknown
+          >,
+        })
+      })
 
       const channelsResponse: { id: string; name: string; type: number }[] = []
 
@@ -145,7 +169,10 @@ export function setupTestEnvironment(
     }
   })
 
-  return setup()
+  const result = setup()
+  // Emit only after the transaction has committed successfully.
+  for (const emit of pendingEvents) emit()
+  return result
 }
 
 /**

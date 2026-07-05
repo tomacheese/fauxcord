@@ -7,6 +7,7 @@
  */
 
 import { Hono } from 'hono'
+import { serve } from '@hono/node-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
 import { createAuthMiddleware, type AppEnv } from './middleware/auth'
@@ -22,6 +23,8 @@ import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { generateSnowflake } from './snowflake'
+import { buildApp } from './app'
+import type { SessionManager } from './gateway/session'
 
 const TEST_BASE_URL = 'http://localhost:3000'
 const TEST_UPLOAD_PATH = '/tmp/fauxcord-test-uploads'
@@ -105,6 +108,62 @@ export function createFullTestApp(): FullTestContext {
     app,
     cleanup: () => {
       closeDatabase(db)
+    },
+  }
+}
+
+/**
+ * Starts a test server that handles WebSocket upgrades over a real socket.
+ * Uses an in-memory DB and lets the OS assign a port via port 0.
+ * @returns The db, the connection URL, and a close function for teardown
+ */
+export async function createTestGatewayServer(): Promise<{
+  db: Database
+  url: string
+  sessionManager: SessionManager
+  close: () => Promise<void>
+}> {
+  const db = initializeDatabase(':memory:') // same DB initialization as the existing createTestApp
+  const { app, wss, sessionManager, unsubscribeGateway } = buildApp(db, {
+    baseUrl: 'http://localhost:0',
+    disableAuth: false,
+  })
+
+  const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
+    const s = serve(
+      {
+        fetch: app.fetch,
+        port: 0,
+        hostname: '127.0.0.1',
+        websocket: { server: wss },
+      },
+      () => {
+        resolve(s)
+      }
+    )
+  })
+
+  const address = server.address()
+  const port = typeof address === 'object' && address ? address.port : 0
+
+  return {
+    db,
+    url: `ws://127.0.0.1:${port}`,
+    sessionManager,
+    close: () => {
+      // Always unsubscribe from gatewayBus to prevent listener leaks across
+      // repeated createTestGatewayServer() calls in the test suite.
+      unsubscribeGateway()
+      return new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err)
+            return
+          }
+          closeDatabase(db)
+          resolve()
+        })
+      })
     },
   }
 }

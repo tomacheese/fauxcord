@@ -4,24 +4,11 @@
  * Starts the Hono app and provides a mock server for Discord REST API v10.
  */
 
-import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
 import { loadConfig } from './config'
 import { initializeDatabase } from './db'
-import { corsMiddleware } from './middleware/cors'
-import { versionMiddleware } from './middleware/version'
-import { createAuthMiddleware, type AppEnv } from './middleware/auth'
-import { rateLimitMiddleware } from './middleware/rate-limit'
-import { createLatencyMiddleware } from './middleware/latency'
-import { createChannelRoutes } from './routes/channels'
-import { createGuildRoutes } from './routes/guilds'
-import { createUserRoutes } from './routes/users'
-import { createGatewayRoutes } from './routes/gateway'
-import { createWebhookRoutes } from './routes/webhooks'
-import { createInviteRoutes } from './routes/invites'
-import { createOAuth2Routes } from './routes/oauth2'
-import { createTestRoutes } from './routes/test'
-import { createMockRoutes } from './routes/mock'
+import { buildApp } from './app'
+import { sendReconnect } from './gateway/server'
 import { readFile } from 'node:fs/promises'
 import { setupTestEnvironment } from './services/test-control'
 
@@ -29,63 +16,7 @@ const config = loadConfig()
 
 const db = initializeDatabase(config.dbPath)
 
-const app = new Hono<AppEnv>()
-
-// Configure middleware (applied to all requests)
-app.use('*', corsMiddleware)
-app.use('*', versionMiddleware)
-
-// Infrastructure APIs require no authentication (registered first)
-app.route('/', createMockRoutes(db, config.uploadPath))
-
-// Test control APIs require no authentication
-app.route('/', createTestRoutes(db))
-
-// OAuth2 is partially exempt from authentication (its endpoints validate
-// their own Bearer/client-credential auth internally), so it is mounted
-// before the auth middleware below — but, like every other route group, it
-// must still be reachable under all three version prefixes, not just the
-// bare path. Real clients (discord.js, Oceanic.js, etc.) always call
-// through the versioned base URL (e.g. `/api/v10/oauth2/token`).
-for (const oauth2Prefix of ['/api/v10', '/api', '']) {
-  app.route(oauth2Prefix, createOAuth2Routes(db))
-}
-
-// Routes below require authentication checks
-// Token-based webhook operations (/webhooks/{id}/{token}...) are exempted in auth.ts
-// CRUD operations requiring a Bot token go through authentication
-const authMiddleware = createAuthMiddleware(db, config.disableAuth)
-const latencyMiddleware = createLatencyMiddleware(config.latencyMs)
-
-app.use('*', authMiddleware)
-app.use('*', latencyMiddleware)
-app.use('*', rateLimitMiddleware)
-
-// Normalize version prefixes and mount each route
-// /api/v10/ → /
-// /api/ → /
-// / → as-is
-const routePrefix = ['/api/v10', '/api', '']
-
-for (const prefix of routePrefix) {
-  app.route(prefix, createChannelRoutes(db, config.baseUrl, config.uploadPath))
-  app.route(prefix, createGuildRoutes(db))
-  app.route(prefix, createUserRoutes(db))
-  app.route(prefix, createGatewayRoutes(db, config.baseUrl))
-  // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
-  app.route(prefix, createWebhookRoutes(db, config.baseUrl))
-  app.route(prefix, createInviteRoutes(db))
-}
-
-// Global error handler
-app.onError((err, c) => {
-  console.error(err)
-  return c.json({ message: '500: Internal Server Error', code: 0 }, 500)
-})
-
-app.notFound((c) => {
-  return c.json({ message: '404: Not Found', code: 0 }, 404)
-})
+const { app, wss, sessionManager } = buildApp(db, config)
 
 // Load SEED_FILE
 if (config.seedFile) {
@@ -127,10 +58,27 @@ const hostname = config.host
 
 console.info(`Discord Mock Server starting on ${hostname}:${port}`)
 
-serve({
+const server = serve({
   fetch: app.fetch,
   port,
   hostname,
+  websocket: { server: wss },
 })
+
+// Gracefully reconnect all Gateway sessions before exiting on termination signals
+/** Max time (ms) to wait for a graceful shutdown before forcing exit */
+const SHUTDOWN_TIMEOUT_MS = 5000
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.on(signal, () => {
+    for (const session of sessionManager.getAll()) {
+      sendReconnect(session)
+    }
+    // Close the HTTP server before exiting so the RECONNECT frames and close
+    // handshakes have a chance to flush; exit once it drains, with a timeout
+    // fallback so a hung connection cannot block shutdown indefinitely.
+    server.close(() => process.exit(0))
+    setTimeout(() => process.exit(0), SHUTDOWN_TIMEOUT_MS).unref()
+  })
+}
 
 export { app }

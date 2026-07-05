@@ -6,6 +6,24 @@
 
 import type { Database } from '../db'
 import type { UserRow } from './messages'
+import { gatewayBus } from '../gateway/bus'
+import { getGuildIdForChannel } from './messages'
+
+/**
+ * Gets the channel ID that a message belongs to, given its message ID.
+ * @param db - Database
+ * @param messageId - Message ID
+ * @returns Channel ID, or undefined if the message doesn't exist
+ */
+function getChannelIdForMessage(
+  db: Database,
+  messageId: string
+): string | undefined {
+  const row = db
+    .prepare('SELECT channel_id FROM messages WHERE id = ?')
+    .get(messageId) as { channel_id: string } | undefined
+  return row?.channel_id
+}
 
 /**
  * Adds a reaction.
@@ -21,14 +39,37 @@ export function addReaction(
   userId: string,
   emoji: string
 ): boolean {
+  let inserted: boolean
   try {
-    db.prepare(
-      'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
-    ).run(messageId, userId, emoji)
-    return true
+    const result = db
+      .prepare(
+        'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+      )
+      .run(messageId, userId, emoji)
+    inserted = result.changes > 0
   } catch {
     return false
   }
+
+  // Gateway emission happens outside the try/catch so a listener throwing
+  // synchronously cannot make this function incorrectly report a DB failure.
+  // Only emit when the row was actually inserted, so a duplicate reaction
+  // (INSERT OR IGNORE with no state change) does not produce a spurious
+  // MESSAGE_REACTION_ADD dispatch.
+  if (inserted) {
+    const channelId = getChannelIdForMessage(db, messageId)
+    if (channelId !== undefined) {
+      gatewayBus.emit('message.reaction.add', {
+        guildId: getGuildIdForChannel(db, channelId),
+        channelId,
+        messageId,
+        userId,
+        emoji: { id: null, name: emoji },
+      })
+    }
+  }
+
+  return true
 }
 
 /**
@@ -44,9 +85,27 @@ export function removeReaction(
   userId: string,
   emoji: string
 ): void {
-  db.prepare(
-    'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
-  ).run(messageId, userId, emoji)
+  const result = db
+    .prepare(
+      'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
+    )
+    .run(messageId, userId, emoji)
+
+  // Only emit when a reaction was actually deleted, so removing a
+  // non-existent reaction does not produce a misleading
+  // MESSAGE_REACTION_REMOVE dispatch.
+  if (result.changes > 0) {
+    const channelId = getChannelIdForMessage(db, messageId)
+    if (channelId !== undefined) {
+      gatewayBus.emit('message.reaction.remove', {
+        guildId: getGuildIdForChannel(db, channelId),
+        channelId,
+        messageId,
+        userId,
+        emoji: { id: null, name: emoji },
+      })
+    }
+  }
 }
 
 /**
