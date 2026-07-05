@@ -9,6 +9,7 @@ import type { Database } from '../db'
 import type { APIGuildTextChannel, APIOverwrite } from 'discord-api-types/v10'
 import type { ChannelType } from 'discord-api-types/v10'
 import { generateSnowflake } from '../snowflake'
+import { gatewayBus } from '../gateway/bus'
 
 /**
  * Compile-time guard: ensures the safe-field subset of ChannelObject is
@@ -278,7 +279,13 @@ export function updateChannel(
   const updated = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
-  return toChannelObject(updated, getChannelOverwrites(db, updated.id))
+  const result = toChannelObject(updated, getChannelOverwrites(db, updated.id))
+
+  gatewayBus.emit('channel.update', {
+    channel: result as unknown as Record<string, unknown>,
+  })
+
+  return result
 }
 
 /**
@@ -300,6 +307,11 @@ export function deleteChannel(
   // channel_overwrites, so overwrites must be read first.
   const result = toChannelObject(row, getChannelOverwrites(db, row.id))
   db.prepare('DELETE FROM channels WHERE id = ?').run(channelId)
+
+  gatewayBus.emit('channel.delete', {
+    channel: result as unknown as Record<string, unknown>,
+  })
+
   return result
 }
 
@@ -370,5 +382,11 @@ export function createGuildChannel(
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
   // A newly created channel never has permission overwrites yet.
-  return toChannelObject(row, [])
+  const result = toChannelObject(row, [])
+
+  gatewayBus.emit('channel.create', {
+    channel: result as unknown as Record<string, unknown>,
+  })
+
+  return result
 }

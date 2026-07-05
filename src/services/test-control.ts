@@ -6,6 +6,9 @@
 
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
+import { gatewayBus } from '../gateway/bus'
+import { getGuild } from './guilds'
+import { getGuildMember } from './guild-members'
 
 /** Test setup request type */
 export interface SetupRequest {
@@ -93,6 +96,10 @@ export function setupTestEnvironment(
            bot_token = excluded.bot_token`
       ).run(guildId, guildReq.name, userId, request.token)
 
+      gatewayBus.emit('guild.create', {
+        guild: getGuild(db, guildId) as unknown as Record<string, unknown>,
+      })
+
       // Auto-create the @everyone role (Discord API spec: every guild always has @everyone)
       // The @everyone role ID is identical to the guild ID
       db.prepare(
@@ -108,6 +115,14 @@ export function setupTestEnvironment(
       db.prepare(
         'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
       ).run(guildId, userId)
+
+      gatewayBus.emit('guild.member.add', {
+        guildId,
+        member: getGuildMember(db, guildId, userId) as unknown as Record<
+          string,
+          unknown
+        >,
+      })
 
       const channelsResponse: { id: string; name: string; type: number }[] = []
 
