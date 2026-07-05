@@ -1,15 +1,2 @@
 ignored:
   - DL3018  # Pin versions in apk add: build tools do not need version pinning
-  - DL3008  # Pin versions in apt-get install: same rationale as DL3018 — the
-            # compat/ verifier images install throwaway build toolchains
-            # (gcc, autoconf, libc6-dev, ...); pinning apt versions makes them
-            # brittle (versions get purged from the mirror over time). Does not
-            # affect the shipped image, which is Alpine/apk based.
-  - DL3059  # Multiple consecutive RUN: the compat/ verifier Dockerfiles keep
-            # dependency-fetch and dependency-build on separate RUN layers on
-            # purpose, so editing verifier source does not invalidate the slow
-            # dependency layer (documented inline in each file).
-  - DL3003  # Use WORKDIR to switch directory: compat/c-concord builds curl
-            # from source inside a subdir via `cd` within a single RUN, mirroring
-            # Concord's upstream CI recipe; splitting it into WORKDIR layers adds
-            # no value for a throwaway build stage.
