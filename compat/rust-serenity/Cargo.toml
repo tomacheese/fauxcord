@@ -36,7 +36,7 @@ serde = { version = "1", features = ["derive"] }
 # (needed to drive the token-authenticated webhook endpoints below) requires
 # the `ExposeSecret` trait directly. Pinned to the exact 0.8.0 that serenity
 # itself resolves, so this adds no new distinct version to the dependency tree.
-secrecy = "0.8"
+secrecy = "0.10"
 # Used directly for the health-check poll and the /_test/setup POST (the same
 # role fetch() plays in the JS verifiers) — kept independent of whatever
 # internal HTTP client serenity's "http" feature pulls in. rustls-tls matches
