@@ -7,7 +7,7 @@
 // in transitively.
 plugins {
     application
-    kotlin("jvm") version "1.9.25"
+    kotlin("jvm") version "2.4.0"
 }
 
 repositories {
