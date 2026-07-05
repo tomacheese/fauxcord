@@ -238,18 +238,36 @@ export function getThreadMember(
 }
 
 /**
- * Retrieves all members of a thread.
+ * Retrieves the members of a thread, paginated by user ID.
+ *
+ * Discord's `GET /channels/{channel.id}/thread-members` supports `after`
+ * (a user-ID cursor) and `limit` query parameters, returning members whose
+ * user ID is greater than `after`, sorted ascending. Honoring the cursor is
+ * required for correctness with cursor-based client paginators: hikari's
+ * `ThreadMembersIterator`, for example, keeps requesting pages (advancing
+ * `after`) until it receives an empty page, so an implementation that ignored
+ * `after` and always returned the full list would make such a paginator loop
+ * forever instead of terminating. Mirrors `getGuildMembers`'s cursor pattern.
  * @param db - Database
  * @param threadId - Thread ID
+ * @param limit - Maximum number of members to return
+ * @param after - User-ID cursor; only members with a greater user ID are returned
  * @returns Array of thread member objects
  */
 export function getThreadMembers(
   db: Database,
-  threadId: string
+  threadId: string,
+  limit = 100,
+  after = '0'
 ): ThreadMemberObject[] {
+  const clampedLimit = Math.min(limit, 100)
   const rows = db
-    .prepare('SELECT * FROM thread_members WHERE thread_id = ?')
-    .all(threadId) as ThreadMemberRow[]
+    .prepare(
+      `SELECT * FROM thread_members
+       WHERE thread_id = ? AND user_id > ?
+       ORDER BY user_id ASC LIMIT ?`
+    )
+    .all(threadId, after, clampedLimit) as ThreadMemberRow[]
   return rows.map((r) => toThreadMemberObject(r))
 }
 
