@@ -22,8 +22,8 @@ dependencies {
 
     // CIO is a pure-JVM/coroutine Ktor engine with no native dependencies,
     // matching the ktor version kord-rest:0.14.0 was compiled against.
-    implementation("io.ktor:ktor-client-cio:2.3.13")
-    implementation("io.ktor:ktor-client-core:2.3.13")
+    implementation("io.ktor:ktor-client-cio:3.5.1")
+    implementation("io.ktor:ktor-client-core:3.5.1")
 
     // kotlinx-serialization-json is already a transitive dependency of
     // kord-rest; declared explicitly here since Verify.kt uses its JsonElement
