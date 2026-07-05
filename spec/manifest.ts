@@ -34,13 +34,15 @@
  *   Bearer token; impractical to exercise in an isolated unit test without significant
  *   test harness work.
  *
- * - `GET /oauth2/applications/@me` and `GET /applications/@me` — The
- *   `PrivateApplicationResponse` schema requires ~20+ fields that the mock intentionally
- *   omits (Fauxcord is not an application hosting platform). Included in drift detection
- *   only (`contractTested: false`).
+ * ## Now contract-tested (previously excluded)
  *
- * - `GET /guilds/{guild_id}` — `GuildWithCountsResponse` → `GuildResponse` requires
- *   ~40 fields the mock does not fully implement. Included in drift detection only.
+ * `GET /guilds/{guild_id}`, `PATCH /guilds/{guild_id}`, `GET /applications/@me`,
+ * and `GET /oauth2/applications/@me` are now mapped in the manifest and
+ * contract-tested. The mock returns fixed null/default values for fields it does
+ * not model (guild: splash/banner/nsfw_level/stickers/incidents_data etc.;
+ * application: verify_key/team/flags/redirect_uris etc.), so their responses
+ * fully satisfy `GuildWithCountsResponse` / `GuildResponse` /
+ * `PrivateApplicationResponse`.
  *
  * ## responseSchemaOverride
  *
@@ -81,6 +83,12 @@ export interface ContractFixture {
   emojiId: string
   /** Seeded invite code */
   inviteCode: string
+  /**
+   * A second, disposable invite code used exclusively by the destructive
+   * DELETE /invites/{code} contract test so it does not consume the
+   * inviteCode fixture that GET /invites/{code} relies on.
+   */
+  deletableInviteCode: string
   /** Seeded banned user ID (a user with a ban record in the guild) */
   bannedUserId: string
   /** Seeded thread (channel type 11) ID, archived, with the bot as a member */
@@ -349,9 +357,10 @@ export const MANIFEST: SpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/webhooks',
     method: 'get',
-    contractTested: false,
-    // Response is an array of oneOf webhook types — too ambiguous to validate
-    // without knowing which branch each item belongs to.
+    contractTested: true,
+    // Response is an array of oneOf webhook types; the mock only ever returns
+    // the incoming-webhook branch, so pin the schema to validate each item.
+    responseSchemaOverride: 'GuildIncomingWebhookResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/webhooks` }),
   },
@@ -397,12 +406,12 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
-    // Response is an array of oneOf invite types. Following the
-    // GET /channels/{channel_id}/webhooks precedent, this is drift-detection
-    // only (contractTested: false) rather than validated per-item.
+    // Response is an array of oneOf invite types; the mock only ever returns
+    // the guild-invite branch, so pin the schema to validate each item.
     specPath: '/channels/{channel_id}/invites',
     method: 'get',
-    contractTested: false,
+    contractTested: true,
+    responseSchemaOverride: 'GuildInviteResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/invites` }),
   },
@@ -435,16 +444,16 @@ export const MANIFEST: SpecEndpoint[] = [
     request: (f) => ({ path: `/api/v10/invites/${f.inviteCode}` }),
   },
   {
-    // DELETE returns the deleted invite (200), but is excluded from contract
-    // tests because it is destructive: deleting the fixture invite would break
-    // the GET /invites/{code} contract test in the same run.
+    // DELETE returns the deleted invite (200). It uses a dedicated disposable
+    // invite fixture so deleting it does not break the GET /invites/{code}
+    // contract test that runs against the shared inviteCode fixture.
     specPath: '/invites/{code}',
     method: 'delete',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildInviteResponse',
     request: (f) => ({
-      path: `/api/v10/invites/${f.inviteCode}`,
+      path: `/api/v10/invites/${f.deletableInviteCode}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -452,19 +461,18 @@ export const MANIFEST: SpecEndpoint[] = [
   // ─── Guilds ─────────────────────────────────────────────────────────────────
 
   {
-    // GuildWithCountsResponse → GuildResponse requires ~40 required fields.
-    // Drift detection only; contract test skipped.
     specPath: '/guilds/{guild_id}',
     method: 'get',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}` }),
   },
   {
     specPath: '/guilds/{guild_id}',
     method: 'patch',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
+    responseSchemaOverride: 'GuildResponse',
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}`,
       init: {
@@ -719,8 +727,9 @@ export const MANIFEST: SpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/webhooks',
     method: 'get',
-    contractTested: false,
-    // Array of oneOf webhook types — too ambiguous without branch pinning
+    contractTested: true,
+    // Same as channel webhooks: mock returns only the incoming-webhook branch.
+    responseSchemaOverride: 'GuildIncomingWebhookResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/webhooks` }),
   },
@@ -788,13 +797,22 @@ export const MANIFEST: SpecEndpoint[] = [
   // ─── OAuth2 ─────────────────────────────────────────────────────────────────
 
   {
-    // PrivateApplicationResponse requires ~20 fields the mock omits intentionally.
-    // Drift detection only; contract test skipped.
     specPath: '/oauth2/applications/@me',
     method: 'get',
-    contractTested: false,
+    contractTested: true,
     successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
     request: () => ({ path: '/api/v10/oauth2/applications/@me' }),
+  },
+  {
+    // Implemented and present in the upstream spec; mapped here so it is both
+    // drift-detected and contract-tested (previously missing from the manifest).
+    specPath: '/applications/@me',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
+    request: () => ({ path: '/api/v10/applications/@me' }),
   },
   {
     specPath: '/oauth2/@me',

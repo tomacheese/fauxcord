@@ -39,6 +39,15 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
   // GET /guilds/:guildId/members — List a guild's members
   app.get('/guilds/:guildId/members', (c) => {
     const { guildId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
     const limit = parseLimitQuery(c, 1, 1000)
     const after = c.req.query('after') ?? '0'
 
@@ -79,6 +88,14 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
   app.get('/guilds/:guildId/members/:userId', (c) => {
     const { guildId, userId } = c.req.param()
 
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
     const member = requireEntity(
       c,
       getGuildMember(db, guildId, userId),
@@ -92,6 +109,14 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
   // PATCH /guilds/:guildId/members/:userId — Update member information
   app.patch('/guilds/:guildId/members/:userId', async (c) => {
     const { guildId, userId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
 
     const payload = (await parseJsonBody(c)) as GuildMemberUpdatePayload
 
@@ -211,6 +236,14 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
   // DELETE /guilds/:guildId/members/:userId — Kick a member
   app.delete('/guilds/:guildId/members/:userId', (c) => {
     const { guildId, userId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
 
     const removed = removeGuildMember(db, guildId, userId)
     if (!removed) {

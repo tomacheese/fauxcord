@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono'
 import type { Database } from '../db'
-import { DiscordErrorCode, discordError } from '../errors'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
 import {
   getChannel,
   updateChannel,
@@ -15,6 +15,7 @@ import {
   type ChannelUpdatePayload,
 } from '../services/channels'
 import { getThread } from '../services/threads'
+import { validateChannelUpdate } from '../validators/channel'
 import type { AppEnv } from '../middleware/auth'
 import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import { createChannelPinRoutes } from './channel-pins'
@@ -61,6 +62,11 @@ export function createChannelRoutes(
   app.patch('/channels/:channelId', async (c) => {
     const { channelId } = c.req.param()
     const payload = (await parseJsonBody(c)) as ChannelUpdatePayload
+
+    const errors = validateChannelUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
 
     const updated = requireEntity(
       c,

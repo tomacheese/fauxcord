@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 Webhook limits.
  */
 
-import { maxLengthError, type ValidationErrors } from './common'
+import { maxLengthError, typeError, type ValidationErrors } from './common'
 
 /** Webhook limit values */
 export const WEBHOOK_LIMITS = {
@@ -51,6 +51,59 @@ export function validateWebhookCreate(
     }
   } else if (payload.name.length > WEBHOOK_LIMITS.NAME_MAX) {
     errors.name = { _errors: [maxLengthError(WEBHOOK_LIMITS.NAME_MAX)] }
+  }
+
+  return errors
+}
+
+/** Webhook update (PATCH) payload (unknown fields until validated) */
+export interface WebhookUpdatePayload {
+  name?: unknown
+  avatar?: unknown
+  channel_id?: unknown
+}
+
+/**
+ * Validates a webhook update (PATCH) payload. `name`, when present, must be a
+ * non-empty string of at most `WEBHOOK_LIMITS.NAME_MAX` characters (matching
+ * creation constraints). `avatar`, when present, must be a string or null;
+ * `channel_id`, when present, must be a string. Fields are untrusted JSON, so
+ * each is type-checked at runtime.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateWebhookUpdate(
+  payload: WebhookUpdatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (payload.name !== undefined && payload.name !== null) {
+    if (typeof payload.name !== 'string') {
+      errors.name = { _errors: [typeError('string')] }
+    } else if (payload.name.length < WEBHOOK_LIMITS.NAME_MIN) {
+      errors.name = {
+        _errors: [
+          { code: 'BASE_TYPE_REQUIRED', message: 'This field is required.' },
+        ],
+      }
+    } else if (payload.name.length > WEBHOOK_LIMITS.NAME_MAX) {
+      errors.name = { _errors: [maxLengthError(WEBHOOK_LIMITS.NAME_MAX)] }
+    }
+  }
+
+  if (
+    payload.avatar !== undefined &&
+    payload.avatar !== null &&
+    typeof payload.avatar !== 'string'
+  ) {
+    errors.avatar = { _errors: [typeError('string')] }
+  }
+
+  if (
+    payload.channel_id !== undefined &&
+    typeof payload.channel_id !== 'string'
+  ) {
+    errors.channel_id = { _errors: [typeError('string')] }
   }
 
   return errors

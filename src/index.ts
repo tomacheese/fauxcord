@@ -27,10 +27,8 @@ import { setupTestEnvironment } from './services/test-control'
 
 const config = loadConfig()
 
-// Initialize the database
 const db = initializeDatabase(config.dbPath)
 
-// Create the Hono app
 const app = new Hono<AppEnv>()
 
 // Configure middleware (applied to all requests)
@@ -112,12 +110,14 @@ if (config.seedFile) {
         if (err instanceof Error && err.message === 'CONFLICT') {
           console.info(`Bot already exists: ${bot.token}, skipping`)
         } else {
-          throw err
+          // Log the specific bot that failed and continue seeding the rest,
+          // so a single bad entry does not silently skip subsequent bots.
+          console.error(`Failed to seed bot: ${bot.token}`, err)
         }
       }
     }
   } catch (err) {
-    console.error('Failed to load seed file:', err)
+    console.error('Failed to load or parse seed file:', err)
   }
 }
 

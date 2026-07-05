@@ -4,6 +4,7 @@
  * Validation follows the Discord API error format (code 50035).
  */
 
+import { maxLengthError, requiredError, typeError } from './common'
 import type { FieldError, ValidationErrors } from './common'
 
 /** Invite creation payload */
@@ -74,6 +75,80 @@ export function validateInviteCreate(
     payload.max_uses,
     INVITE_LIMITS.MAX_USES_MAX,
     'max_uses',
+    errors
+  )
+
+  return errors
+}
+
+/** Channel field limits (from the Discord spec) */
+export const CHANNEL_LIMITS = {
+  NAME_MAX: 100,
+  TOPIC_MAX: 1024,
+  RATE_LIMIT_PER_USER_MAX: 21_600,
+} as const
+
+/** Channel update (PATCH) payload (unknown fields until validated) */
+export interface ChannelUpdatePayload {
+  name?: unknown
+  topic?: unknown
+  nsfw?: unknown
+  rate_limit_per_user?: unknown
+  position?: unknown
+}
+
+/**
+ * Validates a channel update (PATCH) payload. When present: `name` must be a
+ * non-empty string of at most `CHANNEL_LIMITS.NAME_MAX` characters, `topic` a
+ * string of at most `CHANNEL_LIMITS.TOPIC_MAX` characters,
+ * `rate_limit_per_user` an integer in
+ * `[0, CHANNEL_LIMITS.RATE_LIMIT_PER_USER_MAX]`, and `position` a
+ * non-negative integer. Fields are untrusted JSON, so each is type-checked at
+ * runtime.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateChannelUpdate(
+  payload: ChannelUpdatePayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (payload.name !== undefined && payload.name !== null) {
+    if (typeof payload.name !== 'string') {
+      errors.name = { _errors: [typeError('string')] }
+    } else if (payload.name.length === 0) {
+      errors.name = { _errors: [requiredError()] }
+    } else if (payload.name.length > CHANNEL_LIMITS.NAME_MAX) {
+      errors.name = { _errors: [maxLengthError(CHANNEL_LIMITS.NAME_MAX)] }
+    }
+  }
+
+  if (payload.topic !== undefined && payload.topic !== null) {
+    if (typeof payload.topic !== 'string') {
+      errors.topic = { _errors: [typeError('string')] }
+    } else if (payload.topic.length > CHANNEL_LIMITS.TOPIC_MAX) {
+      errors.topic = { _errors: [maxLengthError(CHANNEL_LIMITS.TOPIC_MAX)] }
+    }
+  }
+
+  if (
+    payload.nsfw !== undefined &&
+    payload.nsfw !== null &&
+    typeof payload.nsfw !== 'boolean'
+  ) {
+    errors.nsfw = { _errors: [typeError('boolean')] }
+  }
+
+  validateOptionalIntBound(
+    payload.rate_limit_per_user,
+    CHANNEL_LIMITS.RATE_LIMIT_PER_USER_MAX,
+    'rate_limit_per_user',
+    errors
+  )
+  validateOptionalIntBound(
+    payload.position,
+    Number.MAX_SAFE_INTEGER,
+    'position',
     errors
   )
 

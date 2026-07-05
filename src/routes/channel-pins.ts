@@ -9,7 +9,12 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Database } from '../db'
 import { DiscordErrorCode, discordError } from '../errors'
-import { getPinnedMessages, pinMessage, unpinMessage } from '../services/pins'
+import {
+  getPinnedMessages,
+  getPinnedMessageEntries,
+  pinMessage,
+  unpinMessage,
+} from '../services/pins'
 
 /**
  * Builds the Hono response for a `pinMessage()` result code.
@@ -67,20 +72,11 @@ export function createChannelPinRoutes(db: Database, baseUrl: string): Hono {
   // Used by discord.py 2.7+: {"items":[{"pinned_at":...,"message":{...}}],"has_more":false}
   app.get('/channels/:channelId/messages/pins', (c) => {
     const { channelId } = c.req.param()
-    const pins = getPinnedMessages(db, channelId, baseUrl)
-    const pinRows = db
-      .prepare(
-        'SELECT message_id, pinned_at FROM pins WHERE channel_id = ? ORDER BY pinned_at ASC'
-      )
-      .all(channelId) as { message_id: string; pinned_at: string }[]
-
-    const pinnedAtMap = new Map(pinRows.map((r) => [r.message_id, r.pinned_at]))
+    const entries = getPinnedMessageEntries(db, channelId, baseUrl)
     return c.json({
-      items: pins.map((msg) => ({
-        pinned_at: new Date(
-          pinnedAtMap.get(msg.id) ?? msg.timestamp
-        ).toISOString(),
-        message: msg,
+      items: entries.map((entry) => ({
+        pinned_at: entry.pinnedAt,
+        message: entry.message,
       })),
       has_more: false,
     })

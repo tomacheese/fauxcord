@@ -1,6 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { initializeDatabase, closeDatabase } from './db'
+import BetterSqlite3 from 'better-sqlite3'
 import type Database from 'better-sqlite3'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 
 describe('initializeDatabase', () => {
   let db: Database.Database
@@ -72,5 +76,43 @@ describe('initializeDatabase', () => {
     expect(columnNames).toContain('token')
     expect(columnNames).toContain('user_id')
     expect(columnNames).toContain('username')
+  })
+
+  it('migrates thread columns onto a legacy channels table that predates thread support', () => {
+    // Simulate a database file created before thread support: a `channels`
+    // table without any of the thread-related columns.
+    const dir = mkdtempSync(path.join(tmpdir(), 'fauxcord-db-'))
+    const dbPath = path.join(dir, 'legacy.db')
+    try {
+      const legacy = new BetterSqlite3(dbPath)
+      legacy.exec(`
+        CREATE TABLE channels (
+          id       TEXT PRIMARY KEY,
+          guild_id TEXT,
+          type     INTEGER NOT NULL DEFAULT 0,
+          name     TEXT
+        );
+      `)
+      legacy.close()
+
+      // Reopening through initializeDatabase must add the missing columns.
+      db = initializeDatabase(dbPath)
+      const columnNames = (
+        db.prepare('PRAGMA table_info(channels)').all() as { name: string }[]
+      ).map((c) => c.name)
+
+      for (const column of [
+        'owner_id',
+        'archived',
+        'auto_archive_duration',
+        'locked',
+        'invitable',
+        'archive_timestamp',
+      ]) {
+        expect(columnNames).toContain(column)
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

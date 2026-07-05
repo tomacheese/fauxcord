@@ -17,9 +17,11 @@ import {
 } from '../services/webhooks'
 import { getMessage, updateMessage, deleteMessage } from '../services/messages'
 import { getChannel } from '../services/channels'
-import { validateWebhookExecute } from '../validators/webhook'
+import {
+  validateWebhookExecute,
+  validateWebhookUpdate,
+} from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
-import { parseJsonBody } from '../lib/route-helpers'
 
 /**
  * Creates the Webhooks API routes.
@@ -75,24 +77,18 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   // PATCH /webhooks/:webhookId — Update webhook information
   app.patch('/webhooks/:webhookId', async (c) => {
     const { webhookId } = c.req.param()
-    const payload = (await parseJsonBody(c)) as {
+    const payload = await c.req.json<{
       name?: string
       channel_id?: string
+    }>()
+
+    const errors = validateWebhookUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
     }
 
-    // An unknown webhook takes precedence over an unknown target channel,
-    // matching Discord's error ordering.
-    if (!getWebhook(db, webhookId)) {
-      const err = discordError(
-        DiscordErrorCode.UNKNOWN_WEBHOOK,
-        'Unknown Webhook',
-        404
-      )
-      return c.json(err.body, 404)
-    }
-
-    // Reject a move to a non-existent channel with Discord's Unknown Channel
-    // error instead of letting the foreign-key write fail as an HTTP 500.
+    // Repointing to a nonexistent channel would leave the webhook in an
+    // inconsistent state, so reject it like the real API.
     if (
       payload.channel_id !== undefined &&
       !getChannel(db, payload.channel_id)
@@ -146,9 +142,14 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    const payload = (await parseJsonBody(c)) as {
+    const payload = await c.req.json<{
       name?: string
       avatar?: string | null
+    }>()
+
+    const errors = validateWebhookUpdate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
     }
 
     const updated = updateWebhook(db, webhookId, {
@@ -216,6 +217,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
 
     const contentType = c.req.header('content-type') ?? ''
     let payload: Record<string, unknown>
+    let hasAttachments = false
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await c.req.formData()
@@ -223,11 +225,20 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       payload = payloadJson
         ? (JSON.parse(payloadJson as string) as Record<string, unknown>)
         : {}
+      // A file-only message (no content/embeds) is not empty, so detect any
+      // uploaded file entry rather than assuming there are no attachments.
+      for (const [key, value] of formData.entries()) {
+        if (
+          (key === 'file' || key.startsWith('files[')) &&
+          value instanceof File
+        ) {
+          hasAttachments = true
+          break
+        }
+      }
     } else {
-      payload = await parseJsonBody(c)
+      payload = await c.req.json<Record<string, unknown>>()
     }
-
-    const hasAttachments = false // File attachments on webhook execution are a simplified implementation
 
     // Empty message check
     if (isEmptyMessage(payload, hasAttachments)) {
@@ -328,10 +339,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    const payload = (await parseJsonBody(c)) as {
+    const payload = await c.req.json<{
       content?: string
       embeds?: unknown[]
-    }
+    }>()
 
     const updated = updateMessage(db, messageId, payload, baseUrl)
     if (!updated) {

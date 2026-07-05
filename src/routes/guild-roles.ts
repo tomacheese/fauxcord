@@ -35,6 +35,15 @@ export function createGuildRoleRoutes(db: Database): Hono {
   // GET /guilds/:guildId/roles — List a guild's roles
   app.get('/guilds/:guildId/roles', (c) => {
     const { guildId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
     const roles = getGuildRoles(db, guildId)
     return c.json(roles)
   })
@@ -111,6 +120,14 @@ export function createGuildRoleRoutes(db: Database): Hono {
   // DELETE /guilds/:guildId/roles/:roleId — Delete a role
   app.delete('/guilds/:guildId/roles/:roleId', (c) => {
     const { guildId, roleId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
 
     // The @everyone role (id == guild_id) cannot be deleted
     if (roleId === guildId) {

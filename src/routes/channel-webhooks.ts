@@ -5,6 +5,7 @@
  */
 
 import { Hono } from 'hono'
+import { randomBytes } from 'node:crypto'
 import type { Database } from '../db'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
@@ -28,6 +29,13 @@ export function createChannelWebhookRoutes(db: Database): Hono {
   // GET /channels/:channelId/webhooks — List webhooks for a channel
   app.get('/channels/:channelId/webhooks', (c) => {
     const { channelId } = c.req.param()
+    const channel = requireEntity(
+      c,
+      getChannel(db, channelId),
+      DiscordErrorCode.UNKNOWN_CHANNEL,
+      'Unknown Channel'
+    )
+    if (channel instanceof Response) return channel
     const webhooks = getChannelWebhooks(db, channelId)
     return c.json(webhooks)
   })
@@ -62,7 +70,9 @@ export function createChannelWebhookRoutes(db: Database): Hono {
     }
 
     const webhookId = generateSnowflake()
-    const webhookToken = generateSnowflake() + generateSnowflake()
+    // Webhook tokens are the only credential guarding the token-based webhook
+    // endpoints, so use a CSPRNG rather than predictable sequential Snowflakes.
+    const webhookToken = randomBytes(48).toString('base64url')
 
     const webhook = createWebhook(db, {
       webhookId,

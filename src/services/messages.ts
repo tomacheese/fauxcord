@@ -489,13 +489,25 @@ export function updateMessage(
 }
 
 /**
- * Deletes a message.
+ * Deletes a message. When `channelId` is provided, the deletion is scoped to
+ * that channel so a message can only be removed through the channel it belongs
+ * to (matching Discord's per-channel message endpoints).
  * @param db - Database
  * @param messageId - Message ID
+ * @param channelId - Optional channel ID the message must belong to
  * @returns true on successful deletion
  */
-export function deleteMessage(db: Database, messageId: string): boolean {
-  const result = db.prepare('DELETE FROM messages WHERE id = ?').run(messageId)
+export function deleteMessage(
+  db: Database,
+  messageId: string,
+  channelId?: string
+): boolean {
+  const result =
+    channelId === undefined
+      ? db.prepare('DELETE FROM messages WHERE id = ?').run(messageId)
+      : db
+          .prepare('DELETE FROM messages WHERE id = ? AND channel_id = ?')
+          .run(messageId, channelId)
   return result.changes > 0
 }
 

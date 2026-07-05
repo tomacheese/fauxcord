@@ -392,6 +392,39 @@ describe('Guild Members API', () => {
       expect(remaining.count).toBe(0)
     })
   })
+
+  describe('guild-existence checks', () => {
+    const UNKNOWN_GUILD = '999999999999999999'
+
+    it('GET members returns 404 Unknown Guild for a nonexistent guild', async () => {
+      const res = await app.request(`/guilds/${UNKNOWN_GUILD}/members`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_004)
+    })
+
+    it('GET single member returns 404 Unknown Guild for a nonexistent guild', async () => {
+      const res = await app.request(
+        `/guilds/${UNKNOWN_GUILD}/members/111111111111111111`,
+        { headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_004)
+    })
+
+    it('DELETE member returns 404 Unknown Guild for a nonexistent guild', async () => {
+      const res = await app.request(
+        `/guilds/${UNKNOWN_GUILD}/members/111111111111111111`,
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(404)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(10_004)
+    })
+  })
 })
 
 describe('PATCH /guilds/:guildId/members/@me', () => {

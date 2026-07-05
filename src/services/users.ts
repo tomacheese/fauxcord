@@ -181,10 +181,11 @@ export function getUser(db: Database, userId: string): UserObject | null {
 }
 
 /**
- * Retrieves application information (@applications/@me).
+ * Retrieves application information (/applications/@me and /oauth2/applications/@me).
  * @param db - Database
  * @param botToken - Bot token
- * @returns Application information object, or null
+ * @returns Application information object conforming to
+ * PrivateApplicationResponse, or null when the bot is unknown
  */
 export function getApplication(
   db: Database,
@@ -194,10 +195,21 @@ export function getApplication(
   name: string
   icon: null
   description: string
+  type: null
+  verify_key: string
+  flags: number
+  flags_new: string
+  redirect_uris: string[]
+  interactions_endpoint_url: string | null
+  role_connections_verification_url: string | null
   bot_public: boolean
   bot_require_code_grant: boolean
   owner: UserObject
-  verify_key: string
+  approximate_guild_count: number
+  approximate_user_install_count: number
+  approximate_user_authorization_count: number
+  explicit_content_filter: number
+  team: null
 } | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
     | BotRow
@@ -212,14 +224,21 @@ export function getApplication(
     name: bot.username,
     icon: null,
     description: '',
+    type: null,
+    verify_key:
+      '0000000000000000000000000000000000000000000000000000000000000000',
+    flags: 0,
+    flags_new: '0',
+    redirect_uris: [],
+    interactions_endpoint_url: null,
+    role_connections_verification_url: null,
     bot_public: true,
     bot_require_code_grant: false,
     owner: user,
-    // ApplicationResponse marks verify_key as required (an Ed25519 public
-    // key hex string used for interaction signature verification). Fauxcord
-    // doesn't implement real interaction signing, so a fixed dummy value is
-    // returned just to satisfy clients (e.g. nextcord) that expect the field
-    // to be present and non-empty.
-    verify_key: '0'.repeat(64),
+    approximate_guild_count: 0,
+    approximate_user_install_count: 0,
+    approximate_user_authorization_count: 0,
+    explicit_content_filter: 0,
+    team: null,
   }
 }

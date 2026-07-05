@@ -106,7 +106,6 @@ export function exchangeAuthCode(
 
   if (!authCode) return null
 
-  // Mark the code as used
   db.prepare('UPDATE oauth2_auth_codes SET used = 1 WHERE code = ?').run(code)
 
   const accessToken = generateToken('mock_access_token')
@@ -240,7 +239,8 @@ export function getOAuth2Me(
       bot_public: true,
       bot_require_code_grant: false,
     },
-    scopes: accessToken.scope.split(' '),
+    // Guard against an empty scope so we return [] rather than [""].
+    scopes: accessToken.scope ? accessToken.scope.split(' ') : [],
     expires: new Date(accessToken.expires_at).toISOString(),
     user: {
       id: user.id,
