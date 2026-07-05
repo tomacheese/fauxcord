@@ -207,11 +207,11 @@ The summary below reflects the latest state of that matrix.
 | @discordjs/rest           | JS/TS    | `new REST({ api: "..." })`                               | ✅ Verified, some raw findings pending triage |
 | Eris                      | JS/TS    | ❌ Not possible (hardcodes HTTPS on port 443)            | ⛔ Blocked                                    |
 | Oceanic.js                | JS/TS    | Fully overridable client option                          | ✅ Verified, some findings pending triage     |
-| discord.py                | Python   | `Route.BASE = "..."`                                     | 🧪 Scaffolded, run pending                    |
-| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | 🧪 Scaffolded, run pending                    |
-| Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | 🧪 Scaffolded, run pending                    |
-| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | 🧪 Scaffolded, run pending                    |
-| interactions.py           | Python   | `interactions.api.http.route.Route.BASE`                 | 🧪 Scaffolded, run pending                    |
+| discord.py                | Python   | `Route.BASE = "..."`                                     | ✅ Verified (63/87 pass, 18 n/a, 6 lib-issue) |
+| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | ✅ Verified (51/87 pass, 18 n/a, 18 lib-issue) |
+| Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | ✅ Verified (49/87 pass, 18 n/a, 20 lib-issue) |
+| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | ✅ Verified (60/87 pass, 12 n/a, 15 lib-issue) |
+| interactions.py           | Python   | `interactions.api.http.route.Route.BASE`                 | ✅ Verified (66/87 pass, 14 n/a, 7 lib-issue) |
 | discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | ✅ Verified (73/86 pass, 13 n/a, 0 lib-issue) |
 | Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (62/86 pass, 24 n/a, 0 lib-issue) |
 | DSharpPlus 5.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
@@ -219,11 +219,11 @@ The summary below reflects the latest state of that matrix.
 | JDA                       | JVM      | ❌ Not usable without a real Gateway WebSocket handshake | ⛔ Blocked                                    |
 | Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | 🧪 Scaffolded, run pending                    |
 | Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                    |
-| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | 🧪 Scaffolded, run pending                    |
-| Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | 🧪 Scaffolded, run pending                    |
-| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | 🧪 Scaffolded, run pending                    |
+| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (65/87 pass, 17 n/a, 5 lib-issue) |
+| Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | ✅ Verified (71/87 pass, 16 n/a, 0 lib-issue) |
+| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | ✅ Verified (50/87 pass, 16 n/a, 21 lib-issue) |
 | DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                    |
-| Concord                   | C        | `struct discord_config.base_url`                         | 🧪 Scaffolded, run pending                    |
+| Concord                   | C        | `struct discord_config.base_url`                         | ✅ Verified (53/86 pass, 16 n/a, 17 lib-issue) |
 | Sleepy Discord            | C++      | ❌ Not possible (hardcoded host + scheme literal)        | ⛔ Blocked                                    |
 
 Legend: ✅ verified and working · 🧪 verifier code written, awaiting a Docker run ·
