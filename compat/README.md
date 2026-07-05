@@ -123,10 +123,14 @@ Every `N/A` and `⛔blocked` cell needs an evidence note.
 
 ## Implementation status
 
-This harness is being introduced in stages (the epic spans 6 languages / 20
-libraries). Verifiers present under `compat/` are runnable; libraries not yet
-scaffolded are tracked as follow-up per the plan. Any endpoint/library left
-un-run in this environment is recorded in "Known run limitations" below.
+This harness spans 6 languages / 21 libraries. All 15 libraries with a
+runnable path against Fauxcord have a verifier under `compat/` and a
+populated `results/<lib>.json`; the remaining 6 are technical blockers with
+no runnable code path at all (see below) and are not scaffolded. The one
+outstanding scaffolding gap is a dedicated `dotnet-dsharpplus/README.md`
+section for the 4.x blocker, tracked as follow-up work (see the DSharpPlus
+4.x row below). Any endpoint/library left un-run in this environment is
+recorded in "Known run limitations" below.
 
 ### Known run limitations
 
@@ -145,8 +149,12 @@ this section only summarizes *why*.
 | `jvm-javacord` | Hardcoded HTTPS domain; login requires a Gateway WebSocket | `jvm-javacord/README.md` |
 | `cpp-sleepy` | Base URL is a hardcoded string literal, no override | `cpp-sleepy/README.md` |
 
-None of these have a Dockerfile/verifier/compose service — there is no
-runnable code path against Fauxcord using their public API.
+`js-eris` is the one exception with a real, runnable verifier
+(`js-eris/verify.mjs`, `verify-eris` compose service, `results/eris.json`) —
+it actually starts and empirically confirms `baseUrlOverridable: false`
+against Fauxcord rather than being blocked on inspection alone. The other
+six rows have no Dockerfile/verifier/compose service at all — there is no
+runnable code path against Fauxcord using their public API to even attempt.
 
 #### Verified, with caveats
 
