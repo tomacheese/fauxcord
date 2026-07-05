@@ -49,6 +49,35 @@ function isValidIntents(intents: number): boolean {
 }
 
 /**
+ * Checks whether the given unknown value is a valid IDENTIFY payload shape.
+ * @param d - the `d` field of a decoded Gateway payload
+ * @returns true if `d` has the required `token`/`intents` fields
+ */
+function isIdentifyData(d: unknown): d is IdentifyData {
+  return (
+    typeof d === 'object' &&
+    d !== null &&
+    typeof (d as { token?: unknown }).token === 'string' &&
+    typeof (d as { intents?: unknown }).intents === 'number'
+  )
+}
+
+/**
+ * Checks whether the given unknown value is a valid RESUME payload shape.
+ * @param d - the `d` field of a decoded Gateway payload
+ * @returns true if `d` has the required `token`/`session_id`/`seq` fields
+ */
+function isResumeData(d: unknown): d is ResumeData {
+  return (
+    typeof d === 'object' &&
+    d !== null &&
+    typeof (d as { token?: unknown }).token === 'string' &&
+    typeof (d as { session_id?: unknown }).session_id === 'string' &&
+    typeof (d as { seq?: unknown }).seq === 'number'
+  )
+}
+
+/**
  * http(s) の baseUrl を ws(s) URL へ変換する。
  * @param baseUrl - 変換対象の baseUrl
  * @returns ws(s) URL
@@ -148,7 +177,7 @@ function handleResume(
 ): void {
   const session = sessionManager.get(data.session_id)
   if (session?.token !== data.token) {
-    ws.close(GatewayCloseCode.AuthenticationFailed, 'Authentication failed')
+    ws.send(encodePayload({ op: GatewayOp.InvalidSession, d: false }))
     return
   }
   const replay = sessionManager.replayFrom(session, data.seq)
@@ -158,9 +187,18 @@ function handleResume(
   }
   session.ws = ws.raw as never
   sessionIdByWs.set(ws, session.sessionId)
+  armHeartbeatTimeout(sessionManager, ws, session.sessionId)
   for (const entry of replay) {
     ws.send(encodePayload(entry.event))
   }
+  ws.send(
+    encodePayload({
+      op: GatewayOp.Dispatch,
+      t: 'RESUMED',
+      s: session.seq,
+      d: {},
+    })
+  )
 }
 
 /**
@@ -216,23 +254,29 @@ export function createGatewayWebSocketHandler(
 
       switch (payload.op) {
         case GatewayOp.Identify: {
+          if (!isIdentifyData(payload.d)) {
+            ws.close(
+              GatewayCloseCode.AuthenticationFailed,
+              'Authentication failed'
+            )
+            break
+          }
           handleIdentify(
             db,
             options,
             sessionManager,
             sessionIdByWs,
             ws,
-            payload.d as IdentifyData
+            payload.d
           )
           break
         }
         case GatewayOp.Resume: {
-          handleResume(
-            sessionManager,
-            sessionIdByWs,
-            ws,
-            payload.d as ResumeData
-          )
+          if (!isResumeData(payload.d)) {
+            ws.send(encodePayload({ op: GatewayOp.InvalidSession, d: false }))
+            break
+          }
+          handleResume(sessionManager, sessionIdByWs, ws, payload.d)
           break
         }
         case GatewayOp.Heartbeat: {

@@ -156,8 +156,12 @@ export async function createTestGatewayServer(): Promise<{
       unsubscribeGateway()
       return new Promise<void>((resolve, reject) => {
         server.close((err) => {
-          if (err) reject(err)
-          else resolve()
+          if (err) {
+            reject(err)
+            return
+          }
+          closeDatabase(db)
+          resolve()
         })
       })
     },
