@@ -147,7 +147,7 @@ runnable code path against Fauxcord using their public API.
 
 | Library | Base URL override | Caveat |
 |---|---|---|
-| `js-oceanic` | fully overridable | few `n-a` rows (no high-level wrapper for those endpoints) |
+| `js-oceanic` | fully overridable | few `N/A` rows (no high-level wrapper for those endpoints) |
 | `rust-serenity` | `HttpBuilder::proxy(url)` | written without a `cargo build` in the loop — low-frequency method signatures unverified, see caveat block in `main.rs` |
 | `rust-twilight` | `ClientBuilder::proxy(host, use_http)` | same as serenity: no `cargo build` in the loop, see caveat block in `main.rs` |
 | `python-nextcord` | `nextcord.http.Route.BASE` | pins/thread rows decided by analogy with discord.py, not inspected directly |
@@ -157,7 +157,7 @@ runnable code path against Fauxcord using their public API.
 | `jvm-kord` | Ktor `HttpRequestPipeline.Before` interceptor | source-verified against `0.14.0` |
 | `c-concord` | `struct discord_config.base_url` | source-verified against upstream headers/tests |
 
-Recurring `n-a` categories across most of the above: the new-format pins API,
+Recurring `N/A` categories across most of the above: the new-format pins API,
 thread search, OAuth2 grant-flow endpoints (bot-only libraries lack these),
 and destructive shared-resource deletes that would break later rows in the
 same run. Exact per-row reasoning is in each verifier's own evidence notes
