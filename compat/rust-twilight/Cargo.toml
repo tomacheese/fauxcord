@@ -25,7 +25,7 @@ serde = { version = "1", features = ["derive"] }
 # role fetch() plays in the JS verifiers, and reqwest plays in
 # rust-serenity) — kept independent of whatever internal HTTP client
 # twilight-http's default backend uses. rustls-tls avoids needing OpenSSL.
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
