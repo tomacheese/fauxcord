@@ -236,8 +236,18 @@ async fn main() {
     // See the module-level comment: proxy() takes bare `host:port` (no
     // scheme, no `/api` path) plus a separate `use_http` bool; twilight's
     // own request-building code appends `/api/vN/...` itself.
+    // `remember_invalid_token(false)` is essential for endpoint-matrix probing.
+    // By default twilight "remembers" the first 401 it sees and then refuses to
+    // send any further authenticated request (an API-ban safeguard), returning
+    // `ErrorType::Unauthorized` without hitting the server. This matrix
+    // deliberately exercises a Bearer-only endpoint (`GET /oauth2/@me`) with a
+    // Bot token, which legitimately 401s; leaving the safeguard on would poison
+    // every subsequent probe (users/webhooks/all DELETEs) with a false
+    // "token invalid" failure instead of testing them. Disabling it makes each
+    // endpoint independent, which is what a compatibility matrix needs.
     let client = Client::builder()
         .token(token)
+        .remember_invalid_token(false)
         .proxy(bare_host, true)
         .build();
 
@@ -599,7 +609,7 @@ async fn run_one(
         ),
         "PATCH /guilds/{guild_id}/roles/{role_id}" => call!(client
             .update_role(ctx.guild, ctx.role)
-            .name("compat-role-renamed")),
+            .name(Some("compat-role-renamed"))),
         "GET /guilds/{guild_id}/roles" => call!(client.roles(ctx.guild)),
         "POST /guilds/{guild_id}/roles" => {
             call!(client.create_role(ctx.guild).name("compat-role2"))
@@ -678,7 +688,10 @@ async fn run_one(
 async fn webhook_msg_call<F, Fut, T>(ctx: &Ctx, f: F) -> Outcome
 where
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = Result<T, twilight_http::Error>>,
+    // twilight-http request builders implement `IntoFuture`, not `Future`
+    // directly (their `.await` desugars through `into_future()`), so the bound
+    // must be `IntoFuture` — a `Future` bound rejects the builder types.
+    Fut: std::future::IntoFuture<Output = Result<T, twilight_http::Error>>,
 {
     if ctx.webhook_msg.is_none() {
         return Outcome::NotApplicable(
