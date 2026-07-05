@@ -28,8 +28,16 @@ export interface GuildObject {
   id: string
   name: string
   icon: string | null
+  splash: string | null
+  discovery_splash: string | null
+  banner: string | null
+  home_header: string | null
   owner_id: string
+  region: string
+  afk_channel_id: string | null
   afk_timeout: number
+  widget_enabled: boolean
+  widget_channel_id: string | null
   verification_level: number
   default_message_notifications: number
   explicit_content_filter: number
@@ -37,10 +45,26 @@ export interface GuildObject {
   emojis: never[]
   features: never[]
   mfa_level: number
+  application_id: string | null
   system_channel_id: null
+  system_channel_flags: number
+  rules_channel_id: string | null
+  public_updates_channel_id: string | null
+  safety_alerts_channel_id: string | null
+  max_presences: number | null
+  max_members: number
+  max_video_channel_users: number
+  max_stage_video_channel_users: number
+  vanity_url_code: string | null
+  description: string | null
   premium_tier: number
   premium_subscription_count: number
+  premium_progress_bar_enabled: boolean
   preferred_locale: string
+  nsfw: boolean
+  nsfw_level: number
+  stickers: never[]
+  incidents_data: null
   channels?: unknown[]
   approximate_member_count?: number
 }
@@ -52,12 +76,24 @@ export interface GuildObject {
  * @returns Object for API responses
  */
 function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
+  // Fields not backed by the mock's DB are populated with Discord's documented
+  // default/empty values so the object satisfies the spec-required GuildResponse
+  // shape (strict deserializers such as serenity's PartialGuild reject a guild
+  // object missing any spec-required field).
   return {
     id: row.id,
     name: row.name,
     icon: row.icon,
+    splash: null,
+    discovery_splash: null,
+    banner: null,
+    home_header: null,
     owner_id: row.owner_id,
+    region: 'deprecated',
+    afk_channel_id: null,
     afk_timeout: 300,
+    widget_enabled: false,
+    widget_channel_id: null,
     verification_level: row.verification_level,
     default_message_notifications: row.default_message_notifications,
     explicit_content_filter: row.explicit_content_filter,
@@ -65,10 +101,26 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
     emojis: [],
     features: [],
     mfa_level: 0,
+    application_id: null,
     system_channel_id: null,
+    system_channel_flags: 0,
+    rules_channel_id: null,
+    public_updates_channel_id: null,
+    safety_alerts_channel_id: null,
+    max_presences: null,
+    max_members: 500_000,
+    max_video_channel_users: 25,
+    max_stage_video_channel_users: 50,
+    vanity_url_code: null,
+    description: null,
     premium_tier: row.premium_tier,
     premium_subscription_count: 0,
+    premium_progress_bar_enabled: false,
     preferred_locale: row.preferred_locale,
+    nsfw: false,
+    nsfw_level: 0,
+    stickers: [],
+    incidents_data: null,
   }
 }
 

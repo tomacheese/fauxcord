@@ -95,6 +95,27 @@ describe('Guilds API', () => {
     })
   })
 
+  describe('GET /guilds/:guildId', () => {
+    it('includes the spec-required GuildResponse fields with defaults', async () => {
+      // Strict deserializers (e.g. serenity's PartialGuild) reject a guild
+      // object that omits any spec-required field, so every field below is
+      // part of the OpenAPI GuildResponse `required` set.
+      const res = await app.request(`/guilds/${guildId}`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.system_channel_flags).toBe(0)
+      expect(body.nsfw_level).toBe(0)
+      expect(body.nsfw).toBe(false)
+      expect(body.region).toBe('deprecated')
+      expect(body.stickers).toEqual([])
+      expect(body.incidents_data).toBeNull()
+      expect(body.afk_channel_id).toBeNull()
+      expect(body.premium_progress_bar_enabled).toBe(false)
+    })
+  })
+
   describe('DELETE /guilds/:guildId', () => {
     it('deletes a Guild', async () => {
       const res = await app.request(`/guilds/${guildId}`, {
