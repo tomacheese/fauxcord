@@ -260,7 +260,13 @@ export function getThreadMembers(
   limit = 100,
   after = '0'
 ): ThreadMemberObject[] {
-  const clampedLimit = Math.min(limit, 100)
+  // `limit` can arrive as NaN (e.g. `?limit=abc`) or negative; both must be
+  // rejected here rather than passed to SQLite's LIMIT, which would either
+  // throw (NaN) or disable the limit entirely (SQLite treats LIMIT -1 as
+  // "no limit").
+  const clampedLimit = Number.isFinite(limit)
+    ? Math.min(Math.max(limit, 0), 100)
+    : 100
   const rows = db
     .prepare(
       `SELECT * FROM thread_members

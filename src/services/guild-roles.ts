@@ -136,14 +136,21 @@ export interface RoleCreateParams {
  * 返ってしまい、int() で解釈するクライアント(hikari など)がデシリアライズに
  * 失敗する。ここで整数文字列へ揃える。巨大な bitset を壊さないよう文字列入力は
  * 桁をそのまま保持し、小数点以下のみ切り捨てる。
+ * `value` は本来ルート層のバリデーション(`/^\d+$/`)を通過済みのはずだが、
+ * サービス層単体でも壊れた値を保存しないよう非有限数・負値・空文字はすべて
+ * "0" にフォールバックする。
  * @param value - クライアントから受け取った permissions(文字列 / 数値 / 未指定)
- * @returns 10 進整数の文字列(未指定時は "0")
+ * @returns 10 進整数の文字列(未指定時・不正値は "0")
  */
 function normalizePermissions(value: string | number | undefined): string {
   if (value === undefined) return '0'
-  if (typeof value === 'number') return Math.trunc(value).toString()
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) return '0'
+    return Math.trunc(value).toString()
+  }
   const dotIndex = value.indexOf('.')
-  return dotIndex === -1 ? value : value.slice(0, dotIndex)
+  const intPart = dotIndex === -1 ? value : value.slice(0, dotIndex)
+  return /^\d+$/.test(intPart) ? intPart : '0'
 }
 
 /**
