@@ -2,141 +2,76 @@
  * Concord (github.com/Cogmasters/concord) compatibility verifier.
  *
  * ============================================================================
- * CONFIRMED FACTS (feasibility basis) — every claim below was verified
- * against the upstream Concord source at github.com/Cogmasters/concord
- * (master branch) via `gh api` / raw.githubusercontent.com fetches. Nothing
- * here is guessed; anything not directly confirmed is marked UNCERTAIN.
+ * CONFIRMED FACTS (feasibility basis) — verified against the upstream
+ * Concord source (master branch). Anything not directly confirmed is
+ * marked UNCERTAIN.
  * ============================================================================
  *
- * 1. Base URL is runtime-overridable.
- *    `struct discord_config` (include/discord.h) has a `char *base_url`
- *    field:
- *        "optional override for the REST API base URL
- *         (e.g. `\"http://127.0.0.1:8080\"` for a local test server)
- *         @note when `NULL` (the default) @ref DISCORD_API_BASE_URL is used"
- *    `DISCORD_API_BASE_URL` expands to
- *        "https://discord.com/api/v" DISCORD_VERSION
- *    i.e. it already includes the `/api/v10` suffix, so the override must
- *    also be a *full* base including `/api/v10`, with no trailing slash.
- *    Confirmed at the call site too: src/discord-rest_request.c does
- *        ua_set_url(rqtor->ua, client->config.base_url
- *                                  ? client->config.base_url
- *                                  : DISCORD_API_BASE_URL);
- *    => We set `base_url = "http://<FAUXCORD_ORIGIN>/api/v10"`.
+ * 1. Base URL is runtime-overridable via `struct discord_config.base_url`
+ *    (include/discord.h). It defaults to `DISCORD_API_BASE_URL`, which
+ *    already includes the `/api/v10` suffix, so the override must too, with
+ *    no trailing slash: `base_url = "http://<FAUXCORD_ORIGIN>/api/v10"`.
  *
- * 2. The override is genuinely exercised end-to-end, not just parsed.
- *    test/unit-base-url.c is a hermetic Concord test that boots a client
- *    with `base_url` pointed at a local fixture HTTP server and asserts the
- *    request actually landed there. Its comment also reveals a critical
- *    detail: "Booting with a token implies a synchronous GET /users/@me
- *    during _discord_init()" — i.e. `discord_from_config()` itself performs
- *    a blocking network call before returning. This means the Fauxcord
- *    `/_test/setup` call MUST complete successfully before
- *    `discord_from_config()` is invoked, or client construction itself
- *    fails (returns NULL).
+ * 2. `discord_from_config()` performs a synchronous GET /users/@me during
+ *    init (test/unit-base-url.c), so Fauxcord's `/_test/setup` call MUST
+ *    complete before it's invoked, or client construction fails (NULL).
  *
- * 3. Token format: NO "Bot " prefix in `discord_config.token`.
- *    unit-base-url.c sets `.token = strdup(TEST_DUMMY_TOKEN)` (a bare
- *    token) and then asserts the outgoing `Authorization` header equals
- *    `"Bot " TEST_DUMMY_TOKEN` — Concord itself prepends "Bot ". `token`
- *    must be heap-allocated (`strdup`) because `discord_cleanup()` frees it.
+ * 3. Token format: NO "Bot " prefix in `discord_config.token` — Concord
+ *    prepends it itself. `token` must be heap-allocated (`strdup`) because
+ *    `discord_cleanup()` frees it.
  *
- * 4. Concord's REST layer is usable without ever starting the Gateway.
- *    Every `discord_*` REST wrapper takes a `struct discord *client` and
- *    issues a plain HTTP request through the user-agent/curl layer;
- *    `discord_run()` (which drives the Gateway event loop) is never called
- *    by this verifier. unit-base-url.c itself never calls discord_run().
+ * 4. Concord's REST layer works without starting the Gateway: every
+ *    `discord_*` wrapper issues a plain HTTP request; `discord_run()` (the
+ *    Gateway event loop) is never called by this verifier.
  *
- * 5. Synchronous ("blocking") call idiom, confirmed via
- *    include/discord-response.h + real call sites in examples/*.c:
- *      - Typed responses: `DISCORD_RETURN(foo)` generates
- *        `struct discord_ret_foo { ...; struct discord_foo *sync; }`.
- *        Passing `.sync = &local_struct_foo` blocks the calling thread and
- *        writes the decoded response into `local_struct_foo` on success.
- *      - Blank responses (no object): `struct discord_ret { ...; bool
- *        sync; }` — `.sync = true` blocks and discards the response body.
- *      - `discord_get_gateway` / `discord_get_gateway_bot`
- *        (include/gateway.h) are a THIRD, distinct idiom: they take a
- *        plain `struct ccord_szbuf *ret` (no `discord_ret*` wrapper at
- *        all) and are *always* blocking — the header's own doc comment
- *        says "@warning This function blocks the running thread". No
- *        `.sync` field involved for these two.
- *      - `ret = NULL` is also valid when the caller doesn't need the
- *        response and isn't running the call synchronously either — but
- *        that would make the call fire-and-forget/async, which is NOT
- *        what we want here, so every call below sets `.sync` explicitly.
+ * 5. Synchronous ("blocking") call idiom (include/discord-response.h):
+ *      - Typed responses: `.sync = &local_struct` blocks and writes the
+ *        decoded response into it.
+ *      - Blank responses: `struct discord_ret { bool sync; }` —
+ *        `.sync = true` blocks and discards the body.
+ *      - `discord_get_gateway`/`discord_get_gateway_bot` are a third,
+ *        distinct idiom: a plain `struct ccord_szbuf *ret`, always blocking,
+ *        no `.sync` field.
  *
- * 6. Error codes: `CCORDcode` is `typedef int`; `CCORD_OK == 0`
- *    (core/concord-error.h). `const char *discord_strerror(CCORDcode code,
- *    struct discord *client)` (include/discord.h) renders a code to text.
- *    A call is graded "pass" iff its `CCORDcode` return value equals
- *    `CCORD_OK`; anything else is graded "lib-issue" with the code and
- *    `discord_strerror()` text recorded as the note.
+ * 6. `CCORDcode` is `typedef int`; `CCORD_OK == 0`. A call is graded "pass"
+ *    iff its return equals `CCORD_OK`; otherwise "lib-issue" with
+ *    `discord_strerror()` text as the note.
  *
  * 7. Build requirement: libcurl must be compiled with `--enable-websockets`
- *    (stated in Concord's own README, and confirmed by
- *    .github/workflows/test_build.yml building curl 8.7.1 from source with
- *    that flag rather than using the distro package) — even though this
- *    verifier's REST-only usage never touches WebSockets, `libdiscord.a`
- *    itself is built assuming that curl capability is present. See the
- *    Dockerfile for the exact build recipe mirroring upstream CI.
+ *    (per Concord's README/CI) even though this verifier's REST-only usage
+ *    never touches WebSockets — see the Dockerfile for the build recipe.
  *
  * 8. CONFIRMED Concord bug (upstream master @ 02fff9a7): discord_execute_webhook
- *    SIGSEGVs before sending any request. CCORD_DATA_TO_JSON(client,
- *    discord_execute_webhook, ...) (src/webhook.c:163) resolves the WRONG
- *    reflection template — discord_emoji (8 members) instead of
- *    discord_execute_webhook (11 fields) — then serializes the params memory
- *    as if it were an emoji. At the emoji's `roles` snowflake-list field it
- *    reads the execute-webhook `content` pointer as a list `array` and
- *    dereferences the string bytes as u64 snowflakes
- *    (discord-data-wrap.c:367, _jsonb_write_list_element), faulting on a
- *    non-canonical address (the ASCII bytes of "...ebhook-m..."). Verified
- *    under gdb against a debug build: frame shows tmpl->name="discord_emoji",
- *    members.length=8. This is purely client-side (no HTTP is ever issued) so
- *    it is a Concord defect, unrelated to Fauxcord. Every other body-carrying
- *    call in this verifier (create_message, create_webhook, create_emoji,
- *    modify_*, edit_webhook_message, ...) serializes correctly — only
- *    execute_webhook mis-resolves. Because the crash aborts the entire
- *    process, discord_execute_webhook is NOT invoked here: the single
- *    "POST /webhooks/{id}/{token}" row is recorded as a lib-issue with this
- *    root cause, and the webhook-authored-message rows become n-a (no message
- *    id can be captured). This keeps the remaining ~87 endpoints verifiable.
+ *    SIGSEGVs before sending any request. CCORD_DATA_TO_JSON resolves the
+ *    WRONG reflection template (discord_emoji, 8 members, instead of
+ *    discord_execute_webhook) and walks the params as an emoji, dereferencing
+ *    the `content` string bytes as a snowflake array (verified under gdb).
+ *    Purely client-side (no HTTP ever issued), so it's a Concord defect, not
+ *    Fauxcord's. Because the crash aborts the whole process,
+ *    discord_execute_webhook is NOT invoked here: "POST /webhooks/{id}/{token}"
+ *    is recorded as a lib-issue with this root cause, and the
+ *    webhook-authored-message rows become n-a (no message id captured).
  *
  * ============================================================================
- * ENDPOINT COVERAGE NOTES (n-a entries, all confirmed by reading the public
- * headers include/channel.h, include/guild.h, include/webhook.h,
- * include/user.h, include/invite.h, include/oauth2.h, include/emoji.h,
- * include/gateway.h in full — no wrapper function exists for these):
- *   - New-format pins API (`/channels/{id}/messages/pins*`, 3 endpoints):
- *     Concord only has `discord_pin_message` / `discord_unpin_message` /
- *     `discord_get_pinned_messages`, which target the LEGACY
- *     `/channels/{id}/pins*` routes (confirmed via src/api/channel.recipe.h
- *     route definitions and channel.h doc comments referencing "pin.c").
- *   - `GET /channels/{channel_id}/thread-members/{user_id}` (single-member
- *     fetch): channel.h only exposes `discord_list_thread_members` (the
- *     bulk list); no single-member getter exists.
- *   - `GET /channels/{channel_id}/threads/search`: no wrapper in
- *     channel.h at all.
- *   - `POST /oauth2/token` and `POST /oauth2/token/revoke`: oauth2.h
- *     exposes exactly two functions,
- *     `discord_get_current_bot_application_information` and
- *     `discord_get_current_authorization_information` — no token
- *     exchange/revoke wrappers (consistent with Concord being a
- *     bot-focused library, matching the gap already documented for
+ * ENDPOINT COVERAGE NOTES (n-a entries, confirmed by reading the public
+ * headers in full — no wrapper function exists for these):
+ *   - New-format pins API (`/channels/{id}/messages/pins*`): Concord only
+ *     has `discord_pin_message`/`discord_unpin_message`/
+ *     `discord_get_pinned_messages`, targeting the LEGACY `/pins*` routes.
+ *   - `GET /channels/{channel_id}/thread-members/{user_id}`: channel.h only
+ *     exposes the bulk `discord_list_thread_members`, no single-member getter.
+ *   - `GET /channels/{channel_id}/threads/search`: no wrapper at all.
+ *   - `POST /oauth2/token` and `POST /oauth2/token/revoke`: oauth2.h exposes
+ *     no token exchange/revoke wrappers (bot-focused library, same gap as
  *     discordgo in compat/go-discordgo/verify.go).
- *   - Shared-resource-destroying DELETEs (`DELETE /channels/{channel_id}`,
- *     `DELETE /guilds/{guild_id}`, `DELETE /guilds/{guild_id}/roles/{id}`,
- *     `DELETE /guilds/{guild_id}/members/{user_id}` for the bot itself,
- *     `DELETE /webhooks/{id}(/{token})`) are recorded "n-a" with
- *     "not exercised: ..." notes since Concord DOES have wrappers for all
- *     of these but running them would break later rows in the same run
- *     that depend on the shared guild/channel/role/webhook — identical
- *     policy to compat/go-discordgo/verify.go.
+ *   - Shared-resource-destroying DELETEs are recorded "n-a" with
+ *     "not exercised: ..." notes since running them would break later rows
+ *     depending on the same shared guild/channel/role/webhook — same policy
+ *     as compat/go-discordgo/verify.go.
  *
- * UNCERTAIN markers are placed inline at the few call sites where the exact
- * runtime behaviour (as opposed to the compile-time signature, which was
- * always confirmed from source) could not be verified without actually
- * running the built binary against Fauxcord.
+ * UNCERTAIN markers are placed inline at the few call sites where runtime
+ * behaviour could not be verified without running the built binary against
+ * Fauxcord.
  */
 
 #include <ctype.h>
@@ -150,32 +85,23 @@
 #include "discord.h"
 
 /* discord_config.token must NOT include the "Bot " prefix (see CONFIRMED
- * FACT #3 above); Concord prepends "Bot " itself.
- *
- * The value must be a *format-valid* Discord token: discord_from_config()
- * calls _discord_token_is_valid() (src/discord-client.c) BEFORE any network
- * activity and aborts client construction with "Invalid token format" if it
- * fails. That validator requires len 50-80, exactly two '.'-separated parts
- * of lengths 24/6/40, so the other verifiers' bare "compat-token" cannot be
- * used here. This is Concord's own upstream test dummy (test/test-client.h's
- * TEST_DUMMY_TOKEN); its first segment base64-decodes to the bot user id
- * 100000000000000001, matching the fixture below. Fauxcord accepts any token
- * value (it only matches the registered string), so using a Concord-shaped
- * token changes nothing on the Fauxcord side. */
+ * FACT #3 above); Concord prepends it itself. It must also be a
+ * *format-valid* token: discord_from_config() validates it (len 50-80, two
+ * '.'-separated parts of lengths 24/6/40) before any network activity, so
+ * the other verifiers' bare "compat-token" cannot be used here. This is
+ * Concord's own upstream test dummy (test/test-client.h's TEST_DUMMY_TOKEN);
+ * its first segment decodes to the bot user id 100000000000000001, matching
+ * the fixture below. Fauxcord only matches the registered string, so this
+ * changes nothing server-side. */
 #define BOT_TOKEN                                                            \
     "MTAwMDAwMDAwMDAwMDAwMDAx.G4bZ9X."                                       \
     "c29tZS1mYWtlLXRva2VuLXNlY3JldC1wYWRkaW5n"
 
 /* ---- Fixed test fixture, mirrors compat/common/setup.json -----------------
- * (hardcoded per task instructions rather than parsed at runtime, since
- * plain C has no JSON parser available in this build without adding an extra
- * dependency). Kept in sync with common/setup.json by hand EXCEPT for the
- * token: this verifier deliberately registers BOT_TOKEN (a format-valid
- * Discord token, see above) instead of the shared "compat-token", because
- * Concord rejects the latter at client boot. Referencing BOT_TOKEN here
- * rather than repeating the literal keeps the registered token and the token
- * Concord sends structurally identical. The "Bot " prefix is the wire format
- * /_test/setup expects. */
+ * Hardcoded rather than parsed at runtime (plain C has no JSON parser here).
+ * Kept in sync with common/setup.json by hand EXCEPT for the token, which
+ * uses BOT_TOKEN instead of the shared "compat-token" since Concord rejects
+ * the latter at client boot (see above). */
 #define SETUP_JSON                                                           \
     "{"                                                                      \
     "\"token\":\"Bot " BOT_TOKEN "\","                                       \

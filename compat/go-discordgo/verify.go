@@ -1,21 +1,17 @@
 // discordgo compatibility verifier.
 //
 // discordgo overrides its REST base URL via the package-level
-// discordgo.EndpointAPI variable (see docs/libraries.md: it must be set
-// *before* the Session is created, and must include a trailing slash, per
-// the pattern `discordgo.EndpointAPI = "http://fauxcord:3000/api/v10/"`).
+// discordgo.EndpointAPI variable, set *before* the Session is created, with
+// a trailing slash (see docs/libraries.md).
 //
-// discordgo is an object-model library like discord.js/Oceanic (not a thin
-// REST client), so each endpoint is mapped to its concrete high-level
-// *Session method. Endpoints with no wrapper (e.g. the new-format
-// `/messages/pins` API — discordgo's pin helpers only target the legacy
-// `/pins` API — or endpoints with no client-side coverage at all, such as
-// OAuth2 token exchange) are recorded as "n-a" with an evidence note.
+// discordgo is an object-model library (like discord.js/Oceanic), so each
+// endpoint maps to a concrete high-level *Session method. Endpoints with no
+// wrapper (e.g. the new-format `/messages/pins` API, or OAuth2 token
+// exchange) are recorded as "n-a" with an evidence note.
 //
 // Destructive calls that would break later rows sharing the same resource
-// (deleting the shared guild/channel/role/webhook that other rows still
-// need) are also skipped and recorded as "n-a" with a "not exercised: ..."
-// note, matching the pattern used by the JS verifiers.
+// (deleting the shared guild/channel/role/webhook) are also skipped and
+// recorded as "n-a", matching the pattern used by the JS verifiers.
 package main
 
 import (
@@ -99,16 +95,14 @@ func waitHealthy(origin string) error {
 	return fmt.Errorf("fauxcord did not become healthy")
 }
 
-// doSetup POSTs the shared setup payload. 200/201 (created) and 409
-// (already set up by a prior run against a reused Fauxcord container) both
-// count as success. It retries with backoff on network errors or
-// unexpected statuses: a transient host I/O hiccup here previously caused
-// the setup POST to fail silently in another verifier (see
-// js-oceanic/verify.mjs's doSetup docstring for the incident), which left
-// the guild/channel fixtures missing while the rest of the run proceeded
-// anyway and produced a wave of bogus "Unknown Guild"/"Unknown Channel"
-// results with no real signal. It panics if setup never succeeds so a
-// genuine failure is loud instead of corrupting every downstream result.
+// doSetup POSTs the shared setup payload. 200/201 and 409 (already set up
+// by a prior run against a reused Fauxcord container) both count as
+// success. It retries with backoff on network errors or unexpected
+// statuses, since a transient hiccup here previously caused setup to fail
+// silently and produced a wave of bogus "Unknown Guild/Channel" results
+// (see js-oceanic/verify.mjs's doSetup docstring). It panics if setup never
+// succeeds so a genuine failure is loud instead of corrupting every
+// downstream result.
 func doSetup(origin string, raw []byte) {
 	const maxAttempts = 5
 	var lastErr error
@@ -185,18 +179,15 @@ func main() {
 	const EMOJI = "👍"
 	const pngDataURI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 
-	// Redirect discordgo at Fauxcord. Setting discordgo.EndpointAPI alone is
-	// NOT sufficient: discordgo derives the per-resource root endpoints
-	// (EndpointChannels, EndpointGuilds, ...) from EndpointAPI *once* at
-	// package-initialization time as plain string vars, so a later assignment
-	// to EndpointAPI does not propagate to them and requests would still hit
-	// the real https://discord.com host. The per-resource *functions*
-	// (EndpointChannel(id), EndpointGuild(id), ...) read these root vars at
-	// call time, so overriding every root var used by the exercised endpoints
-	// is enough. EndpointInvite is already a function reading EndpointAPI
-	// directly, so it is fixed by the EndpointAPI assignment alone. This is
-	// the "override other endpoint variables as needed" step documented for
-	// discordgo in docs/libraries.md / CLAUDE.md.
+	// Redirect discordgo at Fauxcord. Setting EndpointAPI alone is NOT enough:
+	// discordgo derives the per-resource root vars (EndpointChannels,
+	// EndpointGuilds, ...) from it once at package-init time, so a later
+	// assignment doesn't propagate and requests would still hit real Discord.
+	// The per-resource *functions* read these root vars at call time, so
+	// overriding every root var used by the exercised endpoints is sufficient
+	// (EndpointInvite already reads EndpointAPI directly, so it needs no
+	// separate override). This is the "override other endpoint variables as
+	// needed" step documented in docs/libraries.md / CLAUDE.md.
 	discordgo.EndpointAPI = base
 	discordgo.EndpointGuilds = base + "guilds/"
 	discordgo.EndpointChannels = base + "channels/"
@@ -282,8 +273,7 @@ func main() {
 	}); err == nil {
 		WEBHOOK_MSG = msg.ID
 	}
-	// Bootstrap a fresh message for the in-loop thread-create probe (see
-	// THREAD_MSG above).
+	// Fresh message for the in-loop thread-create probe (see THREAD_MSG above).
 	if msg, err := sess.ChannelMessageSend(CH, "compat-thread-src"); err == nil {
 		THREAD_MSG = msg.ID
 	}

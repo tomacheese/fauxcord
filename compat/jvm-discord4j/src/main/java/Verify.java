@@ -21,37 +21,16 @@ import java.util.*;
  * Discord4J compatibility verifier.
  *
  * <h2>Why Discord4J is runnable (unlike JDA, see compat/jvm-jda/README.md)</h2>
- * Discord4J 3.x ships a genuine REST-only client: {@code RestClient.create(token)} /
- * {@code RestClient.restBuilder(token).build()} constructs a fully usable client backed only
- * by an HTTP {@link discord4j.rest.request.Router}. Unlike JDA's {@code JDABuilder.build()},
- * building a {@code RestClient} performs no Gateway WebSocket handshake at all — confirmed by
- * reading {@code RestClient.java}/{@code RestClientBuilder.java} at tag {@code 3.2.6} in the
- * Discord4J/Discord4J GitHub repository: {@code RestClientBuilder.build()} only assembles a
- * {@link discord4j.rest.request.Router} (via {@code DefaultRouter::new}) and the various
- * {@code *Service} classes; nothing in that path opens a socket or awaits a gateway
- * {@code READY} event. So Fauxcord's lack of a real Gateway server (see
- * {@code docs/getting-started.md}: "What it cannot do: WebSocket (Gateway / real-time
- * notifications)") is not a blocker for Discord4J the way it is for JDA.
+ * {@code RestClient.restBuilder(token).build()} is a genuine REST-only client backed by an
+ * HTTP {@link discord4j.rest.request.Router} — unlike JDA's {@code JDABuilder}, building it
+ * performs no Gateway WebSocket handshake (confirmed against {@code RestClientBuilder.java} at
+ * tag {@code 3.2.6}), so Fauxcord's lack of a Gateway server is not a blocker here.
  *
- * <h2>Base URL override — confirmed via Discord4J/Discord4J source (tag 3.2.6)</h2>
- * {@code discord4j.rest.route.Routes.BASE_URL} is indeed a {@code public static final String}
- * with no setter, exactly as this task's briefing warned. However, the base URL actually used
- * by the router at runtime is threaded through {@link discord4j.rest.request.RouterOptions},
- * which has a public constructor accepting {@code discordBaseUrl} as its last argument (see
- * {@code RouterOptions.java}: 8-arg ctor {@code (AuthorizationScheme, String token,
- * ReactorResources, ExchangeStrategies, List<ResponseFunction>, GlobalRateLimiter,
- * RequestQueueFactory, String discordBaseUrl)}), and every field has a public getter
- * ({@code getAuthorizationScheme()}, {@code getToken()}, {@code getReactorResources()},
- * {@code getExchangeStrategies()}, {@code getResponseTransformers()},
- * {@code getGlobalRateLimiter()}, {@code getRequestQueueFactory()}, {@code getDiscordBaseUrl()}).
- * {@code RestClientBuilder} (see {@code RestClientBuilder.java}) exposes exactly the hook we
- * need for this: {@code setExtraOptions(Function<? super O, O2> optionsModifier)}, which lets
- * us take the builder-constructed {@code RouterOptions} (built internally with
- * {@code Routes.BASE_URL}) and produce a *new* {@code RouterOptions} with every field copied
- * except {@code discordBaseUrl}, which we replace with {@code FAUXCORD_BASE}. Calling the
- * builder's no-arg {@code build()} afterwards is sufficient — it already defaults to
- * {@code DefaultRouter::new} as the router factory, so there is no need to hand-construct a
- * {@link discord4j.rest.request.DefaultRouter} ourselves:
+ * <h2>Base URL override</h2>
+ * {@code Routes.BASE_URL} has no setter, but {@link discord4j.rest.request.RouterOptions}'s
+ * {@code discordBaseUrl} field does, and {@code RestClientBuilder.setExtraOptions(...)} lets us
+ * rebuild the builder-constructed {@code RouterOptions} with every field copied except
+ * {@code discordBaseUrl}, replaced with {@code FAUXCORD_BASE}:
  *
  * <pre>{@code
  * RestClient client = RestClient.restBuilder(rawToken)
@@ -62,79 +41,48 @@ import java.util.*;
  *     .build();
  * }</pre>
  *
- * This construction was arrived at by reading the actual 3.2.6-tagged source of
- * {@code RouterOptions.java} and {@code RestClientBuilder.java} in this session (via
- * {@code gh api repos/Discord4J/Discord4J/contents/...?ref=3.2.6}), not guessed from prior
- * training knowledge, so it carries high confidence. {@code RestClient.restBuilder(token)}
- * takes the *raw* bot token (no {@code "Bot "} prefix) — confirmed via
- * {@code AuthorizationScheme.java} ({@code BOT("Bot")}) and its use in
- * {@code DiscordWebRequest.java}/{@code DiscordWebClient.java}: Discord4J prepends
- * {@code "Bot "} itself when building the {@code Authorization} header.
+ * {@code RestClient.restBuilder(token)} takes the *raw* bot token (no {@code "Bot "} prefix) —
+ * Discord4J prepends it itself when building the {@code Authorization} header.
  *
- * <h2>API shape: low-level *Service classes, not the (thinner) Rest* entity facades</h2>
- * Discord4J exposes two layers: a set of thin {@code Rest*} facade objects
- * (e.g. {@code RestChannel}, {@code RestGuild}) and the lower-level {@code *Service} classes
- * they delegate to (e.g. {@code ChannelService}, {@code GuildService}, {@code WebhookService}),
- * obtained via public getters on {@code RestClient} (e.g. {@code getChannelService()}). The
- * facades are missing several endpoints this matrix needs (no thread support at all in 3.2.6,
- * no bot-authenticated single-webhook-message helpers, etc.), while the {@code *Service}
- * classes map close to 1:1 onto Discord's actual routes and were confirmed method-by-method
- * against the real 3.2.6 source (including the {@code *ServiceTest.java} integration tests
- * checked into the same repository, which show the exact request-object builder idioms used
- * below, e.g. {@code MessageCreateRequest.builder().content("Hello world").build()} and
- * {@code PermissionsEditRequest.builder().allow(0).deny(0).type(1).build()}). This verifier
- * therefore calls the {@code *Service} layer directly rather than going through the {@code
- * Rest*} facades.
+ * <h2>API shape: low-level *Service classes, not the thinner Rest* facades</h2>
+ * The thin {@code Rest*} facades (e.g. {@code RestChannel}) are missing several endpoints this
+ * matrix needs (no thread support at all in 3.2.6, no bot-authenticated webhook-message
+ * helpers), while the lower-level {@code *Service} classes they delegate to
+ * (e.g. {@code ChannelService}, {@code GuildService}) map 1:1 onto Discord's routes. This
+ * verifier therefore calls the {@code *Service} layer directly.
  *
  * <h2>Confirmed gaps (mapped to "n-a" below, each with its own inline evidence)</h2>
  * <ul>
  *   <li>Threads: {@code ChannelService} (3.2.6) has no thread-creation/thread-member/
- *   archived-thread-listing methods at all (confirmed by reading the full method list of
- *   {@code ChannelService.java} at tag 3.2.6 — no method mentions "thread"). All
- *   {@code /channels/{id}/threads*} and {@code /channels/{id}/thread-members*} endpoints are
- *   therefore n-a.</li>
+ *   archived-thread-listing methods at all, so every {@code /threads*} and
+ *   {@code /thread-members*} endpoint is n-a.</li>
  *   <li>New-format pins API ({@code /channels/{id}/messages/pins*}): {@code ChannelService}
- *   only exposes {@code getPinnedMessages}/{@code addPinnedMessage}/{@code
- *   deletePinnedMessage}, which target the legacy {@code /channels/{id}/pins*} routes (verified
- *   against {@code discord4j.rest.route.Routes} naming conventions used throughout the source);
- *   no wrapper targets the new sub-resource path.</li>
+ *   only targets the legacy {@code /channels/{id}/pins*} routes.</li>
  *   <li>OAuth2 authorization-code-flow endpoints ({@code /oauth2/@me}, {@code /oauth2/token},
- *   {@code /oauth2/token/revoke}): no service in {@code discord4j-rest} 3.2.6 exposes these —
- *   they belong to the user-grant OAuth2 flow, out of scope for a bot-token {@code RestClient}.</li>
+ *   {@code /oauth2/token/revoke}): out of scope for a bot-token {@code RestClient}.</li>
  * </ul>
- * Everything else below (including several endpoints other verifiers in this repo mark n-a,
- * e.g. token-authenticated webhook message CRUD via {@code WebhookService.getWebhookMessage}/
- * {@code modifyWebhookMessage}/{@code deleteWebhookMessage}, and {@code GET
- * /guilds/{guild_id}/roles} via {@code GuildService.getGuildRoles}) maps to a real, confirmed
- * {@code *Service} method.
  *
  * <h2>Execution model</h2>
- * Discord4J is a reactive (Project Reactor {@code Mono}/{@code Flux}) library; this verifier is
- * a synchronous script, so every call is terminated with {@code .block()}. Bootstrap resources
- * (message, bulk-delete pair, role, webhook (+ one webhook message), invite, emoji) are created
- * best-effort up front, mirroring the other verifiers in this repo, with placeholder Snowflakes
- * used as a fallback so downstream calls still exercise the wire format even if bootstrap
- * partially fails. Non-DELETE endpoints run before DELETE endpoints (stable sort), and
- * destructive calls that would remove a shared resource other rows still depend on (the shared
- * guild/channel/role/webhook, or the bot's own guild membership) are recorded as n-a with a
- * "not exercised: ..." note, exactly as in {@code compat/dotnet-discordnet/Program.cs}. Banning
- * uses a placeholder user id (never the bot itself), since banning also kicks — same rationale
- * as the other verifiers.
+ * Discord4J is reactive ({@code Mono}/{@code Flux}); this verifier is synchronous, so every call
+ * ends with {@code .block()}. Bootstrap resources are created best-effort up front, falling back
+ * to placeholder Snowflakes so downstream calls still exercise the wire format. Non-DELETE
+ * endpoints run before DELETEs, and destructive calls that would remove a shared resource other
+ * rows still depend on are recorded as n-a, matching the pattern in
+ * {@code compat/dotnet-discordnet/Program.cs}. Banning uses a placeholder user id (never the bot
+ * itself), since banning also kicks.
  */
 public class Verify {
 
     /**
      * A format-valid Discord bot token used in place of the shared {@code common/setup.json}
      * {@code "compat-token"}. Discord4J's {@code TokenUtil.getSelfId} base64-decodes the token's
-     * first {@code '.'}-segment to recover the bot user id; {@code "compat-token"} contains
-     * {@code '-'} (illegal base64) and is rejected at {@code RestClientBuilder.build()} before any
-     * network call. This value's first segment {@code MTAwMDAwMDAwMDAwMDAwMDAx} base64-decodes to
-     * {@code 100000000000000001}, the fixture bot id — identical to the dummy used by
-     * {@code compat/c-concord/verify.c} for the same reason.
+     * first {@code '.'}-segment to recover the bot user id and rejects {@code "compat-token"}
+     * (contains {@code '-'}, illegal base64) before any network call. This value's first segment
+     * decodes to the fixture bot id {@code 100000000000000001}, matching the dummy used by
+     * {@code compat/c-concord/verify.c}.
      *
-     * <p>Assembled from separate string literals on purpose: the concatenated value is a
-     * format-valid (but entirely fake) bot token, and keeping the three segments split stops
-     * GitHub secret-scanning push protection from flagging it as a real credential.
+     * <p>Assembled from separate string literals so GitHub secret-scanning push protection
+     * doesn't flag the concatenated (fake) token as a real credential.
      */
     static final String FORMAT_VALID_TOKEN =
             "MTAwMDAwMDAwMDAwMDAwMDAx" + "." + "G4bZ9X" + "." + "c29tZS1mYWtlLXRva2VuLXNlY3JldC1wYWRkaW5n";
@@ -221,14 +169,10 @@ public class Verify {
         JsonNode endpoints = mapper.readTree(
                 Files.readString(Path.of("common/endpoints.json"), StandardCharsets.UTF_8));
 
-        // Discord4J's TokenUtil.getSelfId — called eagerly by RestClientBuilder.build(), before any
-        // network I/O — base64-decodes the token's first '.'-segment to recover the bot user id and
-        // throws IllegalArgumentException on anything that is not valid base64. The shared
-        // "compat-token" contains '-' (0x2d), which is illegal base64, so it cannot be used here.
-        // Substitute a format-valid Discord token whose first segment base64-decodes to the fixture
-        // bot id 100000000000000001 (the same dummy concord uses — see compat/c-concord/verify.c).
-        // Fauxcord only matches the registered token string, so registering this token instead of
-        // "compat-token" changes nothing server-side; register it and use it consistently below.
+        // RestClientBuilder.build() eagerly base64-decodes the token's first '.'-segment
+        // (TokenUtil.getSelfId) and rejects "compat-token" (contains '-', illegal base64), so
+        // substitute FORMAT_VALID_TOKEN instead. Fauxcord only matches the registered string, so
+        // this changes nothing server-side.
         ((ObjectNode) setup).put("token", "Bot " + FORMAT_VALID_TOKEN);
         doSetup(http, origin, mapper.writeValueAsString(setup));
 
@@ -239,10 +183,9 @@ public class Verify {
         long channelId = Long.parseLong(guildNode.get("channels").get(0).get("id").asText());
         String rawToken = token.startsWith("Bot ") ? token.substring("Bot ".length()) : token;
 
-        // Force the router's base URL to Fauxcord regardless of Routes.BASE_URL — see the
-        // class-level javadoc for the full evidence trail behind this construction.
-        // Bind the base URL to a final local first: `origin` is reassigned above (trailing-slash
-        // trimming), so it is not effectively final and cannot be captured by the lambda directly.
+        // Force the router's base URL to Fauxcord — see the class-level javadoc. `origin` is
+        // reassigned above, so it isn't effectively final and can't be captured by the lambda
+        // directly; bind it to a final local first.
         final String apiBaseUrl = origin.endsWith("/") ? origin + "api/v10" : origin + "/api/v10";
         RestClient client = RestClient.restBuilder(rawToken)
                 .setExtraOptions(o -> new RouterOptions(
@@ -333,11 +276,8 @@ public class Verify {
             // reaction endpoints below still exercise the wire format even if this fails
         }
 
-        // Deliberately NOT the bot's own id: banning a user also kicks them (matches real
-        // Discord), so exercising ban/unban against the bot itself would delete its
-        // guild_members row and break every member-role/member-patch call that runs afterward.
-        // Use a separate, never-actually-a-member placeholder id instead, same as the other
-        // verifiers in this repo.
+        // Deliberately NOT the bot's own id: banning also kicks, which would delete its
+        // guild_members row and break every member-role/member-patch call run afterward.
         final long banTargetId = 900000000000000001L;
         final String reactionEmoji = "👍"; // 👍, matches the other verifiers' choice
 

@@ -167,9 +167,8 @@ from interactions.api.http.route import Route
 FAUXCORD_BASE = os.environ.get("FAUXCORD_BASE", "http://fauxcord:3000/api/v10")
 ORIGIN = re.sub(r"/api/v10$", "", FAUXCORD_BASE)
 
-# Route.BASE is a ClassVar shared by every Route/HTTPClient in the process;
-# it must be reassigned before any client is constructed or any request is
-# made (see module docstring for the source citation).
+# Route.BASE is a ClassVar shared by every Route/HTTPClient in the process,
+# so it must be reassigned before any request is made (see module docstring).
 Route.BASE = FAUXCORD_BASE
 
 COMMON_DIR = Path(__file__).resolve().parent / "common"
@@ -179,9 +178,8 @@ ENDPOINTS = json.loads((COMMON_DIR / "endpoints.json").read_text(encoding="utf-8
 BOT = SETUP["user"]["id"]
 GUILD = SETUP["guilds"][0]["id"]
 CH = SETUP["guilds"][0]["channels"][0]["id"]
-# setup.json's token includes the "Bot " prefix (as Fauxcord's /_test/setup
-# expects); HTTPClient.request() adds "Bot " itself, so the raw token is
-# passed to login() without the prefix (see module docstring).
+# HTTPClient.request() adds "Bot " itself, so the prefix from setup.json's
+# token is stripped before login() (see module docstring).
 TOKEN = SETUP["token"].removeprefix("Bot ")
 EMOJI = "\U0001f44d"  # thumbs up
 # 1x1 transparent PNG, same fixture used by the other verifiers.
@@ -259,10 +257,9 @@ async def main() -> None:
         await client.login(TOKEN)
 
         # --- bootstrap resources referenced by later calls -------------
-        # Best-effort: a failed bootstrap step falls back to a placeholder
-        # id so dependent rows still run (and get recorded as lib-issue,
-        # which is itself a useful triage signal) rather than crashing the
-        # whole run.
+        # Best-effort: a failed step falls back to a placeholder id so
+        # dependent rows still run (recorded as lib-issue) instead of
+        # crashing the whole run.
         msg = await client.create_message({"content": "compat"}, CH)
         MSG = msg["id"]
 
@@ -716,11 +713,8 @@ async def main() -> None:
             "PATCH /webhooks/{webhook_id}": (edit_bot_webhook, None),
         }
 
-        # Canonical order sometimes lists a DELETE/GET before the PUT/POST
-        # that creates the resource it acts on. Running every non-DELETE
-        # endpoint first, then all DELETEs last, avoids false "Unknown X"
-        # errors from resource-lifecycle ordering (same fix as the other
-        # verifiers in this repo).
+        # Run non-DELETEs before DELETEs to avoid false "Unknown X" errors
+        # from resource-lifecycle ordering (see module docstring).
         ordered = sorted(ENDPOINTS, key=lambda e: e["method"] == "DELETE")
 
         results: dict[str, dict[str, Any]] = {}
@@ -741,9 +735,7 @@ async def main() -> None:
             try:
                 await fn()
                 results[key] = {"endpoint": key, "status": "pass", "note": ""}
-            except Exception as err:  # noqa: BLE001 - deliberately broad: any
-                # exception from the library call is recorded as a result row,
-                # not raised, so one bad endpoint doesn't abort the whole run.
+            except Exception as err:  # noqa: BLE001 - recorded as a result row, not raised
                 results[key] = {
                     "endpoint": key,
                     "status": "lib-issue",

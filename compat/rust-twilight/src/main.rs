@@ -1,55 +1,34 @@
 // Twilight compatibility verifier.
 //
-// FEASIBILITY: twilight-http's `ClientBuilder` has a documented `.proxy(host,
-// use_http)` method, intended for redirecting all REST traffic through
-// "twilight's HTTP proxy server" (see the docs.rs page for
-// `twilight_http::client::ClientBuilder::proxy`). Confirmed signature:
+// FEASIBILITY: twilight-http's `ClientBuilder::proxy(host, use_http)`
+// redirects all REST traffic through a proxy. Confirmed signature:
 // `pub fn proxy(self, proxy_url: String, use_http: bool) -> Self`.
 //
-// Unlike serenity's `.proxy(url)` (which takes a full URL: scheme + host +
-// port) or Discord.Net's/discordgo's overrides (which want the *full* base
-// including `/api/v10/`), twilight's `proxy_url` argument is HOST:PORT ONLY
-// — no scheme, no `/api` path. Twilight's own route-building code appends
-// `/api/vN/...` itself, and the `use_http` bool separately controls
-// http-vs-https. So the value handed to `.proxy()` here is derived from
-// `FAUXCORD_BASE` by stripping both the scheme and the `/api/v10` suffix
-// (e.g. `http://fauxcord:3000/api/v10` -> `fauxcord:3000`), with
-// `use_http: true` passed alongside it; see `bare_host_from` below.
+// Unlike serenity's `.proxy(url)` (a full URL) or Discord.Net's/discordgo's
+// overrides (the *full* base including `/api/v10/`), twilight's `proxy_url`
+// is HOST:PORT ONLY — no scheme, no `/api` path; twilight appends
+// `/api/vN/...` itself and takes http-vs-https as the separate `use_http`
+// bool. So the value handed to `.proxy()` here is `FAUXCORD_BASE` with both
+// the scheme and the `/api/v10` suffix stripped; see `bare_host_from` below.
 //
-// CONFIDENCE CAVEAT (read before assuming this file compiles as-is): unlike
-// rust-serenity (authored from training-data knowledge with no network
-// access), this file's method names and signatures were checked in this
-// session against the actual `twilight-http-0.16.0` tag of
-// https://github.com/twilight-rs/twilight (via `gh api
-// repos/twilight-rs/twilight/contents/...`) and against docs.rs/twilight-http
-// 0.16.0. That said, `cargo build`/`cargo check` were still NOT run in this
-// environment (disallowed by this task's constraints), so:
-//   - The `.proxy()` mechanism itself, the overall `IntoFuture`-based
-//     `builder.method(...).await` call shape (confirmed directly from
-//     `create_message.rs`'s `impl IntoFuture`), and the majority of the
-//     endpoint-to-method mappings below are HIGH confidence (read from the
-//     pinned tag's actual source, not reconstructed from memory).
-//   - A handful of items were not directly inspected line-by-line in this
-//     session and are flagged inline with `// UNCERTAIN:` where they occur
-//     (mainly: exact `AutoArchiveDuration`/`ChannelType` variant names used
-//     for thread bootstrap, and whether `twilight-http`'s default feature
-//     set pulls in a working TLS backend without extra Cargo.toml feature
-//     flags).
-//   - If a real `cargo build` disagrees with a signature here, treat it as a
-//     signature-detail bug to fix, not evidence the `.proxy()` override
-//     itself is unsound (that part is corroborated by both the docs.rs page
-//     and this task's brief).
+// CONFIDENCE CAVEAT: unlike rust-serenity (training-data knowledge only),
+// this file's method names and signatures were checked against the actual
+// `twilight-http-0.16.0` tag of twilight-rs/twilight and docs.rs, though
+// `cargo build`/`cargo check` were still not run here. The `.proxy()`
+// mechanism, the `IntoFuture`-based call shape, and most endpoint mappings
+// are high confidence (read from the pinned tag's source). A few items
+// weren't inspected line-by-line and are flagged inline with
+// `// UNCERTAIN:` (mainly thread-bootstrap enum variant names, and whether
+// the default feature set pulls in a working TLS backend). If a real
+// `cargo build` disagrees with a signature here, treat it as a bug to fix,
+// not evidence the `.proxy()` override itself is unsound.
 //
-// AWAIT STYLE: twilight-http request builders implement `std::future::
-// IntoFuture` directly (see `create_message.rs`: `impl IntoFuture for
-// CreateMessage<'_> { type Output = Result<Response<T>, Error>; ... }`).
-// There is no separate `.exec()` step (that was an older twilight-http API,
-// pre-0.16) — you call `client.method(...).builder_calls().await` directly,
-// getting back `Result<Response<T>, Error>`. Deserializing the body further
-// requires an additional `.model().await`, which this file only does where
-// the bootstrap needs a real ID out of the response (message/thread/role/
-// webhook/invite/emoji creation); endpoint-matrix probes that don't need the
-// body just check `.await.is_ok()`.
+// AWAIT STYLE: twilight-http request builders implement `IntoFuture`
+// directly (no separate `.exec()` step, unlike pre-0.16), so
+// `client.method(...).await` returns `Result<Response<T>, Error>` directly.
+// Deserializing the body needs an additional `.model().await`, done only
+// where bootstrap needs a real ID out of the response; matrix probes that
+// don't need the body just check `.await.is_ok()`.
 //
 // UNCERTAIN: GET /gateway/bot via `client.gateway().authed().await` is a
 // real bot-authed endpoint per docs.rs, but has not been exercised against
@@ -156,17 +135,14 @@ async fn wait_healthy(client: &reqwest::Client, origin: &str) {
     eprintln!("fauxcord did not become healthy in time; continuing anyway");
 }
 
-/// POSTs the shared setup payload. 200/201 (created) and 409 (already set
-/// up by a prior run against a reused Fauxcord container) both count as
-/// success. Retries with backoff on network errors or unexpected statuses:
-/// a transient host I/O hiccup here previously caused the setup POST to
-/// fail silently in another verifier (see js-oceanic/verify.mjs's doSetup
-/// docstring for the incident, and rust-serenity/src/main.rs's `do_setup`
-/// for the same fix applied there), which left the guild/channel fixtures
-/// missing while the rest of the run proceeded anyway and produced a wave
-/// of bogus "Unknown Guild"/"Unknown Channel" results with no real signal.
-/// Panics if setup never succeeds so a genuine failure is loud instead of
-/// corrupting every downstream result.
+/// POSTs the shared setup payload. 200/201 and 409 (already set up by a
+/// prior run against a reused Fauxcord container) both count as success.
+/// Retries with backoff on network errors or unexpected statuses, since a
+/// transient hiccup here previously caused setup to fail silently and
+/// produced a wave of bogus "Unknown Guild/Channel" results (see
+/// js-oceanic/verify.mjs's doSetup docstring, and rust-serenity's
+/// `do_setup` for the same fix). Panics if setup never succeeds so a
+/// genuine failure is loud instead of corrupting every downstream result.
 async fn do_setup(client: &reqwest::Client, origin: &str, raw: &str) {
     const MAX_ATTEMPTS: u32 = 5;
     let mut last_status: Option<reqwest::StatusCode> = None;
@@ -243,15 +219,12 @@ async fn main() {
     // See the module-level comment: proxy() takes bare `host:port` (no
     // scheme, no `/api` path) plus a separate `use_http` bool; twilight's
     // own request-building code appends `/api/vN/...` itself.
-    // `remember_invalid_token(false)` is essential for endpoint-matrix probing.
-    // By default twilight "remembers" the first 401 it sees and then refuses to
-    // send any further authenticated request (an API-ban safeguard), returning
-    // `ErrorType::Unauthorized` without hitting the server. This matrix
-    // deliberately exercises a Bearer-only endpoint (`GET /oauth2/@me`) with a
-    // Bot token, which legitimately 401s; leaving the safeguard on would poison
-    // every subsequent probe (users/webhooks/all DELETEs) with a false
-    // "token invalid" failure instead of testing them. Disabling it makes each
-    // endpoint independent, which is what a compatibility matrix needs.
+    // `remember_invalid_token(false)` is essential here: by default twilight
+    // remembers the first 401 it sees and refuses all further authenticated
+    // requests (an API-ban safeguard). This matrix deliberately exercises a
+    // Bearer-only endpoint (`GET /oauth2/@me`) with a Bot token, which
+    // legitimately 401s; without disabling the safeguard, that would poison
+    // every later probe with a false "token invalid" failure.
     let client = Client::builder()
         .token(token)
         .remember_invalid_token(false)

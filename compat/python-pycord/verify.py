@@ -168,15 +168,12 @@ async def wait_healthy() -> None:
 async def do_setup() -> None:
     """POST the shared setup payload.
 
-    200/201 (created) and 409 (already set up by a prior run against a
-    reused Fauxcord container) both count as success. Retries with backoff
-    on network errors or unexpected statuses: a transient host I/O hiccup
-    here previously caused the setup POST to fail silently in another
-    verifier (see js-oceanic/verify.mjs's doSetup docstring for the
-    incident), which left the guild/channel fixtures missing while the rest
-    of the run proceeded anyway and produced a wave of bogus "Unknown
-    Guild"/"Unknown Channel" results with no real signal. Raises if setup
-    never succeeds so a genuine failure is loud instead of corrupting every
+    200/201 and 409 (already set up by a prior run) both count as success.
+    Retries with backoff on errors/unexpected statuses: a transient I/O
+    hiccup here once caused a silent setup failure in another verifier
+    (see js-oceanic/verify.mjs), leaving fixtures missing and producing a
+    wave of bogus "Unknown Guild/Channel" results. Raises if setup never
+    succeeds so a genuine failure is loud instead of corrupting every
     downstream result.
     """
     max_attempts = 5
@@ -213,9 +210,8 @@ async def main() -> None:
     client = discord.Client(intents=intents)
     await client.login(TOKEN)
 
-    # A dedicated aiohttp session for "partial" (token-authenticated, no bot
-    # credentials) Webhook objects, mirroring how a non-bot caller would use
-    # a webhook URL/token pair.
+    # Dedicated aiohttp session for "partial" (token-only) Webhook objects,
+    # mirroring how a non-bot caller would use a webhook URL/token pair.
     webhook_session = aiohttp.ClientSession()
 
     try:
@@ -225,9 +221,8 @@ async def main() -> None:
 
         # --- bootstrap resources referenced by later calls -------------
         # Best-effort: a failed bootstrap step falls back to a placeholder
-        # id so dependent rows still run (and get recorded as lib-issue,
-        # which is itself a useful triage signal) rather than crashing the
-        # whole run.
+        # id so dependent rows still run (and get recorded as lib-issue)
+        # rather than crashing the whole run.
         msg = await channel.send(content="compat")
         MSG = msg.id
 
@@ -298,9 +293,8 @@ async def main() -> None:
         # n-a (a note is then required as the second tuple element).
 
         async def get_new_format_pins() -> None:
-            # Assumed (medium confidence, see module docstring) that
-            # TextChannel.pins() is a lazy async iterator like discord.py's,
-            # hitting the new-format pins endpoint; it must be consumed to
+            # Assumed a lazy async iterator like discord.py's TextChannel.pins()
+            # (medium confidence, see module docstring); must be consumed to
             # trigger the HTTP request.
             async for _ in channel.pins(limit=5):
                 pass

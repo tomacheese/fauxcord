@@ -117,7 +117,6 @@ PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
 
-# Point nextcord's REST layer at Fauxcord instead of the real Discord API.
 Route.BASE = FAUXCORD_BASE
 
 
@@ -147,14 +146,12 @@ async def do_setup() -> None:
 
     200/201 (created) and 409 (already set up by a prior run against a
     reused Fauxcord container) both count as success. Retries with backoff
-    on network errors or unexpected statuses: a transient host I/O hiccup
-    here previously caused the setup POST to fail silently in another
-    verifier (see js-oceanic/verify.mjs's doSetup docstring for the
-    incident), which left the guild/channel fixtures missing while the rest
-    of the run proceeded anyway and produced a wave of bogus "Unknown
-    Guild"/"Unknown Channel" results with no real signal. Raises if setup
-    never succeeds so a genuine failure is loud instead of corrupting every
-    downstream result.
+    on network errors or unexpected statuses, since a transient host I/O
+    hiccup here previously left the guild/channel fixtures missing while
+    the run proceeded anyway (see js-oceanic/verify.mjs's doSetup
+    docstring), producing bogus "Unknown Guild/Channel" results. Raises if
+    setup never succeeds so a genuine failure is loud instead of silently
+    corrupting every downstream result.
     """
     max_attempts = 5
     last_status: int | None = None
@@ -187,11 +184,9 @@ async def main() -> None:
     await do_setup()
 
     intents = nextcord.Intents.default()
-    # Guild.fetch_members() (the only public wrapper for GET
-    # /guilds/{guild_id}/members) refuses to run at all unless the privileged
-    # members intent is enabled client-side, regardless of whether a real
-    # gateway connection is ever opened; this verifier never connects to a
-    # gateway, so it's safe to enable purely to unblock the HTTP call.
+    # Guild.fetch_members() refuses to run without the privileged members
+    # intent client-side, even though this verifier never opens a gateway
+    # connection, so it's safe to enable purely to unblock the HTTP call.
     intents.members = True
     client = nextcord.Client(intents=intents)
     await client.login(TOKEN)
@@ -229,13 +224,11 @@ async def main() -> None:
             boot_thread = None
         if boot_thread is not None:
             try:
-                # Separate try/except from thread creation above: a bot that
-                # creates a thread is normally already a member of it, so
-                # join() failing here (e.g. "already a member") must not
-                # discard a successfully-created boot_thread — that previously
-                # caused every thread-members-dependent row below to fail an
-                # `assert boot_thread is not None` with an empty message,
-                # masking the real signal for those rows.
+                # Separate try/except from thread creation above: join()
+                # failing (e.g. "already a member") must not discard a
+                # successfully-created boot_thread, or every thread-members
+                # row below would fail a masking `assert boot_thread is not
+                # None` instead of showing the real signal.
                 await boot_thread.join()
             except Exception:
                 pass
@@ -283,18 +276,15 @@ async def main() -> None:
             pass  # reaction endpoints may still exercise the wire format
 
         # Ban a synthetic, never-a-member user id rather than the bot's own
-        # `member`. Fauxcord's ban implementation (correctly, matching real
-        # Discord) removes the banned user from `guild_members`, so banning
-        # the bot itself here previously kicked it out of the test guild for
-        # the rest of the run, turning every later member/role endpoint
-        # (fetch_member, edit nick, add/remove roles) into a false "Unknown
-        # Member" 404 with no real signal about Fauxcord's behavior.
+        # `member`: Fauxcord removes banned users from `guild_members`
+        # (matching real Discord), so banning the bot itself would kick it
+        # out of the test guild and turn every later member/role endpoint
+        # into a false "Unknown Member" 404.
         BAN_TARGET = nextcord.Object(id=700000000000000001)
         try:
-            # Pre-create the ban so "GET /guilds/{guild_id}/bans/{user_id}"
-            # has something to find regardless of where it lands relative to
-            # the scored PUT row in endpoint-execution order (the scored PUT
-            # row re-bans the same target and is itself idempotent).
+            # Pre-create the ban so the GET row has something to find
+            # regardless of execution order; the scored PUT row re-bans the
+            # same target and is itself idempotent.
             await guild.ban(BAN_TARGET)
         except Exception:
             pass  # bootstrap best-effort; the scored PUT row retries this
@@ -720,12 +710,9 @@ async def main() -> None:
             "PATCH /webhooks/{webhook_id}": (edit_bot_webhook, None),
         }
 
-        # Canonical order sometimes lists a DELETE/GET before the PUT/POST
-        # that creates the resource it acts on. Running every non-DELETE
-        # endpoint first, then all DELETEs last, avoids false "Unknown X"
-        # errors from resource-lifecycle ordering (same fix as
-        # compat/python-discordpy/verify.py, compat/js-oceanic/verify.mjs
-        # and compat/js-discordjs/verify.mjs).
+        # Run non-DELETE endpoints first, DELETEs last, to avoid false
+        # "Unknown X" errors from resource-lifecycle ordering (see module
+        # docstring).
         ordered = sorted(ENDPOINTS, key=lambda e: e["method"] == "DELETE")
 
         results: dict[str, dict[str, Any]] = {}

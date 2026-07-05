@@ -1,38 +1,22 @@
 // Serenity compatibility verifier.
 //
-// FEASIBILITY: serenity's `HttpBuilder` has a documented `.proxy(url)`
-// builder method specifically intended for redirecting all REST traffic to a
-// different base (the use case in serenity's own docs is running requests
-// through a local caching/relay proxy). Unlike Discord.Net's
-// `RestClientProvider` (which wants the *full* base including `/api/v10/`)
-// or discordgo's `EndpointAPI` (same), serenity's proxy is documented as
-// replacing the scheme+host+port only — serenity's own route-building code
-// appends the `/api/vN/...` path itself. So the value handed to `.proxy()`
-// here is the bare origin (e.g. `http://fauxcord:3000`), not
-// `FAUXCORD_BASE` as-is; see `proxy_origin_from` below.
+// FEASIBILITY: serenity's `HttpBuilder::proxy(url)` redirects all REST
+// traffic to a given origin. Unlike Discord.Net/discordgo (which want the
+// *full* base including `/api/v10/`), serenity's proxy replaces only the
+// scheme+host+port — serenity appends `/api/vN/...` itself. So the value
+// passed to `.proxy()` here is the bare origin, not `FAUXCORD_BASE` as-is;
+// see `proxy_origin_from` below.
 //
-// CONFIDENCE CAVEAT (read before assuming this file compiles as-is): this
-// was written from training-data knowledge of serenity's public API surface
-// with NO network access to verify method names/signatures against the
-// exact 0.12.x patch `cargo fetch` will resolve (per this task's
-// constraints, `cargo build`/`cargo check` were not run either). The overall
-// mechanism — `HttpBuilder::new(token).proxy(url).build()` redirecting the
-// origin while keeping the `/api/vN` path — is asserted with high confidence
-// (it is a well-known, intentionally-documented serenity feature, and was
-// specifically flagged as such in this task's brief). Lower confidence
-// items, called out inline where they occur:
-//   - exact parameter order/types for less-common `Http` methods (thread
-//     management, permission overwrites, webhook-message CRUD) — these are
-//     reconstructed from the shape of the Discord REST routes they wrap,
-//     not from reading the actual serenity 0.12 source in this session.
-//   - whether body-taking methods accept `&serde_json::Map<String, Value>`
-//     directly vs. a typed request-builder struct gated behind serenity's
-//     separate "builder" feature (deliberately not enabled here, see
-//     Cargo.toml). If compilation fails on this point, adding the "builder"
-//     feature (and swapping the raw-map calls for the corresponding
-//     `CreateXxx` builders) is the expected fix.
-// If any of the above turns out wrong on a real `cargo build`, treat it as
-// a signature-detail bug to fix, not evidence the `.proxy()` mechanism
+// CONFIDENCE CAVEAT: written from training-data knowledge of serenity's
+// public API with no network access to verify signatures against the exact
+// 0.12.x patch, and without running `cargo build`/`cargo check`. The
+// `.proxy()` mechanism itself is high-confidence (a documented serenity
+// feature). Lower-confidence spots, flagged inline where relevant: exact
+// parameter shapes for less-common `Http` methods (thread management,
+// permission overwrites, webhook-message CRUD), and whether raw-map bodies
+// work without serenity's separate "builder" feature (deliberately not
+// enabled here, see Cargo.toml). If compilation disagrees with a signature
+// here, treat it as a bug to fix, not evidence the `.proxy()` mechanism
 // itself is unsound.
 
 use serenity::http::{Http, HttpBuilder};
@@ -126,16 +110,14 @@ async fn wait_healthy(client: &reqwest::Client, origin: &str) {
     eprintln!("fauxcord did not become healthy in time; continuing anyway");
 }
 
-/// POSTs the shared setup payload. 200/201 (created) and 409 (already set
-/// up by a prior run against a reused Fauxcord container) both count as
-/// success. Retries with backoff on network errors or unexpected statuses:
-/// a transient host I/O hiccup here previously caused the setup POST to
-/// fail silently in another verifier (see js-oceanic/verify.mjs's doSetup
-/// docstring for the incident), which left the guild/channel fixtures
-/// missing while the rest of the run proceeded anyway and produced a wave
-/// of bogus "Unknown Guild"/"Unknown Channel" results with no real signal.
-/// Panics if setup never succeeds so a genuine failure is loud instead of
-/// corrupting every downstream result.
+/// POSTs the shared setup payload. 200/201 and 409 (already set up by a
+/// prior run against a reused Fauxcord container) both count as success.
+/// Retries with backoff on network errors or unexpected statuses, since a
+/// transient hiccup here previously caused setup to fail silently and
+/// produced a wave of bogus "Unknown Guild/Channel" results (see
+/// js-oceanic/verify.mjs's doSetup docstring). Panics if setup never
+/// succeeds so a genuine failure is loud instead of corrupting every
+/// downstream result.
 async fn do_setup(client: &reqwest::Client, origin: &str, raw: &str) {
     const MAX_ATTEMPTS: u32 = 5;
     let mut last_status: Option<reqwest::StatusCode> = None;
@@ -175,15 +157,11 @@ async fn main() {
         std::env::var("FAUXCORD_BASE").unwrap_or_else(|_| "http://fauxcord:3000/api/v10".into());
     let origin = proxy_origin_from(&base);
 
-    // NOTE: neither reqwest::Client::new() nor serenity's default HttpBuilder
-    // configure any per-request timeout, so a single stalled connection to
-    // fauxcord (or a genuinely hung request) blocks this entire sequential
-    // run forever with zero stdout output -- confirmed as the likely cause
-    // of a real run that hit the outer driver-script timeout with no
-    // /results/serenity.json ever written. An explicit per-request timeout
-    // turns a hang into a bounded Outcome::Fail row instead, guaranteeing
-    // the loop -- and therefore the final fs::write below -- is always
-    // reached.
+    // Neither reqwest::Client::new() nor serenity's default HttpBuilder set a
+    // per-request timeout, so a single stalled connection can hang this
+    // entire sequential run with no output (confirmed cause of a prior run
+    // that never wrote /results/serenity.json). An explicit timeout turns a
+    // hang into a bounded Outcome::Fail instead.
     let request_timeout = Duration::from_secs(15);
     let plain_client = reqwest::Client::builder()
         .timeout(request_timeout)
@@ -229,13 +207,9 @@ async fn main() {
         .build()
         .expect("build reqwest client for serenity Http");
     // `ratelimiter_disabled(true)` is REQUIRED alongside `.proxy()`: serenity
-    // only honors the proxy on its non-ratelimited request path
-    // (`Http::request`'s `else` branch). The default ratelimiter's `perform()`
-    // rebuilds every request with `proxy = None`, sending it to the real
-    // `https://discord.com` instead of Fauxcord — which returns a genuine 401
-    // for the fake token and makes every authenticated call fail. Disabling
-    // the ratelimiter routes all traffic through the proxied path. serenity's
-    // own `HttpBuilder` docs pair these two settings for exactly this reason.
+    // only honors the proxy on its non-ratelimited request path — the default
+    // ratelimiter rebuilds requests with `proxy = None`, sending them to real
+    // Discord instead of Fauxcord. serenity's own docs pair these settings.
     let http: Http = HttpBuilder::new(&token)
         .client(http_client)
         .proxy(proxy_url)
@@ -421,11 +395,9 @@ async fn main() {
     let mut results = Vec::with_capacity(total_endpoints);
     for (i, ep) in ordered.iter().enumerate() {
         let key = format!("{} {}", ep.method, ep.path);
-        // Per-endpoint progress line on stderr: cheap, and the only way to
-        // tell (from container logs alone) whether a run that produces no
-        // final output ever made progress, or stalled on the very first
-        // call -- there was previously zero output between process start
-        // and the final summary line.
+        // Per-endpoint progress line on stderr, so container logs show
+        // whether a stalled run made any progress (previously silent until
+        // the final summary line).
         eprintln!("[{}/{total_endpoints}] {key}", i + 1);
         let outcome = run_one(&http, &ctx, &reaction, &key).await;
         results.push(match outcome {

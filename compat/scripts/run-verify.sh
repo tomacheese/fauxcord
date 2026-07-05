@@ -3,41 +3,30 @@
 # prevent the same library's Docker verification run from being launched
 # twice concurrently.
 #
-# Background: a buildkit grpc crash (`frontend grpc server closed
-# unexpectedly`) during a serenity retry was traced to run-library-check.sh
-# being started twice for the same library at almost the same time -- once
-# via a manual trailing `&` for backgrounding, and again via the Bash tool's
-# run_in_background:true on a retry a moment later, because the first
-# invocation's liveness wasn't checked before the second was issued. The two
-# `docker compose build` invocations then fought over the same buildkit
-# builder instance and crashed it. That failure mode was previously only
-# guarded against by an operating rule ("check status-check.sh before
-# retrying"); this script makes the double-launch itself impossible instead
-# of relying on every caller remembering the rule.
+# Background: a buildkit grpc crash during a serenity retry was traced to
+# run-library-check.sh being started twice for the same library at almost
+# the same time -- once via a manual trailing `&`, once via the Bash tool's
+# run_in_background:true on a retry, without checking the first invocation's
+# liveness first. The two `docker compose build` invocations fought over the
+# same buildkit builder and crashed it. This script makes the double-launch
+# structurally impossible instead of relying on an operating rule to catch
+# it.
 #
 # How: takes an flock(1) exclusive lock keyed on the library name (not the
 # Compose project name -- a project-suffix retry for the same library must
 # still be serialized against a still-running earlier attempt, since both
-# share the same host buildkit builder). If the lock is already held, this
-# script fails fast with a clear message instead of blocking forever or
-# silently proceeding to double-launch. The lock is held for the entire
-# lifetime of the wrapped run-library-check.sh process (released
-# automatically on exit, including on crash/kill), because `exec` replaces
-# this process's image while keeping its open file descriptors -- so the
-# flock'd fd stays open, and therefore the lock stays held, all the way
-# through the build/run/cleanup steps inside run-library-check.sh.
+# share the same host buildkit builder). Fails fast if the lock is already
+# held. The lock is released automatically on exit (including crash/kill)
+# because `exec` replaces this process's image while keeping open file
+# descriptors, so the flock'd fd -- and thus the lock -- stays held through
+# the build/run/cleanup steps inside run-library-check.sh.
 #
 # Usage: identical to run-library-check.sh --
 #   compat/scripts/run-verify.sh <library-name> [extra-timeout-seconds] [project-suffix]
 #
-# Calling convention (read this before invoking):
-#   Call this script via the Bash tool with run_in_background:true ONLY.
-#   Never append a trailing `&` on top of that -- run_in_background:true
-#   already backgrounds the whole command at the harness level. Stacking a
-#   manual `&` underneath it is exactly the pattern that caused the original
-#   double-launch, since it lets the foregrounded shell return immediately
-#   while a second, unsupervised invocation can be issued before anyone
-#   checks whether the first one is still alive.
+# Calling convention: invoke via the Bash tool with run_in_background:true
+# ONLY. Never stack a manual trailing `&` on top -- that's exactly the
+# double-launch pattern this script exists to prevent.
 set -uo pipefail
 
 LIB="${1:?usage: run-verify.sh <library-name> [timeout-seconds] [project-suffix]}"

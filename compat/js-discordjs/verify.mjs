@@ -30,7 +30,7 @@ async function waitHealthy() {
       const r = await fetch(`${ORIGIN}/_mock/health`)
       if (r.ok) return
     } catch {
-      // not up yet
+      // ignore, retry below
     }
     await new Promise((res) => setTimeout(res, 1000))
   }
@@ -40,9 +40,8 @@ async function waitHealthy() {
 /**
  * POST the shared setup payload. 200/201 (created) and 409 (already set up
  * by a prior run against a reused Fauxcord container) both count as success.
- * Retries with backoff on network errors or unexpected statuses (see
- * js-oceanic/verify.mjs's doSetup for the incident that motivated this).
- * Throws if setup never succeeds so a genuine failure is loud instead of
+ * Retries with backoff on network errors or unexpected statuses; throws if
+ * setup never succeeds so a genuine failure is loud instead of silently
  * corrupting every downstream result.
  */
 async function doSetup() {
@@ -179,17 +178,12 @@ async function bootstrap() {
   } catch {
     // ignore
   }
-  // Bootstrap a real thread (like role/webhook above) so the thread-members
-  // endpoints below operate on an actual thread instead of falling back to
-  // the plain text channel (same pattern as dotnet-discordnet/Program.cs).
-  // endpoints.json reuses the `{channel_id}` placeholder for these paths
-  // (a thread IS a channel in the Discord model), so we don't add a new
-  // placeholder here — main() substitutes THREAD_ID for CH specifically for
-  // thread-members endpoints instead. Uses a dedicated message (not
-  // ctx['{message_id}']) since the main loop separately exercises
-  // `POST .../messages/{message_id}/threads` itself, and Discord only
-  // allows one thread per message ("A thread has already been created for
-  // this message").
+  // Bootstrap a real thread so the thread-members endpoints below operate on
+  // an actual thread instead of the plain text channel. endpoints.json reuses
+  // the `{channel_id}` placeholder for these paths (a thread IS a channel),
+  // so main() substitutes THREAD_ID for CH specifically for thread-members
+  // endpoints. Uses a dedicated message rather than ctx['{message_id}'] since
+  // Discord only allows one thread per message.
   try {
     const threadSourceMsg = await rest.post(`/channels/${CH}/messages`, {
       body: { content: 'compat-thread-source' },
@@ -281,34 +275,19 @@ function bodyFor(method, path, ctx) {
 
 // Endpoints that destroy a shared fixture other rows in this same run still
 // depend on, so they are recorded as n-a instead of actually invoked (same
-// precedent as js-oceanic/verify.mjs's `calls` table entries for these
-// paths). `DELETE /guilds/{guild_id}` is not even in spec/openapi.json's
-// `/guilds/{guild_id}` path (no `delete` operation) — real bots cannot
-// delete a guild (owner-only, user-token action) — so calling it here would
-// only test a mock-only convenience route while cascading destruction onto
-// every other guild-scoped result (roles, channels, invites, webhooks) that
-// runs afterward.
+// precedent as js-oceanic/verify.mjs's `calls` table entries for these paths).
 const SKIP = {
   'DELETE /channels/{channel_id}':
     'not exercised: would delete the shared test channel other rows depend on',
   'DELETE /guilds/{guild_id}':
     'not exercised: bots cannot delete guilds in the real Discord API (owner-only), and doing so would cascade-destroy every other guild-scoped fixture this run still needs',
-  // ctx['{user_id}'] is BOT itself. Removing the bot from its own guild is
-  // harmless within a single fresh run (DELETEs run last), but doSetup()'s
-  // 409-means-"already set up by a prior run" handling shows this harness
-  // is meant to tolerate re-running against a reused container — and a
-  // second run would then find the bot already kicked, 404ing every
-  // guild-member endpoint (same failure mode as the ban self-target bug
-  // above). Same precedent as js-oceanic/verify.mjs's `calls` table entry.
+  // ctx['{user_id}'] is BOT itself; removing it from its own guild would 404
+  // every guild-member endpoint if the container is reused across runs.
   'DELETE /guilds/{guild_id}/members/{user_id}':
     'not exercised: would remove the bot itself from the shared test guild',
   // These require an OAuth2 bearer/authorization-code or client-credentials
-  // flow, which a raw REST client instance configured with a single Bot
-  // token (rest.setToken()) cannot produce — this is a semantic mismatch
-  // with how discord.js apps actually call these endpoints in practice, not
-  // a Fauxcord bug (e.g. GET /oauth2/@me requires the bearer token obtained
-  // via the authorization the endpoint is inspecting, and the two POST
-  // /oauth2/token* endpoints are form-urlencoded grant requests, not JSON).
+  // flow, which a raw REST client configured with a single Bot token
+  // (rest.setToken()) cannot produce.
   'GET /oauth2/@me':
     'not exercised: requires an OAuth2 bearer token from a completed authorization, not a Bot token',
   'POST /oauth2/token':
@@ -335,12 +314,10 @@ async function main() {
       results.push({ endpoint: key, status: 'n-a', note: SKIP[key] })
       continue
     }
-    // thread-members/* reuses the `{channel_id}` placeholder, but must
-    // resolve to the bootstrapped thread's id, not the parent text channel
-    // (see bootstrap()'s ctx.threadId comment). Likewise, bans/* and the
-    // webhook-message / id-only-webhook-delete families need dedicated
-    // fixture ids instead of the shared `{user_id}`/`{message_id}`/
-    // `{webhook_id}` placeholders (see the matching bootstrap() comments).
+    // thread-members/*, bans/*, and the webhook-message / id-only-webhook
+    // -delete families each need a dedicated fixture id instead of the
+    // shared `{channel_id}`/`{user_id}`/`{message_id}`/`{webhook_id}`
+    // placeholders (see the matching bootstrap() comments).
     const url = path.includes('/thread-members')
       ? resolve(path, { ...ctx, '{channel_id}': ctx.threadId })
       : path.includes('/bans/')
@@ -391,13 +368,10 @@ async function main() {
         note: raw.slice(0, 300),
       })
     } finally {
-      // @discordjs/rest's handleErrors() calls manager.setToken(null) on ANY
-      // 401 response (e.g. from the oauth2 endpoints below, which legitimately
-      // require a bearer token rather than a Bot token). Left unchecked, this
-      // permanently clears the shared REST instance's token and cascades a
-      // client-side "Expected token to be set" error into every subsequent
-      // call, masking their real per-endpoint results. Reassert after every
-      // attempt so a single 401 can't contaminate the rest of the run.
+      // @discordjs/rest clears the shared REST instance's token on ANY 401
+      // response (e.g. from the oauth2 endpoints, which need a bearer token
+      // rather than a Bot token). Reassert it after every attempt so one
+      // 401 doesn't cascade a token error into the rest of the run.
       rest.setToken('compat-token')
     }
   }

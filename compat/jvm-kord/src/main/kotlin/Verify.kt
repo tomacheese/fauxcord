@@ -2,93 +2,44 @@
 //
 // === Why Kord is NOT gateway-blocked (unlike JDA, see ../jvm-jda/README.md) ===
 //
-// Kord ships `kord-rest` as a standalone module: `dev.kord.rest.service.RestClient` wraps a
-// `RequestHandler` and exposes high-level REST services (`.channel`, `.guild`, `.user`, `.webhook`,
-// `.emoji`, `.invite`, `.application`, ...) with **no Gateway/WebSocket dependency at all** — this
-// is a materially different architecture from JDA's Gateway-first `JDABuilder`/`JDA` object model.
-// Confirmed by reading `RestClient.kt` at kordlib/kord tag `0.14.0`: it is constructed directly
-// from a `RequestHandler` (or a bare token, via a top-level `RestClient(token: String)` helper
-// that internally builds a default `KtorRequestHandler`), with no gateway/session/login sequence
-// anywhere in the class. This verifier only ever touches `kord-rest`; the full `Kord`
-// gateway-aware facade (a separate `dev.kord:kord-core` artifact) is never used or depended on.
+// `kord-rest` is a standalone module: `RestClient` wraps a `RequestHandler` and exposes
+// high-level REST services with no Gateway/WebSocket dependency at all (confirmed against
+// `RestClient.kt` at tag `0.14.0`). This verifier never touches the gateway-aware `kord-core`
+// facade.
 //
-// === The override mechanism (verified by source, not guessed) ===
+// === The override mechanism ===
 //
-// `KtorRequestHandler.createRequest` (rest/src/commonMain/kotlin/request/KtorRequestHandler.kt,
-// tag 0.14.0) builds each outgoing request as:
-//
-//   url { url.takeFrom(request.baseUrl); encodedPath += request.path; ... }
-//
-// `request.baseUrl` defaults to `Route.baseUrl`, a hardcoded *getter* (no setter) in
-// rest/src/commonMain/kotlin/route/Route.kt:
-//
-//   public val baseUrl: String get() = "https://discord.com/api/v${KordConfiguration.REST_VERSION}"
-//
-// So `takeFrom("https://discord.com/api/v10")` sets scheme=https, host=discord.com, and
-// (crucially) **path=/api/v10** on the request URL — then `encodedPath += request.path` appends
-// the route-specific suffix (e.g. `/channels/123`), producing `/api/v10/channels/123`. Because the
-// `/api/v10` path segment is baked in by `takeFrom` before the per-route path is appended, we do
-// NOT need to touch the path at all to redirect traffic to Fauxcord: only the protocol/host/port
-// need to be rewritten, exactly as the task brief prescribed. This is done via a Ktor
-// `HttpRequestPipeline.Before` interceptor installed on a custom `HttpClient(CIO)`, which is then
-// handed to `KtorRequestHandler`'s **primary constructor** (confirmed exact parameter list from the
-// same source file at tag 0.14.0):
-//
-//   public class KtorRequestHandler(
-//       private val client: HttpClient,
-//       private val requestRateLimiter: RequestRateLimiter = ExclusionRequestRateLimiter(),
-//       private val clock: Clock = Clock.System,
-//       private val parser: Json = jsonDefault,
-//       override val token: String,
-//   ) : RequestHandler
-//
-// We call it with named arguments (`client = ..., token = ...`), letting `requestRateLimiter`,
-// `clock`, and `parser` fall back to their defaults. `RestClient(requestHandler: RequestHandler)`
-// (service/RestClient.kt, same tag) is then just `RestClient(KtorRequestHandler(client, token))`.
+// `KtorRequestHandler.createRequest` builds each request via `url.takeFrom(request.baseUrl)`
+// then appends the route-specific path. `Route.baseUrl` already bakes in `/api/v10`
+// (`"https://discord.com/api/v$REST_VERSION"`), so redirecting to Fauxcord only requires
+// rewriting protocol/host/port, not the path. This is done via a Ktor
+// `HttpRequestPipeline.Before` interceptor on a custom `HttpClient(CIO)`, handed to
+// `KtorRequestHandler`'s primary constructor.
 //
 // === Coverage notes ===
 //
-// Because kord-rest is a thin, comprehensive REST wrapper (not an object-model library gated by a
-// cache/entity graph like Discord.Net/discordgo/Oceanic), it covers noticeably MORE of the 86
-// canonical endpoints for real than the other object-model verifiers in this repo — notably
-// `GET /guilds/{guild_id}/roles` (`GuildService.getGuildRoles`) and `GET /users/@me/guilds`
-// (`UserService.getCurrentUserGuilds`), both of which are "n-a" in `../dotnet-discordnet/Program.cs`
-// for the equivalent Discord.Net.Rest client. Endpoints with no wrapper anywhere in `kord-rest`
-// (confirmed by reading `RestClient.kt`'s service list and the relevant `*Service.kt` files, and by
-// grepping the generated `Route.kt` for the literal path) are recorded as "n-a" with an evidence
-// note, most notably:
-//   - The new-format `/channels/{id}/messages/pins*` API: `ChannelService.addPinnedMessage`/
-//     `deletePinnedMessage`/`getChannelPins` all target the legacy `Route.PinPut`/`PinDelete`/
-//     `PinsGet` routes, whose literal path is `/channels/$ChannelId/pins` (confirmed in Route.kt) —
-//     there is no `Route` at all for the `/messages/pins` path shape.
-//   - `GET /channels/{channel_id}/thread-members/{user_id}` (single-member fetch): `Route.kt` only
-//     defines PUT/DELETE `.../thread-members/{@me,$UserId}` and a list-returning GET
-//     `.../thread-members`; no single-member GET route exists.
-//   - `GET /channels/{channel_id}/threads/search`: no `Route` for a thread-search path exists.
-//   - Gateway bootstrap endpoints (`/gateway`, `/gateway/bot`): `Route.GatewayGet`/`GatewayBotGet`
-//     exist as internal `Route` objects (used by the separate `kord-gateway` module, not depended
-//     on here), but `RestClient` exposes no service wrapping them.
-//   - OAuth2 authorization-code-flow endpoints (`/oauth2/@me`, `/oauth2/token`,
-//     `/oauth2/token/revoke`): no corresponding `Route`/service exists; only the bot-token
-//     `GET /oauth2/applications/@me` is wrapped (`ApplicationService.getCurrentApplicationInfo`,
-//     confirmed against `Route.CurrentApplicationInfo`'s literal path).
-//   - Destructive calls that would break later rows sharing the same resource (deleting the shared
-//     guild/channel/role/webhook that other rows still depend on, or removing the bot itself from
-//     the shared guild) are skipped and recorded as "n-a" with a "not exercised: ..." note, matching
-//     the pattern used by the other verifiers in this repo.
+// Because kord-rest is a thin, comprehensive REST wrapper (not an object-model library gated by
+// a cache/entity graph like Discord.Net/discordgo/Oceanic), it covers noticeably MORE endpoints
+// for real than the other object-model verifiers — notably `GET /guilds/{guild_id}/roles` and
+// `GET /users/@me/guilds`, both "n-a" in `../dotnet-discordnet/Program.cs`. Endpoints with no
+// wrapper anywhere in `kord-rest` are recorded "n-a" with an evidence note, most notably:
+//   - The new-format `/channels/{id}/messages/pins*` API: only the legacy `Route.PinPut`/
+//     `PinDelete`/`PinsGet` routes exist.
+//   - `GET /channels/{channel_id}/thread-members/{user_id}` (single-member fetch): no such
+//     `Route` exists, only PUT/DELETE and the list-returning GET.
+//   - `GET /channels/{channel_id}/threads/search`: no `Route` exists.
+//   - Gateway bootstrap endpoints (`/gateway`, `/gateway/bot`): internal `Route` objects used by
+//     the separate `kord-gateway` module, but `RestClient` exposes no service wrapping them.
+//   - OAuth2 authorization-code-flow endpoints: no corresponding `Route`/service exists; only
+//     the bot-token `GET /oauth2/applications/@me` is wrapped.
+//   - Destructive calls that would break later rows sharing the same resource are skipped and
+//     recorded "n-a" with a "not exercised: ..." note, matching the other verifiers.
 //
 // === UNCERTAIN markers ===
 //
-// A handful of builder property names (e.g. `content` on the `Message*Builder` DSLs) are extremely
-// well-established, ubiquitous Kord API surface backed by the library's own official documentation
-// and examples, but were not individually re-confirmed against the tag-0.14.0 source of every single
-// abstract builder base class in this session (time-boxed source verification prioritized the
-// override mechanism, `Route` literal paths, and top-level service method signatures, which are the
-// parts most load-bearing for the pass/n-a verdicts). These are marked `// UNCERTAIN:` inline below;
-// everything else in this file (service method names/signatures, `Route` literal paths, the
-// `KtorRequestHandler`/`RestClient` constructors, `ArchiveDuration`/`ChannelType`/`OverwriteType`/
-// `Permissions()`/`Image.Format` values, and `BulkDeleteRequest`/`ListThreads*Request` shapes) was
-// read directly from kordlib/kord's source at git tag `0.14.0` via `gh api`.
+// A handful of builder property names (e.g. `content` on the `Message*Builder` DSLs) are
+// well-established Kord API surface but were not individually re-confirmed against the
+// tag-0.14.0 source of every builder base class. These are marked `// UNCERTAIN:` inline below.
 
 import dev.kord.common.entity.ArchiveDuration
 import dev.kord.common.entity.ChannelType
@@ -273,10 +224,8 @@ fun main() {
     var webhookToken = "compat-token-xyz"
     var inviteCode = "compat"
     var emojiId = Snowflake(600000000000000001UL)
-    // Deliberately not the bot's own id: banning a user also kicks them (matches real Discord), so
-    // exercising ban/unban against the bot itself would break every member-role/member-patch call
-    // that runs afterward. Use a separate, never-actually-a-member placeholder id instead, same as
-    // the other verifiers.
+    // Deliberately not the bot's own id: banning also kicks, which would break every
+    // member-role/member-patch call run afterward.
     val banTargetId = Snowflake(900000000000000001UL)
 
     runBlocking {

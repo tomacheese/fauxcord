@@ -7,12 +7,10 @@
 #        run-library-check.sh discordgo 900
 #        run-library-check.sh serenity 900 retry2   # project: fauxcord-compat-serenity-retry2
 #
-# project-suffix: opt-in escape hatch for when a previous invocation for the
-# same library may still be alive (e.g. its log looked STALE but you are not
-# fully certain -- see compat/scripts/status-check.sh). Appending a unique
-# suffix guarantees a brand-new Compose project name, so a leftover live
-# invocation cannot collide with the new one even if the "is it dead" check
-# was wrong. Omit it for the normal case (no suspected leftover run).
+# project-suffix: escape hatch for when a previous invocation for the same
+# library might still be alive (see compat/scripts/status-check.sh) but
+# you're not fully certain -- forces a brand-new Compose project name so a
+# leftover run can't collide. Omit for the normal case.
 #
 # Behavior:
 #   1. docker compose build fauxcord verify-<lib>   (retried once on timeout)
@@ -24,19 +22,13 @@
 # This host's disk (/mnt/hdd) is I/O-saturated, so build/run steps use long
 # timeouts (10min build, 5min run) with one retry on timeout (exit 124/143).
 #
-# Compose project isolation: each invocation runs under its own Compose
-# project name (`-p fauxcord-compat-<lib>`), NOT the shared default derived
-# from the directory name. Without this, two concurrent invocations for
-# different libraries resolve to the SAME project and therefore the SAME
-# container name for the shared `fauxcord` service
-# (`fauxcord-compat-fauxcord-1`) — one invocation's `down`/cleanup then
-# SIGTERMs the *other* invocation's still-in-use fauxcord container out from
-# under it. This was confirmed as the root cause of a real cross-track
-# failure (discordnet + discordgo run concurrently, one's teardown killed
-# the other's fauxcord container), not just host I/O contention. Per-library
-# project names mean each invocation gets its own independent fauxcord
-# container, so concurrent runs are actually isolated rather than merely
-# hoped to be serialized.
+# Compose project isolation: each invocation uses its own project name
+# (`-p fauxcord-compat-<lib>`) instead of the shared default. Otherwise two
+# concurrent invocations for different libraries would resolve to the same
+# project/container name for the shared `fauxcord` service, and one
+# invocation's teardown would SIGTERM the other's still-in-use container out
+# from under it -- confirmed as the root cause of a real cross-track failure
+# (discordnet + discordgo run concurrently), not just host I/O contention.
 set -uo pipefail
 
 LIB="${1:?usage: run-library-check.sh <library-name> [timeout-seconds] [project-suffix]}"
@@ -65,17 +57,11 @@ retry_with_timeout() {
   local attempt rc
   for attempt in 1 2; do
     log "attempt ${attempt}/2 (timeout ${secs}s): $*"
-    # NOTE: rc must be captured on the line directly after the command runs,
-    # NOT via `if timeout ...; then return 0; fi` followed by `rc=$?`. When
-    # the tested command fails, bash's `if`-without-`else` construct reports
-    # its OWN exit status as 0 (POSIX: "if no commands in a branch are
-    # executed, the if-list's exit status is 0") -- so `$?` right after such
-    # an `if/fi` is always 0, never the real failure code. This silently
-    # broke both the 124/143 timeout-retry branch below (dead code -- rc was
-    # never anything but 0) and the "attempt N failed" message (always
-    # printed "exit code 0" regardless of the actual failure). Confirmed via
-    # a real serenity build that hit this exact path; only the separate
-    # downstream image-existence check caught the resulting failure.
+    # Capture rc immediately after the command, not via `if timeout ...;
+    # then return 0; fi` followed by `rc=$?` -- an `if` with no executed
+    # else-branch reports exit 0 for `$?` regardless of the command's real
+    # exit code (POSIX). That previously made the timeout-retry branch below
+    # dead code and always logged "exit code 0" on failure.
     timeout "$secs" "$@" >"$logfile" 2>&1
     rc=$?
     if [[ $rc -eq 0 ]]; then
@@ -106,16 +92,12 @@ if ! retry_with_timeout "$BUILD_TIMEOUT" "$BUILD_LOG" -- \
   exit 1
 fi
 
-# `docker compose build` (bake mode, used automatically when building
-# multiple targets in one invocation) has been observed to report exit 0
-# for the *overall* command even when one of the targets actually failed to
-# compile -- the per-target "failed to solve" error is printed into the
-# build log, but does not affect the aggregate exit code. Trusting the exit
-# code alone previously let a real serenity `cargo build` compile failure
-# slip through here silently, only to surface much later (and far more
-# expensively, since it forced an implicit rebuild inside the shorter,
-# fixed-length run-step timeout) as an opaque `RUN_FAILED`/timeout. Verify
-# each image was actually tagged before trusting the build "succeeded".
+# `docker compose build` (bake mode, used automatically for multi-target
+# builds) can report exit 0 overall even when one target actually failed to
+# compile -- the "failed to solve" error lands in the log but doesn't affect
+# the aggregate exit code. Trusting the exit code alone previously let a
+# real serenity compile failure slip through silently, surfacing much later
+# as an opaque RUN_FAILED/timeout. Verify each image was actually tagged.
 for svc_image in "${PROJECT}-fauxcord" "${PROJECT}-${SERVICE}"; do
   if [[ -z "$(docker images -q "$svc_image" 2>/dev/null)" ]]; then
     log "image ${svc_image} was not produced despite build reporting success; tail of log:"
@@ -133,15 +115,10 @@ if ! retry_with_timeout 300 "${LOG_DIR}/${LIB}-up.log" -- \
 fi
 
 log "running verifier"
-# NOTE: exit code must be captured directly from `timeout`, NOT via
-# `if ! timeout ...; then rc=$?; ...`. Negating with `!` makes `$?` inside
-# the then-branch reflect the (always-0) exit status of the negated `if`
-# condition itself, not the real exit code of `timeout` — this previously
-# caused every failure here to be misreported as "exit 0", hiding the real
-# cause (same class of bug the retry_with_timeout comment above warns about
-# for `local rc=$?`, confirmed via a real serenity run that logged
-# "failed/timed out (exit 0)" for what was actually a dependency-not-ready
-# failure).
+# Capture the exit code directly from `timeout`, not via
+# `if ! timeout ...; then rc=$?; ...` -- negating with `!` makes `$?`
+# reflect the if's own (always-0) status, not timeout's real exit code.
+# Same class of bug as the retry_with_timeout NOTE above.
 timeout "$RUN_TIMEOUT" "${COMPOSE[@]}" run --rm "$SERVICE" \
   >"$RUN_LOG" 2>&1
 rc=$?

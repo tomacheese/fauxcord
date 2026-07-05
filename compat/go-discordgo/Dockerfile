@@ -6,9 +6,7 @@ WORKDIR /app
 COPY go-discordgo/go.mod ./
 COPY go-discordgo/verify.go ./
 COPY common ./common
-# go.sum is intentionally not vendored by hand: `go mod tidy` needs the
-# source file present to see the discordgo import, and resolves/pins the
-# exact release (plus its transitive deps) at build time, which is more
-# robust than hand-computing a go.sum here.
+# go.sum is intentionally not hand-vendored: `go mod tidy` resolves and pins
+# the exact release (and transitive deps) at build time, which is more robust.
 RUN go mod tidy && go build -o /verify verify.go
 CMD ["/verify"]

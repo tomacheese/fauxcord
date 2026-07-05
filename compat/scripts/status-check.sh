@@ -30,18 +30,15 @@ ls -la "$REPO_ROOT/compat/results/"*.json 2>/dev/null || echo "(no result files)
 
 echo
 echo "=== build/run logs liveness (threshold: ${STALE_THRESHOLD}s) ==="
-# NOTE: mtime alone is not sufficient. A log whose last write happened just
-# before its process died (e.g. a buildkit container start failure) still
-# looks freshly-updated -- confirmed via a real case where serenity retry7
-# had fully stopped, but the last line written (the failure itself) was
-# recent enough to report "ALIVE 595s ago". Two extra checks close this
-# gap without changing the existing "STATUS (Ns ago): filename" line format
-# that callers already parse:
+# mtime alone isn't sufficient: a log whose last write happened just before
+# its process died still looks freshly-updated (confirmed on a real case
+# where a fully-stopped serenity retry still reported "ALIVE 595s ago").
+# Two extra checks close the gap without changing the existing
+# "STATUS (Ns ago): filename" line format callers already parse:
 #   1. cross-check the mtime-based ALIVE verdict against whether a matching
 #      buildx/docker-compose process is actually still running
 #   2. scan the log's tail for failure patterns regardless of mtime/STATUS,
-#      since a fatal error can be the very last (and therefore "freshest")
-#      line in the file
+#      since a fatal error is often the very last (and "freshest") line
 LOG_DIR="$REPO_ROOT/compat/results/_logs"
 if [ -d "$LOG_DIR" ]; then
   for f in "$LOG_DIR"/*.log; do
@@ -61,10 +58,8 @@ if [ -d "$LOG_DIR" ]; then
     fi
     echo "$STATUS (${AGE}s ago): $BASENAME"
 
-    # Word-boundary anchored: a naive substring match on "error" false-positived
-    # on Rust crate names like "thiserror" (serenity retry9). \b keeps the
-    # check strict without dropping real signal (still catches "ERROR:",
-    # "failed to ...", "exit code 137", etc.)
+    # Word-boundary anchored: a naive substring match on "error" false-positives
+    # on Rust crate names like "thiserror".
     FAIL_LINE=$(tail -n 20 "$f" | grep -iE "\berror\b|exit code [1-9]|\bfailed\b" | tail -n 1 || true)
     if [ -n "$FAIL_LINE" ]; then
       echo "  FAILED_TAIL: ${BASENAME}: ${FAIL_LINE}"

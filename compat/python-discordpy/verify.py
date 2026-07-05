@@ -25,49 +25,39 @@ used in compat/js-oceanic/verify.mjs for the same class of decisions):
   here the new-format endpoints are exercised for real and the legacy
   `/channels/{id}/pins*` endpoints are recorded `n-a`.
 * Reaction removal for an explicit (non-self) `{user_id}`: discord.py's
-  `Message.remove_reaction(emoji, member)` branches internally on
-  `member.id == self._state.self_id` -- if it matches, it always calls the
-  `/@me` variant regardless of which "member" object was passed in. Fauxcord
-  only registers a single user (the compat bot), so there is no way to
-  drive discord.py's public `remove_reaction` through the explicit
-  `{user_id}` branch without fabricating a directory id that never reacted,
-  which would produce a false failure/success not reflective of anything
-  real. That endpoint is therefore recorded `n-a`.
+  `Message.remove_reaction(emoji, member)` always routes to the `/@me`
+  variant when `member.id` matches the bot's own id, and Fauxcord's setup
+  only registers one user -- there is no way to drive the explicit
+  `{user_id}` branch without a fabricated id, so it's recorded `n-a`.
 * OAuth2: discord.py's bot `Client` does not implement the OAuth2
   *authorization code* flow, so `GET /oauth2/@me`, `POST /oauth2/token`,
   and `POST /oauth2/token/revoke` have no public wrapper and are `n-a`.
-  `Client.application_info()` *is* a real, long-standing public method that
-  maps directly to `GET /oauth2/applications/@me`, so that one is exercised
-  for real.
+  `Client.application_info()` is a real public method mapping to
+  `GET /oauth2/applications/@me`, so that one is exercised for real.
 * Gateway bootstrap info (`GET /gateway`, `GET /gateway/bot`) is fetched
-  internally by `Client.connect()`/`start()`; since this verifier never
-  opens a gateway connection (pure REST usage), and there is no standalone
-  public wrapper to call on demand, both are `n-a`.
-* `GET /users/@me`: exercised internally by `Client.login()` (which the
-  bootstrap phase already calls), but there is no standalone public method
-  to re-fetch the bot's own user record on demand (unlike `fetch_user` for
-  *other* ids, which hits `/users/{user_id}`). Recorded `n-a` for the same
-  reason gateway bootstrap info is `n-a`: no on-demand public wrapper.
+  internally by `Client.connect()`/`start()`; this verifier never opens a
+  gateway connection and there's no standalone wrapper, so both are `n-a`.
+* `GET /users/@me`: exercised internally by `Client.login()`, but there is
+  no standalone public method to re-fetch the bot's own user record on
+  demand (unlike `fetch_user`, which hits `/users/{user_id}` for other
+  ids). Recorded `n-a` for the same reason as gateway bootstrap info.
 * Thread search (`GET /channels/{channel_id}/threads/search`): no public
-  wrapper was found in discord.py 2.7's `Thread`/`TextChannel` API; rather
-  than guess at an undocumented call, this is `n-a`.
-* Bulk delete: `TextChannel.delete_messages(messages)` is a genuine public
-  wrapper around `POST /channels/{channel_id}/messages/bulk-delete` (used
-  here with two freshly-created throwaway messages so the shared `MSG`
-  used by other rows is not touched).
+  wrapper found in discord.py 2.7's `Thread`/`TextChannel` API; rather than
+  guess at an undocumented call, this is `n-a`.
+* Bulk delete: `TextChannel.delete_messages(messages)` wraps
+  `POST /channels/{channel_id}/messages/bulk-delete` (used here with two
+  freshly-created throwaway messages so the shared `MSG` is not touched).
 * DELETE-last ordering: identical fix to compat/js-oceanic/verify.mjs and
-  compat/js-discordjs/verify.mjs -- the canonical endpoint order in
-  common/endpoints.json sometimes lists a DELETE/GET before the PUT/POST
-  that creates the resource it acts on. Running every non-DELETE call
-  first, then all DELETEs last, avoids false "Unknown X" errors caused by
-  resource-lifecycle ordering rather than real library/Fauxcord bugs.
+  compat/js-discordjs/verify.mjs -- common/endpoints.json sometimes lists a
+  DELETE/GET before the PUT/POST that creates the resource it acts on, so
+  non-DELETE calls run first and DELETEs last to avoid false "Unknown X"
+  errors from resource-lifecycle ordering.
 * Shared-resource DELETEs (`DELETE /channels/{channel_id}`,
   `DELETE /guilds/{guild_id}/members/{user_id}`,
   `DELETE /guilds/{guild_id}/roles/{role_id}`,
   `DELETE /webhooks/{webhook_id}[/{webhook_token}]`) are recorded `n-a`
-  with a `not exercised: ...` note instead of being called, because calling
-  them for real would delete a resource that other rows still depend on --
-  same pattern as compat/js-oceanic/verify.mjs.
+  instead of called, since deleting them for real would break other rows
+  that still depend on them -- same pattern as compat/js-oceanic/verify.mjs.
 """
 
 from __future__ import annotations
@@ -105,7 +95,6 @@ PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
 
-# Point discord.py's REST layer at Fauxcord instead of the real Discord API.
 Route.BASE = FAUXCORD_BASE
 
 
@@ -135,13 +124,11 @@ async def do_setup() -> None:
 
     200/201 (created) and 409 (already set up by a prior run against a
     reused Fauxcord container) both count as success. Retries with backoff
-    on network errors or unexpected statuses: a transient host I/O hiccup
-    here previously caused the setup POST to fail silently in another
-    verifier (see js-oceanic/verify.mjs's doSetup docstring for the
-    incident), which left the guild/channel fixtures missing while the rest
-    of the run proceeded anyway and produced a wave of bogus "Unknown
-    Guild"/"Unknown Channel" results with no real signal. Raises if setup
-    never succeeds so a genuine failure is loud instead of corrupting every
+    on network errors/unexpected statuses, since a transient host I/O hiccup
+    here previously caused a silent setup failure in another verifier (see
+    js-oceanic/verify.mjs's doSetup docstring), producing a wave of bogus
+    "Unknown Guild"/"Unknown Channel" results. Raises after exhausting
+    retries so a genuine failure is loud instead of corrupting every
     downstream result.
     """
     max_attempts = 5
@@ -178,9 +165,8 @@ async def main() -> None:
     client = discord.Client(intents=intents)
     await client.login(TOKEN)
 
-    # A dedicated aiohttp session for "partial" (token-authenticated, no bot
-    # credentials) Webhook objects, mirroring how a non-bot caller would use
-    # a webhook URL/token pair.
+    # Dedicated session for "partial" (token-only, no bot credentials)
+    # Webhook objects, mirroring a non-bot caller using a webhook URL/token.
     webhook_session = aiohttp.ClientSession()
 
     try:

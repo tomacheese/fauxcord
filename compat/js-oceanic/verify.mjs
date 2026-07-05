@@ -1,16 +1,14 @@
 // Oceanic.js compatibility verifier.
 //
-// Oceanic.js's RequestHandler accepts a full `baseURL` (protocol + host +
-// port), unlike Eris (see node_modules/oceanic.js/dist/lib/rest/RequestHandler.js:
-// `baseURL: options.baseURL ?? Constants.API_URL`, then `new URL(options.baseURL)`
-// to derive `host`), so it can be pointed at plain-HTTP Fauxcord directly.
+// Unlike Eris, Oceanic.js's RequestHandler accepts a full `baseURL` (protocol
+// + host + port), so it can be pointed at plain-HTTP Fauxcord directly.
 //
-// Oceanic is an object-model library (like discord.js proper, not a thin REST
-// client), so each endpoint is mapped to its concrete high-level method under
+// Oceanic is an object-model library (not a thin REST client), so each
+// endpoint is mapped to its concrete high-level method under
 // `client.rest.{channels,guilds,users,webhooks,oauth}`. Endpoints with no
-// wrapper (e.g. the new-format `/messages/pins` API — Oceanic only wraps the
-// legacy `/pins` API — or bot-inapplicable ones like `DELETE /guilds/{id}`)
-// are recorded as `n-a` with an evidence note.
+// wrapper (e.g. the new-format `/messages/pins` API, or bot-inapplicable
+// ones like `DELETE /guilds/{id}`) are recorded as `n-a` with an evidence
+// note.
 
 import { Client } from 'oceanic.js'
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -52,13 +50,9 @@ async function waitHealthy() {
 /**
  * POST the shared setup payload. 200/201 (created) and 409 (already set up
  * by a prior run against a reused Fauxcord container) both count as success.
- * Retries with backoff on network errors or unexpected statuses: a
- * transient host I/O hiccup here previously caused the setup POST to fail
- * silently (the old implementation swallowed every error unconditionally),
- * which left the guild/channel fixtures missing while the rest of the run
- * proceeded anyway and produced a wave of bogus "Unknown Guild"/"Unknown
- * Channel" results with no real signal. Throws if setup never succeeds so
- * a genuine failure is loud instead of corrupting every downstream result.
+ * Retries with backoff on network errors or unexpected statuses; throws if
+ * setup never succeeds so a genuine failure is loud instead of silently
+ * corrupting every downstream result.
  */
 async function doSetup() {
   const maxAttempts = 5
@@ -107,7 +101,7 @@ try {
   const msg = await rest.channels.createMessage(CH, { content: 'compat' })
   MSG = msg.id
 } catch {
-  /* fall back to placeholder id */
+  // fall back to placeholder id
 }
 try {
   // Bootstrap a real thread so the thread-member endpoints operate on an
@@ -126,33 +120,33 @@ try {
   )
   THREAD_ID = thread.id
 } catch {
-  /* fall back to the plain channel id */
+  // fall back to the plain channel id
 }
 try {
   // Pre-create the ban on the dummy target so the GET (which runs before
   // the PUT in endpoint order) finds it instead of 404ing as "Unknown Ban".
   await rest.guilds.createBan(GUILD, BAN_USER_ID)
 } catch {
-  /* ignore: the PUT call below still exercises the create-ban wire format */
+  // ignore; the PUT call below still exercises the create-ban wire format
 }
 try {
   const role = await rest.guilds.createRole(GUILD, { name: 'compat-role' })
   ROLE = role.id
 } catch {
-  /* fall back: @everyone role id == guild id in fauxcord */
+  // fall back: @everyone role id == guild id in fauxcord
 }
 try {
   const wh = await rest.webhooks.create(CH, { name: 'compat-wh' })
   WEBHOOK_ID = wh.id
   WEBHOOK_TOKEN = wh.token
 } catch {
-  /* fall back to placeholder ids */
+  // fall back to placeholder ids
 }
 try {
   const inv = await rest.channels.createInvite(CH, {})
   CODE = inv.code
 } catch {
-  /* fall back to placeholder code */
+  // fall back to placeholder code
 }
 try {
   const emoji = await rest.guilds.createEmoji(GUILD, {
@@ -162,12 +156,12 @@ try {
   })
   EMOJI_ID = emoji.id
 } catch {
-  /* fall back to placeholder id */
+  // fall back to placeholder id
 }
 try {
   await rest.channels.createReaction(CH, MSG, EMOJI)
 } catch {
-  /* ignore: reaction endpoints may still exercise the wire format */
+  // ignore; reaction endpoints below may still exercise the wire format
 }
 
 // Endpoint key -> [fn, note-if-n-a]. `fn` undefined => n-a (note required).
@@ -426,11 +420,9 @@ const calls = {
 }
 
 // The canonical endpoint order runs some DELETE/GET calls before the PUT/POST
-// that creates the resource they act on (e.g. message DELETE before its
-// GET/PATCH; ban DELETE/GET before the PUT that creates the ban). Running all
-// non-DELETEs first, then DELETEs last, avoids false "Unknown X" errors from
-// resource-lifecycle ordering rather than real Fauxcord/library bugs (same
-// fix as js-discordjs/verify.mjs).
+// that creates the resource they act on. Running all non-DELETEs first, then
+// DELETEs last, avoids false "Unknown X" errors from resource-lifecycle
+// ordering rather than real Fauxcord/library bugs.
 const ordered = [...endpoints].sort(
   (a, b) => (a.method === 'DELETE') - (b.method === 'DELETE')
 )

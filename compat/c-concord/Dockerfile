@@ -2,19 +2,13 @@
 #
 # Concord (github.com/Cogmasters/concord) compatibility verifier.
 #
-# Concord's own upstream CI (.github/workflows/test_build.yml, confirmed via
-# `gh api repos/Cogmasters/concord/contents/.github/workflows/test_build.yml`)
-# does NOT use Debian/Ubuntu's packaged libcurl. It builds curl 8.7.1 from
-# source with `--enable-websockets`, because Concord's README states:
-# "Libcurl must be compiled with the --enable-websockets flag to work with
-# Concord." System libcurl (e.g. Debian's libcurl4-openssl-dev) is not built
-# with that flag, so linking against it risks missing symbols even though
-# this verifier never touches the Gateway/WebSocket path. This Dockerfile
-# mirrors the official CI recipe instead of relying on the distro package.
+# Concord requires libcurl built with --enable-websockets (per its README);
+# Debian's packaged libcurl lacks that flag, so this builds curl 8.7.1 from
+# source instead, mirroring Concord's own upstream CI recipe.
 FROM debian:stable-slim AS build
 
-# Build tools, so version pinning isn't meaningful here (same rationale as
-# the root Dockerfile's `hadolint ignore=DL3018` for apk).
+# Build tools; pinning isn't meaningful here (same rationale as the root
+# Dockerfile's `hadolint ignore=DL3018` for apk).
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -29,10 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Build libcurl 8.7.1 from source with WebSocket support enabled, exactly as
-# Concord's own CI does, then install it to /usr/local (ldconfig refreshes
-# the loader cache so `-lcurl` at link time picks up this build instead of
-# any system copy).
+# Build libcurl with WebSocket support (as Concord's CI does) and install to
+# /usr/local; ldconfig refreshes the loader cache so `-lcurl` finds this build.
 WORKDIR /tmp/curl-build
 RUN curl -LO https://curl.se/download/curl-8.7.1.tar.gz \
     && tar -xzf curl-8.7.1.tar.gz
@@ -42,9 +34,8 @@ RUN ./configure --with-openssl --enable-websockets \
     && make install \
     && ldconfig
 
-# Build Concord itself from source (static lib) and install headers/lib to
-# /usr/local, per README.md's "Installing Concord" section (`make && make
-# install`, PREFIX defaults to /usr/local).
+# Build Concord from source and install headers/lib to /usr/local, per
+# README.md's "Installing Concord" section.
 WORKDIR /tmp/concord
 RUN git clone --depth 1 https://github.com/Cogmasters/concord . \
     && make all \
@@ -57,8 +48,7 @@ WORKDIR /app
 COPY c-concord/verify.c ./verify.c
 COPY common ./common
 
-# Concord installs headers to $PREFIX/include/concord (see Makefile's
-# `install:` target: DESTINCLUDE_DIR = $(PREFIX)/include/concord).
+# Concord installs headers to $PREFIX/include/concord (see Makefile's install target).
 RUN gcc -O2 -Wall -I/usr/local/include/concord -o /verify verify.c \
     -ldiscord -lcurl -lpthread -lm
 
@@ -67,9 +57,8 @@ FROM debian:stable-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-# Concord's shared runtime pieces (libcurl 8.7.1 built above, libdiscord.so
-# if produced) live under /usr/local/lib; refresh the loader cache in the
-# final image too since this is a separate filesystem layer from `build`.
+# Runtime libs (libcurl, libdiscord.so) live under /usr/local/lib; refresh the
+# loader cache here too since this is a separate layer from `build`.
 COPY --from=build /usr/local/lib /usr/local/lib
 COPY --from=build /verify /verify
 COPY common /app/common

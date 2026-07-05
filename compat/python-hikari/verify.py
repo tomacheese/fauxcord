@@ -1,118 +1,69 @@
 """hikari 2.5.0 compatibility verifier.
 
-hikari is unusual among the libraries in this compat matrix: it is one of the
-few that ships a *first-class, documented, gateway-free REST client*
-(`hikari.RESTApp` / `hikari.impl.rest.RESTClientImpl`), intended for use cases
-such as slash-command registration scripts that never open a gateway
-connection. That REST-only client exposes flat, public, high-level methods
-(`rest.fetch_channel(...)`, `rest.create_message(...)`, etc.) directly on the
-client object rather than through an object model reached via a logged-in
-gateway `Client`/`Bot` (contrast discord.py). Every call below uses that
-public `RESTClientImpl` surface -- never any internal/private HTTP layer --
-per the project's compatibility-testing methodology.
+hikari is unusual among the libraries in this compat matrix: it ships a
+first-class, documented, gateway-free REST client (`hikari.RESTApp` /
+`RESTClientImpl`) with flat public methods (`rest.fetch_channel(...)`, etc.)
+directly on the client object, rather than an object model reached via a
+logged-in gateway `Client`/`Bot` (contrast discord.py). Every call below uses
+that public `RESTClientImpl` surface, never an internal/private HTTP layer.
 
-Key decisions worth documenting explicitly (mirrors the code-comment style
-used in compat/js-oceanic/verify.mjs and compat/python-discordpy/verify.py
-for the same class of decisions):
+Key decisions worth documenting explicitly (mirrors the comment style used in
+compat/js-oceanic/verify.mjs and compat/python-discordpy/verify.py):
 
-* Base URL override: confirmed via hikari's own documentation (not guessed).
-  `hikari.RESTApp.__init__` accepts a `url: str | None = None` keyword arg,
-  documented as "The base URL for the API. You can generally leave this as
-  being `None` and the correct default API base URL will be generated" --
-  i.e. it exists specifically to let callers point the REST client at a
-  non-Discord (e.g. mock) origin. `RESTClientImpl` (what `RESTApp.acquire()`
-  returns) mirrors this with its own `rest_url` constructor parameter,
-  documented as overridable "if you are attempting to point to an unofficial
-  endpoint, or if you are attempting to mock/stub the Discord API for any
-  reason." Source: https://docs.hikari-py.dev/en/latest/reference/hikari/impl/rest/
-  (RESTApp/RESTClientImpl API reference, retrieved during authoring). We pass
-  `url=FAUXCORD_BASE` to `hikari.RESTApp(...)`, matching this documented
-  contract exactly (no fabricated parameter name).
-* Client acquisition: `RESTApp` itself is not a request client -- it is a
-  factory. Per hikari's own usage example, `await rest_app.start()` followed
-  by `async with rest_app.acquire(token, token_type) as rest:` yields the
-  actual `RESTClientImpl` used for every call below; `rest_app.close()` tears
-  the factory down afterwards.
-* Login/token format: per docs/libraries.md's table for this project,
-  hikari's token is passed *without* the `"Bot "` prefix to `acquire()`
-  (`token_type=hikari.TokenType.BOT` supplies the prefix internally), the
-  same convention as discord.py's `Client.login()`.
+* Base URL override: `hikari.RESTApp(url=...)` and `RESTClientImpl`'s
+  `rest_url` param are documented as overridable to point at a mock/non-
+  Discord origin (see hikari's RESTApp/RESTClientImpl API reference:
+  https://docs.hikari-py.dev/en/latest/reference/hikari/impl/rest/). We pass
+  `url=FAUXCORD_BASE`, matching that documented contract.
+* Client acquisition: `RESTApp` is a factory, not a request client itself.
+  `await rest_app.start()` then `async with rest_app.acquire(token, type) as
+  rest:` yields the actual `RESTClientImpl`; `rest_app.close()` tears it down.
+* Login/token format: per docs/libraries.md, hikari's token is passed
+  *without* the `"Bot "` prefix to `acquire()` (`TokenType.BOT` supplies it
+  internally), same convention as discord.py's `Client.login()`.
 * Reaction removal for an explicit (non-self) `{user_id}`: unlike discord.py
-  (whose single `remove_reaction(emoji, member)` always branches internally
-  to the `/@me` route when the member id matches the bot's own id), hikari
-  exposes two genuinely distinct public methods -- `delete_my_reaction(...)`
-  (always `/@me`) and `delete_reaction(channel, message, user, emoji)`
-  (always the explicit `{user_id}` route, unconditionally). This means the
-  explicit-user-id endpoint *can* be exercised for real here even though
-  Fauxcord's shared setup only registers one user (the bot itself): calling
-  `delete_reaction(..., user=BOT, ...)` still drives the explicit-id code
-  path and route, regardless of whose id is passed. This is a genuine
-  precision improvement over the discord.py verifier's `n-a` for this row.
-* Pins: hikari's `fetch_pins` / `pin_message` / `unpin_message` were not
-  confirmed (during authoring) to have migrated to the newer
-  `/channels/{id}/messages/pins*` API shape that discord.py 2.7+ uses
-  internally; no changelog/doc evidence of that migration was found. Rather
-  than guess, they are treated as exercising the long-standing legacy
-  `/channels/{id}/pins*` routes (matching hikari's historical, still-current
-  as far as could be confirmed, behavior), and the newer `/messages/pins*`
-  routes are recorded `n-a` with this uncertainty noted -- same "don't guess"
-  posture as compat/python-discordpy/verify.py took for the opposite case.
+  (whose single `remove_reaction()` branches internally to `/@me` when the
+  member id matches the bot's own), hikari exposes two distinct methods --
+  `delete_my_reaction()` (always `/@me`) and `delete_reaction(...)` (always
+  the explicit `{user_id}` route). So the explicit-id endpoint can be
+  exercised for real here even with only one registered test user, unlike
+  the discord.py verifier's `n-a` for this row.
+* Pins: it wasn't confirmed during authoring whether hikari's
+  `fetch_pins`/`pin_message`/`unpin_message` migrated to the newer
+  `/channels/{id}/messages/pins*` shape discord.py 2.7+ uses. Rather than
+  guess, they're treated as exercising the legacy `/channels/{id}/pins*`
+  routes, and the newer `/messages/pins*` routes are recorded `n-a`.
 * Gateway bootstrap info (`GET /gateway`, `GET /gateway/bot`): unlike
-  discord.py (where these are only ever fetched internally by
-  `Client.connect()`/`start()`, with no standalone wrapper), hikari's
-  REST-only client exposes genuine standalone public methods for both --
-  `rest.fetch_gateway_url()` and `rest.fetch_gateway_bot_info()` -- callable
-  on demand with no gateway connection ever opened. Both are exercised for
-  real, a direct consequence of hikari's REST-first design.
+  discord.py (fetched only internally by `connect()`/`start()`), hikari
+  exposes standalone public methods for both (`fetch_gateway_url()`,
+  `fetch_gateway_bot_info()`), callable with no gateway connection opened.
 * Thread search (`GET /channels/{channel_id}/threads/search`): no public
-  wrapper was found on hikari's `RESTClient` surface; rather than guess at an
-  undocumented call, this is `n-a`.
-* OAuth2: hikari's REST client is genuinely capable of driving the OAuth2
-  *client credentials* flow end to end via public methods --
-  `rest.authorize_client_credentials_token(client, client_secret, scopes)`
-  (confirmed signature: `client: SnowflakeishOr[PartialApplication]`,
-  `client_secret: str`, `scopes: Sequence[OAuth2Scope | str]`) -- which maps
-  to `POST /oauth2/token` with `grant_type=client_credentials`. Fauxcord's
-  `/oauth2/token` route auto-registers any previously-unseen `client_id` on
-  first use, so a throwaway id/secret pair drives this for real without any
-  extra bootstrap. The resulting bearer access token is then used to acquire
-  a *second* short-lived hikari REST client with
-  `token_type=hikari.TokenType.BEARER`, whose `rest.fetch_authorization()`
-  exercises `GET /oauth2/@me`. `rest.fetch_application()` (the bot-token
-  method) exercises `GET /oauth2/applications/@me`, mirroring discord.py's
-  `application_info()`. `rest.revoke_access_token(client, client_secret,
-  token)` is attempted for `POST /oauth2/token/revoke`; its exact parameter
-  order was not independently confirmed against hikari's source during
-  authoring (the source file is too large to fetch source-verified in full),
-  so if the call signature is wrong it will surface honestly as a
-  `lib-issue` row with the real exception message, rather than being
-  silently faked or guessed into a `pass`.
-  `authorize_access_token`/`refresh_access_token` (the *authorization code*
-  grant methods) are not exercised: they require a real `code`/
-  `refresh_token` obtained via the interactive `/oauth2/authorize` redirect,
-  which this non-interactive verifier has no way to drive.
-* Bulk delete: `rest.delete_messages(channel, messages)` is a genuine public
-  wrapper around `POST /channels/{channel_id}/messages/bulk-delete` (used
-  here with two freshly-created throwaway messages so the shared `MSG` used
-  by other rows is not touched).
-* DELETE-last ordering: identical fix to compat/js-oceanic/verify.mjs,
-  compat/js-discordjs/verify.mjs and compat/python-discordpy/verify.py -- the
-  canonical endpoint order in common/endpoints.json sometimes lists a
-  DELETE/GET before the PUT/POST that creates the resource it acts on.
-  Running every non-DELETE call first, then all DELETEs last, avoids false
-  "Unknown X" errors caused by resource-lifecycle ordering rather than real
-  library/Fauxcord bugs.
-* Shared-resource DELETEs (`DELETE /channels/{channel_id}`,
-  `DELETE /guilds/{guild_id}/members/{user_id}`,
-  `DELETE /guilds/{guild_id}/roles/{role_id}`,
-  `DELETE /webhooks/{webhook_id}[/{webhook_token}]`) are recorded `n-a` with
-  a `not exercised: ...` note instead of being called, because calling them
-  for real would delete a resource that other rows still depend on -- same
-  pattern as the other verifiers.
-* `DELETE /guilds/{guild_id}`: hikari's `RESTClient` has no `delete_guild`
-  method, matching the real API (bots cannot delete guilds; it is an
-  owner-only, user-token action) -- `n-a`, same reasoning as
-  compat/python-discordpy/verify.py.
+  wrapper found on hikari's `RESTClient`; `n-a` rather than guessing.
+* OAuth2: hikari can drive the client_credentials grant end to end via
+  `authorize_client_credentials_token(client, secret, scopes)`, which maps to
+  `POST /oauth2/token`. Fauxcord auto-registers unseen `client_id`s, so a
+  throwaway id/secret works without extra bootstrap. The resulting bearer
+  token is used to acquire a second, short-lived `TokenType.BEARER` client
+  for `fetch_authorization()` (`GET /oauth2/@me`). `fetch_application()`
+  covers `GET /oauth2/applications/@me`. `revoke_access_token()`'s parameter
+  order wasn't independently source-verified during authoring, so a wrong
+  signature will surface honestly as a `lib-issue` rather than a faked pass.
+  `authorize_access_token`/`refresh_access_token` (auth-code grant) aren't
+  exercised: they need a real `code`/`refresh_token` from the interactive
+  `/oauth2/authorize` redirect, which this non-interactive verifier can't do.
+* Bulk delete: `rest.delete_messages(channel, messages)` wraps
+  `POST /channels/{channel_id}/messages/bulk-delete`; uses two throwaway
+  messages so the shared `MSG` used by other rows is untouched.
+* DELETE-last ordering: same fix as the other verifiers in this repo --
+  common/endpoints.json sometimes lists a DELETE/GET before the PUT/POST that
+  creates the resource it acts on, causing false "Unknown X" errors. Running
+  all non-DELETE calls first, then DELETEs last, avoids that.
+* Shared-resource DELETEs (channel, guild member, guild role, webhook) are
+  recorded `n-a` instead of called, since deleting them would break other
+  rows that depend on the resource still existing -- same pattern as the
+  other verifiers.
+* `DELETE /guilds/{guild_id}`: hikari has no `delete_guild` method, matching
+  the real API (bots cannot delete guilds) -- `n-a`.
 """
 
 from __future__ import annotations
@@ -155,11 +106,7 @@ PNG_BYTES = base64.b64decode(
 
 
 async def wait_healthy() -> None:
-    """Poll Fauxcord's `/_mock/health` endpoint until it responds ok.
-
-    Retries up to 60 times, 1 second apart, matching the other verifiers'
-    startup wait loop.
-    """
+    """Poll `/_mock/health` until it responds ok (60 retries, 1s apart), matching the other verifiers' startup wait loop."""
     async with aiohttp.ClientSession() as session:
         for _ in range(60):
             try:
@@ -175,12 +122,10 @@ async def wait_healthy() -> None:
 async def do_setup() -> None:
     """POST the shared setup payload.
 
-    200/201 (created) and 409 (already set up by a prior run against a
-    reused Fauxcord container) both count as success. Retries with backoff
-    on network errors or unexpected statuses (see js-oceanic/verify.mjs's
-    doSetup docstring for the incident this guards against). Raises if
-    setup never succeeds so a genuine failure is loud instead of
-    corrupting every downstream result.
+    200/201 and 409 (already set up by a prior run against a reused
+    container) both count as success. Retries with backoff on network
+    errors or unexpected statuses; raises after exhausting attempts so a
+    genuine failure is loud instead of corrupting every downstream result.
     """
     max_attempts = 5
     last_status: int | None = None
@@ -221,9 +166,8 @@ async def main() -> None:
         async with rest_app.acquire(TOKEN, hikari.TokenType.BOT) as rest:
             # --- bootstrap resources referenced by later calls -------------
             # Best-effort: a failed bootstrap step falls back to a
-            # placeholder id so dependent rows still run (and get recorded as
-            # lib-issue, which is itself a useful triage signal) rather than
-            # crashing the whole run.
+            # placeholder id so dependent rows still run (recorded as
+            # lib-issue) instead of crashing the whole run.
             msg = await rest.create_message(CH, content="compat")
             MSG = msg.id
 
@@ -381,13 +325,7 @@ async def main() -> None:
                 await rest.edit_webhook(WEBHOOK_ID, name="compat-renamed2")
 
             async def oauth2_token_client_credentials() -> str:
-                """POST /oauth2/token via the client_credentials grant.
-
-                Returns the issued access token so `oauth2_me` can reuse it
-                for `GET /oauth2/@me`. Fauxcord auto-registers a
-                previously-unseen client_id on first use, so a throwaway id
-                works without extra bootstrap.
-                """
+                """POST /oauth2/token via client_credentials; returns the access token for `oauth2_me` to reuse against GET /oauth2/@me."""
                 client_id = 999000000000000001
                 token_response = await rest.authorize_client_credentials_token(
                     client_id, "compat-client-secret", scopes=[hikari.OAuth2Scope.IDENTIFY]
@@ -714,11 +652,9 @@ async def main() -> None:
                 "PATCH /webhooks/{webhook_id}": (edit_bot_webhook, None),
             }
 
-            # Canonical order sometimes lists a DELETE/GET before the PUT/POST
-            # that creates the resource it acts on. Running every non-DELETE
-            # endpoint first, then all DELETEs last, avoids false "Unknown X"
-            # errors from resource-lifecycle ordering (same fix as the other
-            # verifiers in this repo).
+            # Run non-DELETE endpoints first, DELETEs last -- avoids false
+            # "Unknown X" errors from resource-lifecycle ordering (see
+            # module docstring).
             ordered = sorted(ENDPOINTS, key=lambda e: e["method"] == "DELETE")
 
             results: dict[str, dict[str, Any]] = {}

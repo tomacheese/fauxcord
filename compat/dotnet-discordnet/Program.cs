@@ -2,43 +2,33 @@
 //
 // Discord.Net.Rest overrides its REST base URL via `DiscordRestConfig.RestClientProvider`,
 // a factory that ignores the URL Discord.Net would normally pass in and always returns a
-// client pointed at Fauxcord instead (see docs/libraries.md:
-// `RestClientProvider = _ => DefaultRestClientProvider.Instance(FAUXCORD_BASE)`).
-// `LoginAsync(TokenType.Bot, token)` takes the *raw* bot token (no "Bot " prefix);
-// Discord.Net adds the prefix itself when building the Authorization header.
+// client pointed at Fauxcord instead (see docs/libraries.md). `LoginAsync(TokenType.Bot, token)`
+// takes the *raw* bot token (no "Bot " prefix); Discord.Net adds the prefix itself.
 //
 // Discord.Net.Rest is an object-model library (like discord.js/Oceanic/discordgo), so each
-// canonical endpoint is mapped to a concrete high-level method on RestGuild/RestTextChannel/
-// RestUserMessage/etc. Endpoints with no public wrapper in the Rest-only package are recorded
-// as "n-a" with an evidence note, most notably:
+// canonical endpoint is mapped to a concrete high-level method. Endpoints with no public
+// wrapper in the Rest-only package are recorded as "n-a" with an evidence note, most notably:
 //   - Token-authenticated webhook endpoints (GET/PATCH/DELETE /webhooks/{id}/{token}, the
-//     webhook-message sub-resource endpoints, and the webhook-execute POST): this surface is
-//     unauthenticated-by-token and lives in the separate Discord.Net.Webhook package
-//     (DiscordWebhookClient), which is out of scope for a Discord.Net.Rest-only verifier.
-//   - The new-format `/channels/{id}/messages/pins*` API: Discord.Net's Pin/Unpin/
-//     GetPinnedMessagesAsync wrappers target the legacy `/channels/{id}/pins` endpoints only.
+//     webhook-message sub-resource endpoints, and webhook-execute): this surface lives in the
+//     separate Discord.Net.Webhook package (DiscordWebhookClient), out of scope here.
+//   - The new-format `/channels/{id}/messages/pins*` API: Discord.Net's Pin/Unpin wrappers
+//     target the legacy `/channels/{id}/pins` endpoints only.
 //   - Gateway bootstrap endpoints (`/gateway`, `/gateway/bot`): internal to the Socket/Sharded
-//     client connection flow; DiscordRestClient never calls them and exposes no wrapper.
-//   - OAuth2 authorization-code-flow endpoints (`/oauth2/@me`, `/oauth2/token`,
-//     `/oauth2/token/revoke`) and `/users/@me/guilds`: these serve the OAuth2 user-grant flow
-//     (a separate use case with its own token type), not the bot-token Rest client used here.
+//     client connection flow; DiscordRestClient exposes no wrapper.
+//   - OAuth2 authorization-code-flow endpoints and `/users/@me/guilds`: these serve the OAuth2
+//     user-grant flow, not the bot-token Rest client used here.
 //
-// Destructive calls that would break later rows sharing the same resource (deleting the
-// shared guild/channel/role/webhook that other rows still depend on) are skipped and recorded
-// as "n-a" with a "not exercised: ..." note, matching the pattern used by the other verifiers.
+// Destructive calls that would break later rows sharing the same resource are skipped and
+// recorded as "n-a" with a "not exercised: ..." note, matching the other verifiers.
 //
 // The canonical endpoint order interleaves some DELETE/GET calls before the PUT/POST that
 // creates the resource they act on. Running all non-DELETEs first, then DELETEs last, avoids
-// false "Unknown X" errors from resource-lifecycle ordering rather than real Fauxcord/library
-// bugs (same fix as the other verifiers).
+// false "Unknown X" errors from resource-lifecycle ordering rather than real bugs.
 //
-// NOTE ON "UNCERTAIN" comments below: this file was originally written from documentation and
-// prior knowledge without a live NuGet restore/compile. It has since been built and run for
-// real against Discord.Net.Rest 3.20.1 (see DiscordNetVerify.csproj), so every method/overload
-// referenced below is now confirmed to exist and compile; the compile-time uncertainty is
-// resolved. Any remaining "UNCERTAIN" notes describe runtime-behavior assumptions only (e.g.
-// whether a call is paged vs. a plain Task, or which resource it targets) — those are exactly
-// what the pass/lib-issue verdicts below are meant to surface, not a sign the code is wrong.
+// NOTE ON "UNCERTAIN" comments below: this file has been built and run for real against
+// Discord.Net.Rest 3.20.1, so every method/overload referenced is confirmed to compile.
+// Remaining "UNCERTAIN" notes describe runtime-behavior assumptions only (e.g. paged vs. plain
+// Task) — exactly what the pass/lib-issue verdicts are meant to surface.
 
 using System.Text;
 using System.Text.Json;
@@ -117,12 +107,9 @@ ulong webhookId = 500000000000000001;
 var webhookToken = "compat-token-xyz";
 var inviteCode = "compat";
 ulong emojiId = 600000000000000001;
-// Deliberately NOT the bot's own id: banning a user also kicks them (matches
-// real Discord), so exercising ban/unban against the bot itself would delete
-// its guild_members row and break every member-role/member-patch call that
-// runs afterward (confirmed via a real NullReferenceException from
-// Discord.Net's GetUserAsync-returns-null-on-404 pattern). Use a separate,
-// never-actually-a-member placeholder id instead, same as other verifiers.
+// Deliberately NOT the bot's own id: banning also kicks, which would delete its
+// guild_members row and break every member-role/member-patch call run afterward
+// (confirmed via a real NullReferenceException from GetUserAsync-returns-null-on-404).
 ulong banTargetId = 900000000000000001;
 
 RestTextChannel? channel = null;
@@ -711,16 +698,11 @@ static async Task WaitHealthyAsync(HttpClient http, string origin)
 }
 
 /// <summary>
-/// POSTs the shared setup payload. 200/201 (created) and 409 (already set
-/// up by a prior run against a reused Fauxcord container) both count as
-/// success. Retries with backoff on network errors or unexpected statuses:
-/// a transient host I/O hiccup here previously caused the setup POST to
-/// fail silently in another verifier (see js-oceanic/verify.mjs's doSetup
-/// docstring for the incident), which left the guild/channel fixtures
-/// missing while the rest of the run proceeded anyway and produced a wave
-/// of bogus "Unknown Guild"/"Unknown Channel" results with no real signal.
-/// Throws if setup never succeeds so a genuine failure is loud instead of
-/// corrupting every downstream result.
+/// POSTs the shared setup payload. 200/201 (created) and 409 (already set up by a prior run
+/// against a reused Fauxcord container) both count as success. Retries with backoff on
+/// network errors or unexpected statuses, and throws if setup never succeeds, so a transient
+/// hiccup doesn't silently leave fixtures missing and corrupt every downstream result with
+/// bogus "Unknown Guild"/"Unknown Channel" failures.
 /// </summary>
 static async Task DoSetupAsync(HttpClient http, string origin, string rawSetupJson)
 {
