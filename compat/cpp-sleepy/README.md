@@ -45,7 +45,7 @@ the library's public API.
 Sleepy Discord is recorded as **`⛔blocked`** for all canonical endpoints in
 `compat/common/endpoints.json`. No Dockerfile, build config, or verifier
 script is provided, and no `verify-sleepy` service is registered in
-`compat/docker-compose.yml`, since there is no code path (using Sleepy
+`compat/compose.yaml`, since there is no code path (using Sleepy
 Discord's public, documented API) that reaches a runnable state against
 Fauxcord.
 

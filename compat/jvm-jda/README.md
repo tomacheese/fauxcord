@@ -77,7 +77,7 @@ JDA is recorded as **`⛔blocked`** for all 86 canonical endpoints in
 `compat/common/endpoints.json`, for the reason above (hard Gateway
 dependency, not a REST base-URL limitation). No Dockerfile, build config, or
 verifier script is provided, and no `verify-jda` service is registered in
-`compat/docker-compose.yml`, since there is no code path (using JDA's public,
+`compat/compose.yaml`, since there is no code path (using JDA's public,
 documented API) that reaches a runnable state against Fauxcord to justify a
 build step.
 

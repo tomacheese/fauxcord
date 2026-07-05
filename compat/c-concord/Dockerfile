@@ -48,7 +48,7 @@ RUN git clone --depth 1 https://github.com/Cogmasters/concord . \
     && make install \
     && ldconfig
 
-# Build context is compat/ (see docker-compose.yml), so COPY paths are
+# Build context is compat/ (see compose.yaml), so COPY paths are
 # prefixed with the library directory and the shared common/ dir.
 WORKDIR /app
 COPY c-concord/verify.c ./verify.c

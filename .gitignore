@@ -14,5 +14,8 @@ spec/openapi.upstream.json
 compat/results/*.json
 # run-verify.sh flock lock files (runtime-only, never a build artifact)
 compat/results/_locks/
+# library-compat verifier build artifacts (Rust/Gradle output; never committed)
+compat/**/target/
+compat/**/.gradle/
 __pycache__/
 *.pyc

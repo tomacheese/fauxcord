@@ -13,7 +13,7 @@ that runs are reproducible and portable across CI and developer machines.
 
 ## Layout
 
-- `docker-compose.yml` — starts the Fauxcord SUT (`fauxcord`) + one verifier per library.
+- `compose.yaml` — starts the Fauxcord SUT (`fauxcord`) + one verifier per library.
 - `common/setup.json` — fixed `/_test/setup` payload (bot/guild/channel snowflakes).
 - `common/endpoints.json` — canonical endpoint list = the matrix rows (generated from
   `spec/manifest.ts` plus OAuth2 token endpoints and `DELETE /guilds/{guild_id}`).
@@ -41,7 +41,7 @@ Each verifier writes `results/<lib>.json`:
 ## Run one verifier
 
 ```bash
-docker compose -f compat/docker-compose.yml up --build \
+docker compose -f compat/compose.yaml up --build \
   --abort-on-container-exit --exit-code-from verify-discordjs fauxcord verify-discordjs
 cat compat/results/discordjs.json
 ```
@@ -49,7 +49,7 @@ cat compat/results/discordjs.json
 ## Run everything (heavy; needs network + time)
 
 ```bash
-docker compose -f compat/docker-compose.yml up --build --abort-on-container-exit
+docker compose -f compat/compose.yaml up --build --abort-on-container-exit
 ```
 
 ## Buildx builder setup
@@ -87,7 +87,7 @@ invocations that actually set it:
 
 ```bash
 export BUILDX_BUILDER=fauxcord-compat
-docker compose -f compat/docker-compose.yml build fauxcord verify-discordjs
+docker compose -f compat/compose.yaml build fauxcord verify-discordjs
 ```
 
 `compat/scripts/run-library-check.sh` and `compat/scripts/run-verify.sh` do

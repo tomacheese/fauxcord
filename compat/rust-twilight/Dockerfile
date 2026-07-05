@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build context is compat/ (see docker-compose.yml), so COPY paths are prefixed
+# Build context is compat/ (see compose.yaml), so COPY paths are prefixed
 # with the library directory and the shared common/ dir.
 #
 # Single-stage, debug build (matches the low-ceremony style of the other
@@ -22,7 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy the manifest first and pre-fetch/build dependencies as their own layer,
 # so editing src/main.rs alone doesn't invalidate the (slow) dependency build.
-COPY rust-twilight/Cargo.toml ./
+# Cargo.lock is committed (same as rust-serenity) so the dependency graph is
+# reproducible across builds instead of re-resolving to latest each time.
+COPY rust-twilight/Cargo.toml rust-twilight/Cargo.lock ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo fetch
 RUN cargo build

@@ -418,7 +418,7 @@ main(void)
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     /* Every other verifier in this repo reads `FAUXCORD_BASE` (the full
-     * `/api/v10`-suffixed base set by docker-compose.yml); this one needs
+     * `/api/v10`-suffixed base set by compose.yaml); this one needs
      * the bare origin too (for /_mock/health and /_test/setup, which are
      * NOT under /api/v10), so it derives it by stripping the suffix, same
      * as compat/rust-twilight/src/main.rs's origin_from() and

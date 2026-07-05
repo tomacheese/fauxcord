@@ -78,7 +78,7 @@ DPP is recorded as **`⛔blocked`** for all 86 canonical endpoints in
 `compat/common/endpoints.json`, for the reason above (hardcoded REST host
 and hardcoded HTTPS transport, with no public runtime override). No
 `Dockerfile`, build config, or verifier script is provided, and no
-`verify-dpp` service is registered in `compat/docker-compose.yml`, since
+`verify-dpp` service is registered in `compat/compose.yaml`, since
 there is no code path (using DPP's public, documented API) that reaches a
 runnable state against Fauxcord to justify a build step. Recompiling DPP
 from a patched fork for every verification run is excluded per the task's

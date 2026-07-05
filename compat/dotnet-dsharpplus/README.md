@@ -61,7 +61,7 @@ fabricated "confident" nightly version string was deliberately avoided.
 DSharpPlus 5.x is recorded as **`⛔blocked`** for all canonical endpoints in
 `compat/common/endpoints.json`. No Dockerfile, build config, or verifier
 script is provided, and no `verify-dsharpplus` service is registered in
-`compat/docker-compose.yml`, since there is no code path (using DSharpPlus's
+`compat/compose.yaml`, since there is no code path (using DSharpPlus's
 public, documented 5.x API) that reaches a runnable state against Fauxcord.
 This mirrors how JDA and DPP are handled (evidence-only README, no fake
 verifier).

@@ -49,7 +49,7 @@ BUILD_TIMEOUT="${EXTRA_TIMEOUT:-900}"   # 15 min default (host is I/O-saturated)
 RUN_TIMEOUT=600                          # 10 min for the verifier run itself
 SERVICE="verify-${LIB}"
 PROJECT="fauxcord-compat-${LIB}${PROJECT_SUFFIX:+-${PROJECT_SUFFIX}}"
-COMPOSE=(docker compose -p "$PROJECT" -f docker-compose.yml)
+COMPOSE=(docker compose -p "$PROJECT" -f compose.yaml)
 LOG_DIR="${COMPAT_DIR}/results/_logs"
 mkdir -p "$LOG_DIR"
 BUILD_LOG="${LOG_DIR}/${LIB}-build.log"

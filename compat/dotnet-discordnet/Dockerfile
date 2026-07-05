@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build context is compat/ (see docker-compose.yml), so COPY paths are prefixed
+# Build context is compat/ (see compose.yaml), so COPY paths are prefixed
 # with the library directory and the shared common/ dir.
 #
 # Single-stage: build and run from the SDK image (matches the low-ceremony

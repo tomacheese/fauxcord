@@ -63,7 +63,7 @@ mechanism that blocks JDA (`jvm-jda/README.md`).
 Javacord is recorded as **`⛔blocked`** for all canonical endpoints in
 `compat/common/endpoints.json`. No Dockerfile, build config, or verifier
 script is provided, and no `verify-javacord` service is registered in
-`compat/docker-compose.yml`, since there is no code path (using Javacord's
+`compat/compose.yaml`, since there is no code path (using Javacord's
 public, documented API) that reaches a runnable state against Fauxcord.
 
 ## Confidence notes
