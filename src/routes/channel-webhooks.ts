@@ -14,8 +14,9 @@ import { getChannelWebhooks, createWebhook } from '../services/webhooks'
 import {
   validateWebhookCreate,
   isChannelWebhookLimitReached,
+  type WebhookCreatePayload,
 } from '../validators/webhook'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 
 /**
  * Creates the channel webhooks API routes.
@@ -61,10 +62,7 @@ export function createChannelWebhookRoutes(db: Database): Hono {
       return c.json(err.body, 400)
     }
 
-    const payload = await c.req.json<{
-      name: string
-      avatar?: string | null
-    }>()
+    const payload = (await parseJsonBody(c)) as unknown as WebhookCreatePayload
 
     const errors = validateWebhookCreate(payload)
     if (Object.keys(errors).length > 0) {

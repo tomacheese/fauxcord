@@ -41,7 +41,10 @@ export interface ThreadMemberRow {
 /** Thread metadata sub-object (ThreadMetadataResponse). */
 export interface ThreadMetadataObject {
   archived: boolean
-  archive_timestamp: string | null
+  // Discord's spec (discord-api-types APIThreadMetadata) declares this a
+  // non-nullable string: it is set at thread creation time and only updated
+  // when the archived state changes, never left null.
+  archive_timestamp: string
   auto_archive_duration: number
   locked: boolean
   create_timestamp: string
@@ -121,9 +124,12 @@ export function toThreadObject(db: Database, row: ThreadRow): ThreadObject {
     total_message_sent: messageCount,
     thread_metadata: {
       archived: row.archived === 1,
-      archive_timestamp: row.archive_timestamp
-        ? new Date(row.archive_timestamp).toISOString()
-        : null,
+      // Falls back to the creation timestamp when never explicitly archived
+      // (matches real Discord: archive_timestamp starts at creation time and
+      // is never null — confirmed via discord-api-types' APIThreadMetadata).
+      archive_timestamp: new Date(
+        row.archive_timestamp ?? row.created_at
+      ).toISOString(),
       auto_archive_duration: normalizeAutoArchiveDuration(
         row.auto_archive_duration
       ),
@@ -232,18 +238,42 @@ export function getThreadMember(
 }
 
 /**
- * Retrieves all members of a thread.
+ * Retrieves the members of a thread, paginated by user ID.
+ *
+ * Discord's `GET /channels/{channel.id}/thread-members` supports `after`
+ * (a user-ID cursor) and `limit` query parameters, returning members whose
+ * user ID is greater than `after`, sorted ascending. Honoring the cursor is
+ * required for correctness with cursor-based client paginators: hikari's
+ * `ThreadMembersIterator`, for example, keeps requesting pages (advancing
+ * `after`) until it receives an empty page, so an implementation that ignored
+ * `after` and always returned the full list would make such a paginator loop
+ * forever instead of terminating. Mirrors `getGuildMembers`'s cursor pattern.
  * @param db - Database
  * @param threadId - Thread ID
+ * @param limit - Maximum number of members to return
+ * @param after - User-ID cursor; only members with a greater user ID are returned
  * @returns Array of thread member objects
  */
 export function getThreadMembers(
   db: Database,
-  threadId: string
+  threadId: string,
+  limit = 100,
+  after = '0'
 ): ThreadMemberObject[] {
+  // `limit` can arrive as NaN (e.g. `?limit=abc`) or negative; both must be
+  // rejected here rather than passed to SQLite's LIMIT, which would either
+  // throw (NaN) or disable the limit entirely (SQLite treats LIMIT -1 as
+  // "no limit").
+  const clampedLimit = Number.isFinite(limit)
+    ? Math.min(Math.max(limit, 0), 100)
+    : 100
   const rows = db
-    .prepare('SELECT * FROM thread_members WHERE thread_id = ?')
-    .all(threadId) as ThreadMemberRow[]
+    .prepare(
+      `SELECT * FROM thread_members
+       WHERE thread_id = ? AND user_id > ?
+       ORDER BY user_id ASC LIMIT ?`
+    )
+    .all(threadId, after, clampedLimit) as ThreadMemberRow[]
   return rows.map((r) => toThreadMemberObject(r))
 }
 

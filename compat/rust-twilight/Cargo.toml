@@ -1,0 +1,31 @@
+[package]
+name = "twilight-verify"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Pinned to the 0.16 major line (the current stable major as of this writing).
+# twilight-http is HTTP-only by design (no gateway/voice bundled in), so no
+# feature trimming is needed the way it is for serenity.
+#
+# CONFIDENCE NOTE: verified against docs.rs/twilight-http 0.16.0 and the
+# `twilight-http-0.16.0` tag of https://github.com/twilight-rs/twilight in
+# this session (via `gh api repos/twilight-rs/twilight/contents/...`), so
+# method names/signatures below are high confidence — unlike rust-serenity,
+# which was authored from training data alone. See the CONFIDENCE CAVEAT
+# block at the top of src/main.rs for the residual uncertainties (mainly:
+# no `cargo build` was actually run in this offline session).
+twilight-http = "0.16"
+twilight-model = "0.16"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+# Used directly for the health-check poll and the /_test/setup POST (the same
+# role fetch() plays in the JS verifiers, and reqwest plays in
+# rust-serenity) — kept independent of whatever internal HTTP client
+# twilight-http's default backend uses. rustls-tls avoids needing OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }

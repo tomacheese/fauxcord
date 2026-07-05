@@ -1,0 +1,47 @@
+[package]
+name = "serenity-verify"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Pinned to the 0.12 major line (the current stable major as of this writing).
+# `default-features = false` + an explicit minimal feature set keeps this an
+# HTTP-only build with no gateway/voice/cache/model-impl bloat.
+#
+# CONFIDENCE NOTE: the feature *names* below ("http", "rustls_backend") are
+# based on training-data knowledge of serenity's Cargo feature flags, not a
+# live docs.rs/crates.io lookup (network access is disallowed in this build
+# environment, so this could not be verified against the exact 0.12.x patch
+# that `cargo fetch` will resolve to). If `cargo build` reports an unknown
+# feature, or a missing type/method because some model types are gated behind
+# a separate "model" feature in this exact release, add the missing feature
+# name rather than assuming serenity is unusable here.
+#
+# CONFIRMED VIA `cargo build` (0.12.5): "http" alone fails to compile --
+# serenity's own `http/client.rs` and `http/multipart.rs` unconditionally
+# `use crate::builder::{...}`, so `builder` must be enabled too even though
+# this file never calls the `CreateXxx` builder types directly (every call
+# here uses a raw `serde_json::Map` body).
+serenity = { version = "0.12", default-features = false, features = [
+  "http",
+  "builder",
+  "rustls_backend",
+] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+# serenity 0.12 exposes `Webhook.token` as `Option<secrecy::SecretString>` and
+# does NOT publicly re-export `secrecy`, so extracting the raw token string
+# (needed to drive the token-authenticated webhook endpoints below) requires
+# the `ExposeSecret` trait directly. Pinned to the exact 0.8.0 that serenity
+# itself resolves, so this adds no new distinct version to the dependency tree.
+secrecy = "0.8"
+# Used directly for the health-check poll and the /_test/setup POST (the same
+# role fetch() plays in the JS verifiers) — kept independent of whatever
+# internal HTTP client serenity's "http" feature pulls in. rustls-tls matches
+# serenity's own rustls_backend choice so the image doesn't need OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls",
+] }

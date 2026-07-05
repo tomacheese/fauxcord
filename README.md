@@ -12,6 +12,26 @@ Run integration tests for Discord bots and applications without connecting to th
 - **Snowflake IDs** — Automatically generates Discord-compatible IDs
 - **File attachments** — Supports file uploads via multipart/form-data
 
+## Verified Library Compatibility
+
+Fauxcord is continuously verified against real Discord client libraries via a
+Docker-based harness (`compat/`) — 21 libraries across 6 languages, checked
+endpoint-by-endpoint against the mock.
+
+| Language | Verified libraries |
+| -------- | ------------------- |
+| JS/TS    | discord.js, Oceanic.js |
+| Python   | discord.py, Nextcord, Pycord, hikari, interactions.py |
+| Go       | discordgo |
+| C#       | Discord.Net.Rest |
+| JVM      | Discord4J, Kord |
+| Rust     | Serenity, Twilight |
+| C        | Concord |
+
+See [docs/libraries.md](./docs/libraries.md) for setup snippets per library,
+and [compat/coverage-matrix.md](./compat/coverage-matrix.md) for the full
+per-endpoint pass/fail breakdown.
+
 ## Quick Start
 
 ### Docker Compose (recommended)

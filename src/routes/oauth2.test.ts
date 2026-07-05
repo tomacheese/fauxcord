@@ -255,3 +255,43 @@ describe('OAuth2 API', () => {
     })
   })
 })
+
+describe('OAuth2 API route prefixes', () => {
+  let db: Database
+  let app: Hono
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono()
+
+    // Mirrors src/index.ts's production mounting: OAuth2 routes must be
+    // reachable under every documented version prefix (/api/v10, /api, and
+    // the bare path), the same as every other route group.
+    const prefixes = ['/api/v10', '/api', '']
+    for (const prefix of prefixes) {
+      app.route(prefix, createOAuth2Routes(db))
+    }
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  describe('POST /oauth2/token (client_credentials)', () => {
+    for (const prefix of ['/api/v10', '/api', '']) {
+      it(`is reachable under the ${prefix || '(bare)'} prefix`, async () => {
+        const res = await app.request(`${prefix}/oauth2/token`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'client_credentials',
+            scope: 'identify',
+          }),
+        })
+        expect(res.status).toBe(200)
+        const body = (await res.json()) as { access_token: string }
+        expect(body.access_token).toBeTruthy()
+      })
+    }
+  })
+})

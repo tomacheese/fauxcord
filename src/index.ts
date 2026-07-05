@@ -41,8 +41,15 @@ app.route('/', createMockRoutes(db, config.uploadPath))
 // Test control APIs require no authentication
 app.route('/', createTestRoutes(db))
 
-// OAuth2 is partially exempt from authentication
-app.route('/', createOAuth2Routes(db))
+// OAuth2 is partially exempt from authentication (its endpoints validate
+// their own Bearer/client-credential auth internally), so it is mounted
+// before the auth middleware below — but, like every other route group, it
+// must still be reachable under all three version prefixes, not just the
+// bare path. Real clients (discord.js, Oceanic.js, etc.) always call
+// through the versioned base URL (e.g. `/api/v10/oauth2/token`).
+for (const oauth2Prefix of ['/api/v10', '/api', '']) {
+  app.route(oauth2Prefix, createOAuth2Routes(db))
+}
 
 // Routes below require authentication checks
 // Token-based webhook operations (/webhooks/{id}/{token}...) are exempted in auth.ts

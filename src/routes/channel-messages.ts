@@ -23,7 +23,11 @@ import {
   type MessageCreatePayload,
 } from '../validators/message'
 import type { AppEnv, BotRecord } from '../middleware/auth'
-import { requireEntity, parseLimitQuery } from '../lib/route-helpers'
+import {
+  requireEntity,
+  parseLimitQuery,
+  parseJsonBody,
+} from '../lib/route-helpers'
 
 /**
  * Creates the channel messages API routes.
@@ -136,7 +140,7 @@ export function createChannelMessageRoutes(
         })
       }
     } else {
-      payload = await c.req.json<Record<string, unknown>>()
+      payload = await parseJsonBody(c)
     }
 
     const hasAttachments = attachmentFiles.length > 0
@@ -227,8 +231,10 @@ export function createChannelMessageRoutes(
       return c.json(err.body, 403)
     }
 
-    const payload =
-      await c.req.json<Pick<MessageCreatePayload, 'content' | 'embeds'>>()
+    const payload = (await parseJsonBody(c)) as Pick<
+      MessageCreatePayload,
+      'content' | 'embeds'
+    >
 
     const errors = validateMessageCreate(payload)
     if (Object.keys(errors).length > 0) {

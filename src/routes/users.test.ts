@@ -215,3 +215,31 @@ describe('Users GET endpoints', () => {
     expect(res.status).toBe(200)
   })
 })
+
+describe('GET /oauth2/applications/@me', () => {
+  let app: ReturnType<typeof createFullTestApp>['app']
+  let cleanup: () => void
+  const token = 'Bot testtoken'
+  const userId = '111111111111111111'
+
+  beforeEach(() => {
+    const ctx = createFullTestApp()
+    app = ctx.app
+    cleanup = ctx.cleanup
+    seedBot(ctx.db, token, userId)
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('includes a verify_key field (required by ApplicationResponse, relied on by nextcord)', async () => {
+    const res = await app.request('/api/v10/oauth2/applications/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(typeof body.verify_key).toBe('string')
+    expect((body.verify_key as string).length).toBeGreaterThan(0)
+  })
+})

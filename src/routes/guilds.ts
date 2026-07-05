@@ -15,8 +15,9 @@ import {
   validateChannelCreate,
   validateGuildName,
   GUILD_LIMITS,
+  type ChannelCreatePayload,
 } from '../validators/guild'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import { createGuildRoleRoutes } from './guild-roles'
 import { createGuildMemberRoutes } from './guild-members'
 import { createGuildEmojiRoutes } from './guild-emojis'
@@ -48,7 +49,16 @@ export function createGuildRoutes(db: Database): Hono {
   // PATCH /guilds/:guildId — Update guild information
   app.patch('/guilds/:guildId', async (c) => {
     const { guildId } = c.req.param()
-    const payload = await c.req.json<{ name?: string }>()
+
+    // Tolerate an empty/invalid/non-object JSON body (including a literal
+    // `null` or an array, both of which parse without error): treat it as an
+    // empty (no-op) payload rather than crashing on JSON.parse of an empty
+    // body (same idiom as PATCH /users/@me and POST .../bans).
+    const parsed: unknown = await c.req.json().catch(() => ({}))
+    const payload: { name?: string } =
+      typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+        ? parsed
+        : {}
 
     if (payload.name !== undefined) {
       const errors = validateGuildName(payload.name)
@@ -121,14 +131,7 @@ export function createGuildRoutes(db: Database): Hono {
       return c.json(err.body, 400)
     }
 
-    const payload = await c.req.json<{
-      name: string
-      type?: number
-      topic?: string | null
-      nsfw?: boolean
-      parent_id?: string | null
-      position?: number | null
-    }>()
+    const payload = (await parseJsonBody(c)) as unknown as ChannelCreatePayload
 
     const errors = validateChannelCreate(payload)
     if (Object.keys(errors).length > 0) {

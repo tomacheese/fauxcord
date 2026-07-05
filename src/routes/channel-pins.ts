@@ -20,12 +20,10 @@ import {
  * Builds the Hono response for a `pinMessage()` result code.
  * @param c - Hono context
  * @param result - Result code returned by `pinMessage()`
- * @returns 204 on success, or the Discord error response matching the code
+ * @returns 204 on success (including the idempotent already-pinned case), or
+ * the Discord error response matching the code
  */
-function respondToPinResult(
-  c: Context,
-  result: 0 | 10_008 | 40_041 | 30_003 | 50_019
-) {
+function respondToPinResult(c: Context, result: 0 | 10_008 | 30_003 | 50_019) {
   switch (result) {
     case 10_008: {
       const err = discordError(
@@ -34,14 +32,6 @@ function respondToPinResult(
         404
       )
       return c.json(err.body, 404)
-    }
-    case 40_041: {
-      const err = discordError(
-        DiscordErrorCode.ALREADY_PINNED,
-        'This message was already pinned',
-        400
-      )
-      return c.json(err.body, 400)
     }
     case 30_003: {
       const err = discordError(

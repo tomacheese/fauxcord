@@ -25,7 +25,11 @@ import {
   THREAD_CHANNEL_TYPES,
 } from '../validators/thread'
 import type { AppEnv, BotRecord } from '../middleware/auth'
-import { requireEntity } from '../lib/route-helpers'
+import {
+  requireEntity,
+  parseJsonBody,
+  parseLimitQuery,
+} from '../lib/route-helpers'
 
 /**
  * Resolves the authenticated bot's user ID, falling back to a direct token
@@ -93,7 +97,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       )
     }
 
-    const payload = await c.req.json<Record<string, unknown>>()
+    const payload = await parseJsonBody(c)
     const errors = validateThreadCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
@@ -126,7 +130,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     )
     if (channel instanceof Response) return channel
 
-    const payload = await c.req.json<Record<string, unknown>>()
+    const payload = await parseJsonBody(c)
     const errors = validateThreadCreate(payload)
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
@@ -226,6 +230,8 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
   // GET /channels/:channelId/thread-members — List members
   app.get('/channels/:channelId/thread-members', (c) => {
     const { channelId } = c.req.param()
+    const limit = parseLimitQuery(c, 100, 100)
+    const after = c.req.query('after') ?? '0'
     const thread = requireEntity(
       c,
       getThread(db, channelId),
@@ -233,7 +239,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
-    return c.json(getThreadMembers(db, channelId))
+    return c.json(getThreadMembers(db, channelId, limit, after))
   })
 
   // PUT /channels/:channelId/thread-members/@me — Join

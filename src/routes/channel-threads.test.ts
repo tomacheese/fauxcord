@@ -277,6 +277,24 @@ describe('GET /channels/:channelId/thread-members', () => {
     expect(body.some((m) => m.user_id === BOT_USER_ID)).toBe(true)
   })
 
+  it('honors the after user-ID cursor so paginators terminate', async () => {
+    // Discord paginates thread members by user ID via the `after` cursor;
+    // clients like hikari keep advancing `after` until they receive an empty
+    // page. Passing an `after` at/above the highest member's user ID must
+    // return an empty array, otherwise such a paginator loops forever.
+    const { app, channelId } = setup()
+    const thread = await createThreadViaApi(app, channelId)
+    const threadId = thread.id as string
+
+    const res = await app.request(
+      `/channels/${threadId}/thread-members?after=${BOT_USER_ID}`,
+      { headers: AUTH }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { user_id: string }[]
+    expect(body).toEqual([])
+  })
+
   it('returns 404 for an unknown thread', async () => {
     const { app } = setup()
     const res = await app.request(
@@ -284,6 +302,38 @@ describe('GET /channels/:channelId/thread-members', () => {
       { headers: AUTH }
     )
     expect(res.status).toBe(404)
+  })
+
+  it('does not error and returns members when limit is non-numeric', async () => {
+    // `?limit=abc` parses to NaN; passing NaN straight through to SQLite's
+    // LIMIT clause throws a datatype mismatch, so this must not 500.
+    const { app, channelId } = setup()
+    const thread = await createThreadViaApi(app, channelId)
+    const threadId = thread.id as string
+
+    const res = await app.request(
+      `/channels/${threadId}/thread-members?limit=abc`,
+      { headers: AUTH }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { user_id: string }[]
+    expect(body.some((m) => m.user_id === BOT_USER_ID)).toBe(true)
+  })
+
+  it('does not bypass the limit when limit is negative', async () => {
+    // SQLite treats `LIMIT -1` as "no limit"; a negative limit must not be
+    // able to disable pagination.
+    const { app, channelId } = setup()
+    const thread = await createThreadViaApi(app, channelId)
+    const threadId = thread.id as string
+
+    const res = await app.request(
+      `/channels/${threadId}/thread-members?limit=-1`,
+      { headers: AUTH }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { user_id: string }[]
+    expect(body).toEqual([])
   })
 })
 

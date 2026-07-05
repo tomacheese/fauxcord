@@ -17,8 +17,13 @@ import {
   updateEmoji,
   deleteEmoji,
 } from '../services/guild-emojis'
-import { validateEmojiCreate, validateEmojiUpdate } from '../validators/guild'
-import { requireEntity } from '../lib/route-helpers'
+import {
+  validateEmojiCreate,
+  validateEmojiUpdate,
+  type EmojiCreatePayload,
+  type EmojiUpdatePayload,
+} from '../validators/guild'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 
 /** Minimal bot record shape needed to resolve the emoji creator. */
 interface BotRow {
@@ -78,13 +83,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     )
     if (guild instanceof Response) return guild
 
-    // `name` is typed as required so downstream usage needs no assertion;
-    // its runtime presence is enforced by validateEmojiCreate below.
-    const payload = await c.req.json<{
-      name: string
-      image?: string
-      roles?: string[] | null
-    }>()
+    const payload = (await parseJsonBody(c)) as EmojiCreatePayload
 
     const errors = validateEmojiCreate(payload)
     if (Object.keys(errors).length > 0) {
@@ -104,10 +103,14 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
       }
     }
 
+    // `payload.name` is guaranteed present here: validateEmojiCreate above
+    // requires it and would have returned a 400 otherwise. Widen to a
+    // required-name shape rather than using a non-null assertion.
+    const validatedPayload = payload as EmojiCreatePayload & { name: string }
     const emoji = createEmoji(db, {
       emojiId: generateSnowflake(),
       guildId,
-      name: payload.name,
+      name: validatedPayload.name,
       userId: bot?.user_id ?? null,
       roles: payload.roles,
     })
@@ -125,10 +128,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     )
     if (guild instanceof Response) return guild
 
-    const payload = await c.req.json<{
-      name?: string
-      roles?: string[] | null
-    }>()
+    const payload = (await parseJsonBody(c)) as EmojiUpdatePayload
 
     const errors = validateEmojiUpdate(payload)
     if (Object.keys(errors).length > 0) {

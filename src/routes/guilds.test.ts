@@ -54,6 +54,18 @@ describe('Guilds API', () => {
       expect(body.name).toBe('Test Guild')
     })
 
+    it('treats an empty request body as no changes (does not 500)', async () => {
+      // Some libraries send a PATCH with no body at all; the mock must not crash
+      // on JSON.parse of an empty body.
+      const res = await app.request(`/guilds/${guildId}`, {
+        method: 'PATCH',
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.name).toBe('Test Guild')
+    })
+
     it('returns 404 for a non-existent Guild', async () => {
       const res = await app.request('/guilds/999999999999999999', {
         method: 'PATCH',
@@ -80,6 +92,27 @@ describe('Guilds API', () => {
       expect(res.status).toBe(400)
       const body = (await res.json()) as Record<string, unknown>
       expect(body.code).toBe(50_035)
+    })
+  })
+
+  describe('GET /guilds/:guildId', () => {
+    it('includes the spec-required GuildResponse fields with defaults', async () => {
+      // Strict deserializers (e.g. serenity's PartialGuild) reject a guild
+      // object that omits any spec-required field, so every field below is
+      // part of the OpenAPI GuildResponse `required` set.
+      const res = await app.request(`/guilds/${guildId}`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.system_channel_flags).toBe(0)
+      expect(body.nsfw_level).toBe(0)
+      expect(body.nsfw).toBe(false)
+      expect(body.region).toBe('deprecated')
+      expect(body.stickers).toEqual([])
+      expect(body.incidents_data).toBeNull()
+      expect(body.afk_channel_id).toBeNull()
+      expect(body.premium_progress_bar_enabled).toBe(false)
     })
   })
 

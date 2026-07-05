@@ -8,10 +8,16 @@
 import { Hono } from 'hono'
 import type { Database } from '../db'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
-import { getChannel, updateChannel, deleteChannel } from '../services/channels'
+import {
+  getChannel,
+  updateChannel,
+  deleteChannel,
+  type ChannelUpdatePayload,
+} from '../services/channels'
+import { getThread } from '../services/threads'
 import { validateChannelUpdate } from '../validators/channel'
 import type { AppEnv } from '../middleware/auth'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import { createChannelPinRoutes } from './channel-pins'
 import { createChannelMessageRoutes } from './channel-messages'
 import { createChannelReactionRoutes } from './channel-reactions'
@@ -38,9 +44,13 @@ export function createChannelRoutes(
   // GET /channels/:channelId — Retrieve channel information
   app.get('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
+    // Threads (types 10/11/12) must include `thread_metadata` (and message/
+    // member counts) here — real Discord always does, and object-model
+    // client libraries (e.g. Discord.Net) use its presence, not just `type`,
+    // to decide whether to construct a thread-shaped model.
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getThread(db, channelId) ?? getChannel(db, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -51,13 +61,7 @@ export function createChannelRoutes(
   // PATCH /channels/:channelId — Update channel information
   app.patch('/channels/:channelId', async (c) => {
     const { channelId } = c.req.param()
-    const payload = await c.req.json<{
-      name?: string
-      topic?: string | null
-      nsfw?: boolean
-      rate_limit_per_user?: number
-      position?: number
-    }>()
+    const payload = (await parseJsonBody(c)) as ChannelUpdatePayload
 
     const errors = validateChannelUpdate(payload)
     if (Object.keys(errors).length > 0) {

@@ -99,8 +99,20 @@ interface ReactionAggRow {
 export interface ReactionObject {
   /** Reaction count */
   count: number
+  /**
+   * Per-type reaction count breakdown. Required by the Discord API spec
+   * (discord-api-types APIReactionCountDetails) — always { burst: 0,
+   * normal: count } in the mock, since super reactions (bursts) are not
+   * simulated.
+   */
+  count_details: {
+    burst: number
+    normal: number
+  }
   /** Whether the requesting user has reacted (always false in the mock) */
   me: boolean
+  /** Whether the requesting user super-reacted (always false in the mock) */
+  me_burst: boolean
   /** Emoji information */
   emoji: {
     /** Custom emoji ID (null for standard emoji) */
@@ -108,6 +120,8 @@ export interface ReactionObject {
     /** Emoji string (Unicode emoji or custom emoji name) */
     name: string
   }
+  /** Hex colors used for super reactions (always empty in the mock) */
+  burst_colors: string[]
 }
 
 /** Message object for API responses */
@@ -231,11 +245,14 @@ export function toMessageObject(
   if (reactions.length > 0) {
     obj.reactions = reactions.map((r) => ({
       count: r.count,
+      count_details: { burst: 0, normal: r.count },
       me: false, // Always false in the mock (the requesting user is not identified)
+      me_burst: false, // Super reactions are not simulated
       emoji: {
         id: null, // Always null because these are standard emoji
         name: r.emoji,
       },
+      burst_colors: [],
     }))
   }
 

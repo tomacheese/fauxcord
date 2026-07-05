@@ -1,0 +1,13 @@
+{
+  "token": "Bot compat-token",
+  "user": { "id": "100000000000000001", "username": "CompatBot" },
+  "guilds": [
+    {
+      "id": "200000000000000001",
+      "name": "Compat Guild",
+      "channels": [
+        { "id": "300000000000000001", "name": "general", "type": 0 }
+      ]
+    }
+  ]
+}

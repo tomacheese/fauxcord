@@ -46,6 +46,30 @@ describe('Channels API', () => {
       const body = (await res.json()) as Record<string, unknown>
       expect(body.code).toBe(10_003)
     })
+
+    it('returns the thread shape (with thread_metadata) for a thread channel', async () => {
+      // Real Discord always includes thread_metadata (and message/member
+      // counts) on GET /channels/{id} for thread-type channels (10/11/12).
+      // Object-model client libraries (e.g. Discord.Net) use the presence of
+      // this sub-object, not just `type`, to decide whether to construct a
+      // thread-shaped model — omitting it caused a real
+      // 'RestTextChannel' -> 'RestThreadChannel' InvalidCastException in the
+      // compat/dotnet-discordnet verifier.
+      const threadId = '444444444444444444'
+      db.prepare(
+        `INSERT INTO channels (id, guild_id, type, name, parent_id, owner_id, archived, auto_archive_duration)
+         VALUES (?, NULL, 11, 'a-thread', ?, ?, 0, 1440)`
+      ).run(threadId, channelId, 'bot')
+
+      const res = await app.request(`/channels/${threadId}`, {
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as Record<string, unknown>
+      expect(body.id).toBe(threadId)
+      expect(body.type).toBe(11)
+      expect(body.thread_metadata).toBeTruthy()
+    })
   })
 
   describe('PATCH /channels/:channelId', () => {

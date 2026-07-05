@@ -19,8 +19,10 @@ import {
   validateRoleCreate,
   validateRoleUpdate,
   GUILD_LIMITS,
+  type RoleCreatePayload,
+  type RoleUpdatePayload,
 } from '../validators/guild'
-import { requireEntity } from '../lib/route-helpers'
+import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 
 /**
  * Creates the guild roles API routes.
@@ -68,13 +70,7 @@ export function createGuildRoleRoutes(db: Database): Hono {
       return c.json(err.body, 400)
     }
 
-    const payload = await c.req.json<{
-      name?: string
-      permissions?: string
-      color?: number
-      hoist?: boolean
-      mentionable?: boolean
-    }>()
+    const payload = (await parseJsonBody(c)) as RoleCreatePayload
 
     const errors = validateRoleCreate(payload)
     if (Object.keys(errors).length > 0) {
@@ -103,13 +99,7 @@ export function createGuildRoleRoutes(db: Database): Hono {
     )
     if (guild instanceof Response) return guild
 
-    const payload = await c.req.json<{
-      name?: string
-      color?: number
-      hoist?: boolean
-      mentionable?: boolean
-      permissions?: string
-    }>()
+    const payload = (await parseJsonBody(c)) as RoleUpdatePayload
 
     const errors = validateRoleUpdate(payload)
     if (Object.keys(errors).length > 0) {

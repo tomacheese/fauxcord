@@ -100,6 +100,15 @@ export function setupTestEnvironment(
          VALUES (?, ?, '@everyone', '1071698660929', 0, 0, 0, 0)`
       ).run(guildId, guildId)
 
+      // Register the bot as a member of the guild it owns. On real Discord, a
+      // bot present in a guild always shows up in that guild's member list;
+      // without this row, GET/PATCH/PUT/DELETE /guilds/{id}/members/{bot_id}*
+      // 404 for the bot itself, breaking any client library flow that
+      // manages the bot's own guild member (e.g. self role assignment).
+      db.prepare(
+        'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+      ).run(guildId, userId)
+
       const channelsResponse: { id: string; name: string; type: number }[] = []
 
       for (const channelReq of guildReq.channels ?? []) {

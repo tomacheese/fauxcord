@@ -1,0 +1,8 @@
+{
+  "name": "compat-eris",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "eris": "^0.18.0"
+  }
+}

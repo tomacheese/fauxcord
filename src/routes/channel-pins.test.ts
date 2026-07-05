@@ -38,6 +38,26 @@ describe('Channel Pins API', () => {
     })
   })
 
+  describe('PUT /channels/:channelId/pins/:messageId', () => {
+    it('is idempotent: pinning an already-pinned message returns 204, not an error', async () => {
+      const messageId = seedMessage(db, channelId, '111111111111111111', token)
+
+      const first = await app.request(
+        `/channels/${channelId}/pins/${messageId}`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(first.status).toBe(204)
+
+      // Real Discord's pin endpoint is idempotent (matches discord.js/discord.py
+      // client expectations); repeating the same pin must not error.
+      const second = await app.request(
+        `/channels/${channelId}/pins/${messageId}`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(second.status).toBe(204)
+    })
+  })
+
   describe('new-format pins API (/messages/pins)', () => {
     it('returns the {items, has_more} shape', async () => {
       const res = await app.request(`/channels/${channelId}/messages/pins`, {

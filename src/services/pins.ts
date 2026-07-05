@@ -92,13 +92,13 @@ export function getPinnedMessageEntries(
  * @param db - Database
  * @param channelId - Channel ID
  * @param messageId - Message ID
- * @returns Error code (0 = success, 10008 = message not found, 40041 = already pinned, 30003 = limit reached, 50019 = different channel)
+ * @returns Error code (0 = success, 10008 = message not found, 30003 = limit reached, 50019 = different channel)
  */
 export function pinMessage(
   db: Database,
   channelId: string,
   messageId: string
-): 0 | 10_008 | 40_041 | 30_003 | 50_019 {
+): 0 | 10_008 | 30_003 | 50_019 {
   // Verify the message is in the same channel
   const msg = db
     .prepare('SELECT channel_id FROM messages WHERE id = ?')
@@ -108,11 +108,14 @@ export function pinMessage(
   if (!msg) return 10_008
   if (msg.channel_id !== channelId) return 50_019
 
-  // Already-pinned check
+  // Pinning an already-pinned message is a no-op success, matching real
+  // Discord's idempotent pin endpoint (relied on by discord.js/discord.py and
+  // other client implementations). spec/openapi.json does not document this
+  // case, but the spec's silence here is not evidence to the contrary.
   const existing = db
     .prepare('SELECT 1 FROM pins WHERE channel_id = ? AND message_id = ?')
     .get(channelId, messageId)
-  if (existing) return 40_041
+  if (existing) return 0
 
   // Limit check
   const count = (

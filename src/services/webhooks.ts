@@ -193,12 +193,18 @@ export function updateWebhook(
   if (payload.name !== undefined) updates.name = payload.name
   if (payload.avatar !== undefined) updates.avatar = payload.avatar
   if (payload.channel_id !== undefined) {
-    updates.channel_id = payload.channel_id
-    // Update the guild ID as well
+    // Only move the webhook when the target channel exists. Writing an
+    // unknown channel_id would violate the webhooks.channel_id foreign key
+    // and surface as an HTTP 500; callers are expected to validate the
+    // channel first (see the PATCH /webhooks/:id route), and this guard keeps
+    // the constraint from ever being hit regardless of the entry point.
     const channel = db
       .prepare('SELECT guild_id FROM channels WHERE id = ?')
       .get(payload.channel_id) as { guild_id: string | null } | undefined
-    if (channel) updates.guild_id = channel.guild_id
+    if (channel) {
+      updates.channel_id = payload.channel_id
+      updates.guild_id = channel.guild_id
+    }
   }
 
   if (Object.keys(updates).length > 0) {
