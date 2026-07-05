@@ -9,7 +9,7 @@ repositories {
 
 dependencies {
     // Kept in sync with the version documented/asserted in Verify.java's header comment.
-    implementation("com.discord4j:discord4j-core:3.2.6")
+    implementation("com.discord4j:discord4j-core:3.3.2")
 }
 
 application {
