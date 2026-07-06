@@ -747,11 +747,118 @@ async def main() -> None:
             results[f"{e['method']} {e['path']}"] for e in ENDPOINTS
         ]
 
+        async def verify_gateway() -> dict:
+            """Run the Gateway connect + dispatch verification for Nextcord.
+
+            Reuses the module-level `client` (already Route.BASE-patched) but
+            calls `client.connect()` in a background task to open the real
+            Gateway WebSocket, which `client.login()` alone does not do.
+            """
+            steps: list[dict] = []
+            ready_event = asyncio.Event()
+            message_event = asyncio.Event()
+
+            @client.event
+            async def on_ready() -> None:
+                ready_event.set()
+
+            @client.event
+            async def on_message(message: nextcord.Message) -> None:
+                if message.content == "gateway-compat-check":
+                    message_event.set()
+
+            connect_task = asyncio.create_task(client.connect(reconnect=False))
+            try:
+                await asyncio.wait_for(ready_event.wait(), timeout=20)
+                steps.append(
+                    {"step": "connect-identify-ready", "status": "pass", "note": ""}
+                )
+            except Exception as err:  # noqa: BLE001
+                # A bare timeout here (str(err) == "" for asyncio.TimeoutError)
+                # hides the real cause: connect_task dies from an internal
+                # exception well before the 20s deadline. Surface it instead.
+                connect_exc: BaseException | None = None
+                if connect_task.done() and not connect_task.cancelled():
+                    connect_exc = connect_task.exception()
+                if isinstance(connect_exc, KeyError) and connect_exc.args[:1] in (
+                    ("s",),
+                    ("t",),
+                ):
+                    # Confirmed Fauxcord bug: src/gateway/protocol.ts's
+                    # GatewayPayload declares `s`/`t` as optional, and
+                    # encodePayload() is plain JSON.stringify(), which drops
+                    # `undefined` fields entirely instead of emitting them as
+                    # `null`. Real Discord always includes both keys (e.g.
+                    # HELLO is `{"t":null,"s":null,"op":10,"d":{...}}`).
+                    # nextcord's Socket.received_message() does
+                    # `message["s"]` with no `.get()` fallback, so the very
+                    # first HELLO frame (which omits `s`/`t`) raises
+                    # KeyError before IDENTIFY is ever sent -- not a nextcord
+                    # bug, blocks every Gateway-verifying library the same
+                    # way.
+                    steps.append(
+                        {
+                            "step": "connect-identify-ready",
+                            "status": "fauxcord-fix",
+                            "note": (
+                                "Fauxcord's Gateway HELLO/Dispatch frames omit the "
+                                "`s`/`t` keys instead of sending them as null "
+                                "(src/gateway/protocol.ts's encodePayload() relies on "
+                                "JSON.stringify() dropping optional undefined fields); "
+                                "nextcord's Socket.received_message() indexes "
+                                f"message[{connect_exc.args[0]!r}] directly, raising "
+                                "KeyError on the first frame"
+                            ),
+                        }
+                    )
+                    connect_task.cancel()
+                    return {"status": "fauxcord-fix", "steps": steps}
+                note = str(connect_exc) if connect_exc is not None else str(err)
+                steps.append(
+                    {
+                        "step": "connect-identify-ready",
+                        "status": "lib-issue",
+                        "note": note[:300],
+                    }
+                )
+                connect_task.cancel()
+                return {"status": "lib-issue", "steps": steps}
+
+            try:
+                channel = client.get_channel(int(CH)) or await client.fetch_channel(
+                    int(CH)
+                )
+                await channel.send("gateway-compat-check")
+                await asyncio.wait_for(message_event.wait(), timeout=15)
+                steps.append(
+                    {"step": "dispatch-message-create", "status": "pass", "note": ""}
+                )
+            except Exception as err:  # noqa: BLE001
+                steps.append(
+                    {
+                        "step": "dispatch-message-create",
+                        "status": "lib-issue",
+                        "note": str(err)[:300],
+                    }
+                )
+            finally:
+                connect_task.cancel()
+                try:
+                    await connect_task
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                    pass
+
+            failed = next((s for s in steps if s["status"] != "pass"), None)
+            return {"status": failed["status"] if failed else "pass", "steps": steps}
+
+        gateway_result = await verify_gateway()
+
         output = {
             "library": "nextcord",
             "version": "2.6.0",
             "baseUrlOverridable": True,
             "results": ordered_results,
+            "gateway": gateway_result,
         }
         Path("/results").mkdir(parents=True, exist_ok=True)
         Path("/results/nextcord.json").write_text(
