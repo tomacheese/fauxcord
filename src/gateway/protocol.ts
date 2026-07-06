@@ -38,11 +38,23 @@ export interface ResumeData {
 
 /**
  * Encodes a Gateway payload as JSON text.
+ *
+ * Real Discord always sends all four top-level keys (`op`/`d`/`s`/`t`),
+ * using `null` for `s`/`t` on payloads where they don't apply (e.g. HELLO).
+ * Some strict clients (e.g. Nextcord) index `message["s"]` directly and
+ * raise a `KeyError` if the key is missing entirely, so `s`/`t` are
+ * normalized to `null` here rather than left `undefined` — `JSON.stringify`
+ * silently drops `undefined`-valued keys, which would omit them from the
+ * wire payload.
  * @param payload - Payload to encode
  * @returns JSON string
  */
 export function encodePayload(payload: GatewayPayload<unknown>): string {
-  return JSON.stringify(payload)
+  return JSON.stringify({
+    ...payload,
+    s: payload.s ?? null,
+    t: payload.t ?? null,
+  })
 }
 
 /**
