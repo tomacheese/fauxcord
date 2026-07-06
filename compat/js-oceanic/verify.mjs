@@ -452,6 +452,109 @@ for (const { method, path } of ordered) {
   }
 }
 
+/**
+ * Runs the Gateway connect + dispatch verification using a second Oceanic
+ * Client instance with gateway enabled (the REST-only `client` above keeps
+ * `gateway: { disable: true }` for the REST phase).
+ * @returns Gateway verification result object.
+ */
+async function verifyOceanicGateway() {
+  const steps = []
+  const gwClient = new Client({
+    auth: 'Bot compat-token',
+    rest: { baseURL: `${ORIGIN}/api/v10` },
+    gateway: { concurrency: 1 },
+  })
+
+  // Oceanic's own docs warn that an unhandled 'error' event throws and can
+  // kill the process, so give it a sink. Separately, Fauxcord's mock READY
+  // payload has no `application` field; Oceanic's Shard._ready constructs a
+  // ClientApplication from `d.application` and throws synchronously when
+  // it's missing. That throw happens inside the ws 'message' event handler,
+  // so it never surfaces as a rejection of connect()/the 'ready' listener
+  // below, nor as an 'error' event — it's a raw uncaughtException. The
+  // shard also auto-reconnects and retries IDENTIFY after this crash, so
+  // the same exception can recur; this handler is left installed (not
+  // removed) for the rest of the process's lifetime so a retry-triggered
+  // recurrence logs instead of killing the whole verifier.
+  gwClient.on('error', () => {
+    // swallowed: outcome is captured via the promises below instead
+  })
+  let onUncaughtGatewayError
+  process.on('uncaughtException', (error) => {
+    onUncaughtGatewayError?.(error)
+  })
+
+  const connectOutcome = await new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(
+      () => finish({ ok: false, error: new Error('ready timeout') }),
+      20000
+    )
+    function finish(outcome) {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      onUncaughtGatewayError = undefined
+      resolve(outcome)
+    }
+    onUncaughtGatewayError = (error) => finish({ ok: false, error })
+    gwClient.once('ready', () => finish({ ok: true }))
+    gwClient.connect().catch((error) => finish({ ok: false, error }))
+  })
+
+  if (!connectOutcome.ok) {
+    steps.push({
+      step: 'connect-identify-ready',
+      status: 'lib-issue',
+      note: String(connectOutcome.error?.message ?? connectOutcome.error).slice(
+        0,
+        300
+      ),
+    })
+    // The shard's WebSocket may still be open even though READY failed
+    // (e.g. the crash above happens after the socket connects but before
+    // the shard is marked ready), which would otherwise keep the process
+    // alive forever.
+    gwClient.disconnectAll?.() ??
+      gwClient.shards?.forEach((s) => s.disconnect())
+    return { status: 'lib-issue', steps }
+  }
+  steps.push({ step: 'connect-identify-ready', status: 'pass', note: '' })
+
+  try {
+    const dispatchWait = new Promise((resolve, reject) => {
+      const t = setTimeout(
+        () => reject(new Error('messageCreate timeout')),
+        15000
+      )
+      gwClient.once('messageCreate', (msg) => {
+        clearTimeout(t)
+        resolve(msg)
+      })
+    })
+    await rest.channels.createMessage(CH, {
+      content: 'gateway-compat-check',
+    })
+    await dispatchWait
+    steps.push({ step: 'dispatch-message-create', status: 'pass', note: '' })
+  } catch (err) {
+    steps.push({
+      step: 'dispatch-message-create',
+      status: 'lib-issue',
+      note: String(err?.message ?? err).slice(0, 300),
+    })
+  } finally {
+    gwClient.disconnectAll?.() ??
+      gwClient.shards?.forEach((s) => s.disconnect())
+  }
+
+  const failed = steps.find((s) => s.status !== 'pass')
+  return { status: failed ? failed.status : 'pass', steps }
+}
+
+const gatewayResult = await verifyOceanicGateway()
+
 writeFileSync(
   process.env.RESULTS_PATH ?? '/results/oceanic.json',
   JSON.stringify(
@@ -460,6 +563,7 @@ writeFileSync(
       version: '1.11.x',
       baseUrlOverridable: true,
       results,
+      gateway: gatewayResult,
     },
     null,
     2
@@ -468,3 +572,7 @@ writeFileSync(
 console.log(
   `oceanic done: ${results.filter((r) => r.status === 'pass').length}/${results.length} pass`
 )
+// The Gateway phase's shard may keep retrying/reconnecting in the
+// background after a failed handshake despite the disconnect calls above,
+// which would otherwise leave the process hanging past this point.
+process.exit(0)
