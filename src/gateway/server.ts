@@ -17,6 +17,14 @@ const HEARTBEAT_INTERVAL_MS = 41_250
 /** Time (ms) to wait for a Heartbeat before closing the session */
 const HEARTBEAT_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2
 
+/** Bot info resolved from an IDENTIFY token, used to build the READY user object */
+interface IdentifiedBot {
+  userId: string
+  username: string
+  discriminator: string
+  avatar: string | null
+}
+
 /**
  * Resolves the Bot for an IDENTIFY token. When DISABLE_AUTH=true, any token
  * is accepted (matching REST behavior) and unregistered tokens are treated
@@ -37,13 +45,26 @@ function resolveBotForIdentify(
   db: Database,
   disableAuth: boolean,
   token: string
-): { userId: string; username: string } | undefined {
+): IdentifiedBot | undefined {
   const lookupToken = token.startsWith('Bot ') ? token : `Bot ${token}`
   const row = db
-    .prepare('SELECT user_id, username FROM bots WHERE token = ?')
-    .get(lookupToken) as { user_id: string; username: string } | undefined
-  if (row) return { userId: row.user_id, username: row.username }
-  if (disableAuth) return { userId: '0', username: 'MockBot' }
+    .prepare(
+      'SELECT user_id, username, discriminator, avatar FROM bots WHERE token = ?'
+    )
+    .get(lookupToken) as
+    | { user_id: string; username: string; discriminator: string; avatar: string | null }
+    | undefined
+  if (row) {
+    return {
+      userId: row.user_id,
+      username: row.username,
+      discriminator: row.discriminator,
+      avatar: row.avatar,
+    }
+  }
+  if (disableAuth) {
+    return { userId: '0', username: 'MockBot', discriminator: '0', avatar: null }
+  }
   return undefined
 }
 
@@ -170,7 +191,26 @@ function handleIdentify(
       s: sessionManager.nextSeq(session),
       d: {
         v: 10,
-        user: { id: bot.userId, username: bot.username, bot: true },
+        // Real Discord's READY `user` is the full own-user object (matching
+        // GET /users/@me's shape), not just {id, username, bot}. Some
+        // clients build a strict own-user model straight from this field
+        // (e.g. interactions.py's `ClientUser` requires `verified` with no
+        // default) and raise before their `ready` event ever fires if a
+        // field is missing. `verified: true` and the other dummy values
+        // mirror src/services/users.ts's getBotUser().
+        user: {
+          id: bot.userId,
+          username: bot.username,
+          discriminator: bot.discriminator,
+          avatar: bot.avatar,
+          bot: true,
+          flags: 0,
+          public_flags: 0,
+          global_name: null,
+          mfa_enabled: false,
+          locale: 'en-US',
+          verified: true,
+        },
         guilds: [],
         session_id: session.sessionId,
         resume_gateway_url: toWsUrl(options.baseUrl),

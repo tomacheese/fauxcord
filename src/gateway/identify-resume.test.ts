@@ -97,6 +97,41 @@ describe('IDENTIFY payload validation', () => {
     ws.close()
   })
 
+  it('includes a complete `user` object in READY (required by strict client models such as interactions.py\'s ClientUser)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    const userId = '888888888888888888'
+    seedBot(db, 'Bot userfieldtoken', userId)
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot userfieldtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as {
+      user?: {
+        id: string
+        username: string
+        discriminator: string
+        avatar: string | null
+        bot: boolean
+        verified: boolean
+      }
+    }
+    expect(readyData.user).toMatchObject({
+      id: userId,
+      discriminator: expect.any(String),
+      avatar: null,
+      bot: true,
+      verified: true,
+    })
+    ws.close()
+  })
+
   it('closes with 4013 when intents are invalid', async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c
