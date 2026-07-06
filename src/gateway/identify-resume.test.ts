@@ -58,6 +58,25 @@ describe('IDENTIFY payload validation', () => {
     expect(await closePromise).toBe(GatewayCloseCode.AuthenticationFailed)
   })
 
+  it('authenticates when the IDENTIFY token omits the "Bot " prefix (real client behavior)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    seedBot(db, 'Bot noprefixtoken')
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'noprefixtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    expect(ready.op).toBe(GatewayOp.Dispatch)
+    expect(ready.t).toBe('READY')
+    ws.close()
+  })
+
   it('closes with 4013 when intents are invalid', async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c

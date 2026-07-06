@@ -21,6 +21,13 @@ const HEARTBEAT_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2
  * Resolves the Bot for an IDENTIFY token. When DISABLE_AUTH=true, any token
  * is accepted (matching REST behavior) and unregistered tokens are treated
  * as MockBot.
+ *
+ * Real Discord Gateway clients send the raw bot token in IDENTIFY's `token`
+ * field, without the `"Bot "` prefix used in the REST `Authorization`
+ * header (`bots.token` is stored with that prefix, per `/_test/setup`'s
+ * documented `"Bot <token>"` format). The lookup normalizes the IDENTIFY
+ * token by adding the prefix when missing, so both the real-protocol
+ * unprefixed form and an already-prefixed form resolve to the same row.
  * @param db - Database
  * @param disableAuth - Auth-bypass flag
  * @param token - The `token` field from IDENTIFY
@@ -31,9 +38,10 @@ function resolveBotForIdentify(
   disableAuth: boolean,
   token: string
 ): { userId: string; username: string } | undefined {
+  const lookupToken = token.startsWith('Bot ') ? token : `Bot ${token}`
   const row = db
     .prepare('SELECT user_id, username FROM bots WHERE token = ?')
-    .get(token) as { user_id: string; username: string } | undefined
+    .get(lookupToken) as { user_id: string; username: string } | undefined
   if (row) return { userId: row.user_id, username: row.username }
   if (disableAuth) return { userId: '0', username: 'MockBot' }
   return undefined
