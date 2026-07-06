@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DISABLE_AUTH: "false"
+      BASE_URL: "http://fauxcord:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/_mock/health"]
       interval: 5s

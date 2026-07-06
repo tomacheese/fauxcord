@@ -38,6 +38,46 @@ Each verifier writes `results/<lib>.json`:
 
 `status` ∈ `pass` | `n-a` | `blocked` | `fauxcord-fix` | `lib-issue`.
 
+## Gateway verification
+
+Each verifier that wraps a library with real Gateway client capability adds a
+`gateway` field to its `results/<lib>.json` alongside the existing REST
+`results` array:
+
+```json
+{
+  "gateway": {
+    "status": "pass",
+    "steps": [
+      { "step": "connect-identify-ready", "status": "pass", "note": "" },
+      { "step": "dispatch-message-create", "status": "pass", "note": "" }
+    ]
+  }
+}
+```
+
+`gateway.status` / each step's `status` ∈ `pass` | `n-a` | `blocked` |
+`fauxcord-fix` | `lib-issue`.
+
+The common flow every Gateway verifier follows:
+
+1. `connect-identify-ready`: open a WebSocket connection via the library's
+   high-level client, complete HELLO → IDENTIFY → READY, and confirm the
+   library's own "ready" callback/event fires.
+2. `dispatch-message-create`: after READY, send `POST
+   /channels/{channel_id}/messages` via REST, then confirm the library's
+   high-level "message create" callback/event fires with a matching message
+   within a timeout.
+
+REST-only clients with no Gateway capability (e.g. `@discordjs/rest`,
+`DiscordRestClient`, `twilight-http` alone) are not expected to add a
+`gateway` field at all — see `docs/superpowers/specs/2026-07-06-gateway-compat-verification-design.md`
+for the full list of libraries and their Gateway-capable counterpart
+(full `discord.js`, `DiscordSocketClient`, `twilight-gateway`).
+
+Libraries with no Gateway client at all remain REST-only rows in this file
+and are unaffected by this section.
+
 ## Run one verifier
 
 ```bash
