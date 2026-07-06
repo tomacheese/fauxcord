@@ -53,6 +53,13 @@ export interface UserObject {
   mfa_enabled?: boolean
   /** User locale (always "en-US" in the mock) */
   locale?: string
+  /**
+   * Whether the account's email has been verified. Real Discord only
+   * includes this for the current authenticated user's own `/users/@me`
+   * response (never for arbitrary user lookups), so `getBotUser()` sets it
+   * and `getUser()` deliberately omits it.
+   */
+  verified?: boolean
 }
 
 /**
@@ -92,6 +99,7 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
     global_name: null,
     mfa_enabled: false,
     locale: 'en-US',
+    verified: true,
   }
 }
 

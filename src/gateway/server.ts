@@ -52,7 +52,12 @@ function resolveBotForIdentify(
       'SELECT user_id, username, discriminator, avatar FROM bots WHERE token = ?'
     )
     .get(lookupToken) as
-    | { user_id: string; username: string; discriminator: string; avatar: string | null }
+    | {
+        user_id: string
+        username: string
+        discriminator: string
+        avatar: string | null
+      }
     | undefined
   if (row) {
     return {
@@ -63,7 +68,12 @@ function resolveBotForIdentify(
     }
   }
   if (disableAuth) {
-    return { userId: '0', username: 'MockBot', discriminator: '0', avatar: null }
+    return {
+      userId: '0',
+      username: 'MockBot',
+      discriminator: '0',
+      avatar: null,
+    }
   }
   return undefined
 }
@@ -193,11 +203,13 @@ function handleIdentify(
         v: 10,
         // Real Discord's READY `user` is the full own-user object (matching
         // GET /users/@me's shape), not just {id, username, bot}. Some
-        // clients build a strict own-user model straight from this field
-        // (e.g. interactions.py's `ClientUser` requires `verified` with no
-        // default) and raise before their `ready` event ever fires if a
-        // field is missing. `verified: true` and the other dummy values
-        // mirror src/services/users.ts's getBotUser().
+        // clients build a strict own-user model straight from this field and
+        // raise before their `ready` event ever fires if it's incomplete.
+        // `verified: true` and the other dummy values mirror
+        // src/services/users.ts's getBotUser() (which independently needed
+        // the same `verified` field added, since some clients -- e.g.
+        // interactions.py -- build their own-user model from the REST
+        // `/users/@me` login response instead of this Gateway field).
         user: {
           id: bot.userId,
           username: bot.username,

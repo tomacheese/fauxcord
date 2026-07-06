@@ -175,13 +175,25 @@ describe('Users GET endpoints', () => {
     expect(res.status).toBe(401)
   })
 
+  it("GET /users/@me includes `verified: true` (required by strict client models such as interactions.py's ClientUser, built from this REST response rather than the Gateway READY payload)", async () => {
+    const res = await app.request('/api/v10/users/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { verified?: boolean }
+    expect(body.verified).toBe(true)
+  })
+
   it('GET /users/:id returns a known user', async () => {
     const res = await app.request(`/api/v10/users/${userId}`, {
       headers: { Authorization: token },
     })
     expect(res.status).toBe(200)
-    const body = (await res.json()) as { id: string }
+    const body = (await res.json()) as { id: string; verified?: boolean }
     expect(body.id).toBe(userId)
+    // `verified` is only ever returned for the current user's own
+    // /users/@me, never for arbitrary user lookups (matches real Discord).
+    expect(body.verified).toBeUndefined()
   })
 
   it('GET /users/:id returns 404 (10013) for an unknown user', async () => {
