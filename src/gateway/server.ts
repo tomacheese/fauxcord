@@ -174,6 +174,11 @@ function handleIdentify(
         guilds: [],
         session_id: session.sessionId,
         resume_gateway_url: toWsUrl(options.baseUrl),
+        // `application` is required by the real Gateway READY payload
+        // (GatewayReadyDispatchData in discord-api-types); some clients
+        // (e.g. Oceanic.js) fail to parse READY without it. `flags: 0` is a
+        // dummy value, matching the REST `/applications/@me` mock.
+        application: { id: bot.userId, flags: 0 },
       },
     })
   )

@@ -77,6 +77,26 @@ describe('IDENTIFY payload validation', () => {
     ws.close()
   })
 
+  it('includes the `application` field in READY (required by GatewayReadyDispatchData)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    const userId = '999999999999999999'
+    seedBot(db, 'Bot appfieldtoken', userId)
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot appfieldtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as { application?: { id: string; flags: number } }
+    expect(readyData.application).toEqual({ id: userId, flags: 0 })
+    ws.close()
+  })
+
   it('closes with 4013 when intents are invalid', async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c
