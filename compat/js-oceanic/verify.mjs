@@ -516,8 +516,7 @@ async function verifyOceanicGateway() {
     // (e.g. the crash above happens after the socket connects but before
     // the shard is marked ready), which would otherwise keep the process
     // alive forever.
-    gwClient.disconnectAll?.() ??
-      gwClient.shards?.forEach((s) => s.disconnect())
+    gwClient.shards?.forEach((s) => s.disconnect())
     return { status: 'lib-issue', steps }
   }
   steps.push({ step: 'connect-identify-ready', status: 'pass', note: '' })
@@ -545,8 +544,7 @@ async function verifyOceanicGateway() {
       note: String(err?.message ?? err).slice(0, 300),
     })
   } finally {
-    gwClient.disconnectAll?.() ??
-      gwClient.shards?.forEach((s) => s.disconnect())
+    gwClient.shards?.forEach((s) => s.disconnect())
   }
 
   const failed = steps.find((s) => s.status !== 'pass')
