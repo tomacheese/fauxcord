@@ -8,6 +8,7 @@
 // reaction), resolve each endpoint's params, call it, and record the outcome.
 
 import { REST } from '@discordjs/rest'
+import { Client as DjsClient, GatewayIntentBits } from 'discord.js'
 import { readFileSync, writeFileSync } from 'node:fs'
 
 const BASE = process.env.FAUXCORD_BASE ?? 'http://fauxcord:3000/api/v10'
@@ -382,14 +383,18 @@ async function main() {
     byKey.get(`${method} ${path}`)
   )
 
+  // --- Gateway phase: full discord.js package (separate from @discordjs/rest above) ---
+  const gatewayResult = await verifyGateway()
+
   writeFileSync(
     process.env.RESULTS_PATH ?? '/results/discordjs.json',
     JSON.stringify(
       {
         library: 'discord.js',
-        version: '@discordjs/rest 2.x',
+        version: '@discordjs/rest 2.x (gateway: discord.js 14.16.3)',
         baseUrlOverridable: true,
         results: ordered2,
+        gateway: gatewayResult,
       },
       null,
       2
@@ -397,6 +402,96 @@ async function main() {
   )
   const pass = results.filter((r) => r.status === 'pass').length
   console.log(`discordjs done: ${pass}/${results.length} pass`)
+}
+
+/**
+ * Runs the Gateway connect + dispatch verification using the full
+ * discord.js package (distinct from the @discordjs/rest client used for
+ * REST verification above).
+ * @returns Gateway verification result object.
+ */
+async function verifyGateway() {
+  const steps = []
+  const djs = new DjsClient({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+    rest: { api: `${ORIGIN}/api` },
+  })
+
+  try {
+    // Race login()+ready against a single timeout guard rather than awaiting
+    // them sequentially: if login() itself never settles (e.g. discord.js
+    // silently retries the Gateway connection instead of rejecting), a
+    // separately-awaited timeout promise would reject with nothing
+    // consuming it — an unhandled rejection that crashes the whole process.
+    // Promise.race attaches a handler to every input promise, so this stays
+    // safe regardless of which promise settles first.
+    await Promise.race([
+      (async () => {
+        await djs.login('compat-token')
+        await new Promise((resolve) => djs.once('ready', resolve))
+      })(),
+      new Promise((_resolve, reject) =>
+        setTimeout(() => reject(new Error('ready timeout')), 20000)
+      ),
+    ])
+    steps.push({ step: 'connect-identify-ready', status: 'pass', note: '' })
+  } catch (err) {
+    // discord.js sends the raw token (no "Bot " prefix) in the IDENTIFY
+    // payload's `token` field, matching real Discord's Gateway protocol —
+    // the "Bot " prefix is an HTTP Authorization-header convention only.
+    // Fauxcord's gateway looks up `bots.token` with that raw value, but the
+    // table stores the full "Bot <token>" string (as passed to
+    // /_test/setup), so every real-token Gateway client is rejected with
+    // 4004 Authentication failed. This is a Fauxcord-side bug, not a
+    // discord.js issue (confirmed by connecting a raw `ws` client: sending
+    // "Bot <token>" in IDENTIFY succeeds, sending the real, unprefixed
+    // token fails).
+    const message = String(err?.message ?? err)
+    const isPrefixBug = message.includes('Authentication failed')
+    steps.push({
+      step: 'connect-identify-ready',
+      status: isPrefixBug ? 'fauxcord-fix' : 'lib-issue',
+      note: isPrefixBug
+        ? 'Fauxcord gateway IDENTIFY rejects the unprefixed token discord.js sends (matches real Discord protocol); bots.token is stored with a "Bot " prefix and resolveBotForIdentify() compares it verbatim (src/gateway/server.ts)'
+        : message.slice(0, 300),
+    })
+    return { status: isPrefixBug ? 'fauxcord-fix' : 'lib-issue', steps }
+  }
+
+  try {
+    const dispatchWait = new Promise((resolve) =>
+      djs.once('messageCreate', resolve)
+    )
+    await rest.post(`/channels/${CH}/messages`, {
+      body: { content: 'gateway-compat-check' },
+    })
+    // Same Promise.race rationale as the connect phase above: a
+    // separately-awaited timeout would go unhandled if rest.post() itself
+    // throws first (dispatchWait never gets awaited, but its timer keeps
+    // running).
+    await Promise.race([
+      dispatchWait,
+      new Promise((_resolve, reject) =>
+        setTimeout(() => reject(new Error('messageCreate timeout')), 15000)
+      ),
+    ])
+    steps.push({ step: 'dispatch-message-create', status: 'pass', note: '' })
+  } catch (err) {
+    steps.push({
+      step: 'dispatch-message-create',
+      status: 'lib-issue',
+      note: String(err?.message ?? err).slice(0, 300),
+    })
+  } finally {
+    djs.destroy()
+  }
+
+  const failed = steps.find((s) => s.status !== 'pass')
+  return { status: failed ? failed.status : 'pass', steps }
 }
 
 main().catch((e) => {
