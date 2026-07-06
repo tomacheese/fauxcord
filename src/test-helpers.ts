@@ -17,6 +17,7 @@ import { createChannelRoutes } from './routes/channels'
 import { createGuildRoutes } from './routes/guilds'
 import { createUserRoutes } from './routes/users'
 import { createGatewayRoutes } from './routes/gateway'
+import { createSoundboardRoutes } from './routes/soundboard'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createInviteRoutes } from './routes/invites'
 import { createOAuth2Routes } from './routes/oauth2'
@@ -99,6 +100,7 @@ export function createFullTestApp(): FullTestContext {
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
+    app.route(prefix, createSoundboardRoutes())
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
     app.route(prefix, createInviteRoutes(db))
   }

@@ -19,6 +19,7 @@ import { createChannelRoutes } from './routes/channels'
 import { createGuildRoutes } from './routes/guilds'
 import { createUserRoutes } from './routes/users'
 import { createGatewayRoutes } from './routes/gateway'
+import { createSoundboardRoutes } from './routes/soundboard'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createInviteRoutes } from './routes/invites'
 import { createOAuth2Routes } from './routes/oauth2'
@@ -129,6 +130,7 @@ export function buildApp(
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, config.baseUrl))
+    app.route(prefix, createSoundboardRoutes())
     // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
     app.route(prefix, createWebhookRoutes(db, config.baseUrl))
     app.route(prefix, createInviteRoutes(db))
