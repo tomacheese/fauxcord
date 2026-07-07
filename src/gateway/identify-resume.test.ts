@@ -97,7 +97,7 @@ describe('IDENTIFY payload validation', () => {
     ws.close()
   })
 
-  it('includes a complete `user` object in READY (required by strict client models such as interactions.py\'s ClientUser)', async () => {
+  it("includes a complete `user` object in READY (required by strict client models such as interactions.py's ClientUser)", async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c
     const userId = '888888888888888888'
