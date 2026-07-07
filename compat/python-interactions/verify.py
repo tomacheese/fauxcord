@@ -272,36 +272,49 @@ CallEntry = tuple[Optional[Callable[[], Awaitable[Any]]], Note]
 def _classify_gateway_error(err: BaseException | None) -> tuple[str, str]:
     """Classify a Gateway connect failure as a Fauxcord bug or a lib issue.
 
-    interactions.py's `ClientUser` (source-verified,
-    `interactions/models/discord/user.py`, tag `5.16.0`) declares `verified`
-    as a required keyword-only field with no default, and the gateway's
-    internal READY handler constructs it straight from `d.user` before ever
-    firing the `Ready` listener. Fauxcord's READY payload's `user` object
-    (`src/gateway/server.ts`) used to only send `{id, username, bot}` -- no
-    `verified` -- so `ClientUser(**user_data)` raised `TypeError` before
-    `on_ready` ever ran. Real Discord's own READY payload does include
-    `verified` for the bot's own user (per the Discord API docs, the
-    identify/`users/@me` context always returns it, unlike third-party user
-    objects), so this was a genuine Fauxcord gap, the same class of bug as
-    the missing `application` field fixed earlier -- not an interactions.py
-    issue. This has since been fixed on the Fauxcord side (the READY `user`
-    object now matches the REST `/users/@me` shape, including `verified`),
-    so this branch is expected to be dead code during normal runs; it is
-    kept as a regression guard in case the READY payload's `user` shape
-    ever drops the field again.
-    @param err - The exception raised while `astart()` was processing READY, if any.
+    `interactions.Client.astart()` calls `login()` before it ever opens the
+    Gateway socket (source-verified, `interactions/client/client.py`, tag
+    `5.16.0`, `astart()` -> `login()` -> `_connection_state.start()`), and
+    `login()` itself does two plain REST calls and builds two strict attrs
+    models straight from their JSON: `self._user = ClientUser.from_dict(
+    await self.http.login(self.token), self)` (the REST `GET /users/@me`
+    login response) and `self._app = Application.from_dict(await self.http.
+    get_current_bot_information(), self)` (`GET /applications/@me`). Both
+    `ClientUser` and `Application` (`interactions/models/discord/user.py`,
+    `interactions/models/discord/application.py`) declare required
+    keyword-only fields with no default -- `verified` and `summary`
+    respectively -- so a `TypeError` from either one surfaces as a
+    `start_task` exception before READY is ever received, even though it
+    has nothing to do with the Gateway handshake itself. Two genuine
+    Fauxcord REST gaps were found this way (via this verifier): `getBotUser()`
+    (`GET /users/@me`, `src/services/users.ts`) was missing `verified`
+    (fixed), and `getApplication()` (`GET /applications/@me`, same file) was
+    missing the deprecated-but-required `summary` field (fixed). Both are
+    genuine Fauxcord gaps, not interactions.py issues -- real Discord always
+    returns both fields on these endpoints. This function is kept as a
+    regression guard in case either field's mock response ever drops the
+    field again; a clean run is expected to never hit either branch.
+    @param err - The exception raised while `astart()` was processing login/READY, if any.
     @returns A `(status, note)` tuple.
     """
-    is_missing_verified = isinstance(err, TypeError) and "verified" in str(err)
-    if is_missing_verified:
+    message = str(err) if err is not None else ""
+    if isinstance(err, TypeError) and "verified" in message:
         return (
             "fauxcord-fix",
-            "Fauxcord's READY payload's user object omits `verified`, which "
+            "Fauxcord's GET /users/@me response omits `verified`, which "
             "interactions.py's ClientUser requires with no default "
-            "(src/gateway/server.ts); real Discord always includes it for "
-            "the bot's own user",
+            "(src/services/users.ts's getBotUser()); real Discord always "
+            "includes it for the bot's own user",
         )
-    return ("lib-issue", str(err)[:300] if err is not None else "ready timeout")
+    if isinstance(err, TypeError) and "summary" in message:
+        return (
+            "fauxcord-fix",
+            "Fauxcord's GET /applications/@me response omits `summary`, "
+            "which interactions.py's Application requires with no default "
+            "(src/services/users.ts's getApplication()); real Discord "
+            "always includes this deprecated-but-required field",
+        )
+    return ("lib-issue", message[:300] if err is not None else "ready timeout")
 
 
 async def main() -> None:
@@ -888,7 +901,20 @@ async def main() -> None:
                     }
                 )
             finally:
-                await bot.stop()
+                # `bot.stop()` waits on interactions.py's own keep-alive task,
+                # which (observed while building this verifier) can enter a
+                # reconnect loop that never yields cleanly if the underlying
+                # transport was reset mid-session -- a bare aiohttp client
+                # doing the same REST-during-open-Gateway pattern against
+                # Fauxcord does *not* reproduce this, so it looks like
+                # interactions.py-internal behavior rather than a Fauxcord
+                # protocol violation. Either way, a graceful `bot.stop()`
+                # must never be allowed to hang the whole verifier: bound it
+                # and fall back to cancelling the task tree directly.
+                try:
+                    await asyncio.wait_for(bot.stop(), timeout=10)
+                except Exception:  # noqa: BLE001
+                    pass
                 start_task.cancel()
                 await asyncio.gather(start_task, return_exceptions=True)
 
