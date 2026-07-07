@@ -5,6 +5,7 @@
  */
 
 import type { Database } from '../db'
+import { toDiscordTimestamp } from '../timestamp'
 
 /** OAuth2 token response type */
 export interface TokenResponse {
@@ -241,7 +242,7 @@ export function getOAuth2Me(
     },
     // Guard against an empty scope so we return [] rather than [""].
     scopes: accessToken.scope ? accessToken.scope.split(' ') : [],
-    expires: new Date(accessToken.expires_at).toISOString(),
+    expires: toDiscordTimestamp(new Date(accessToken.expires_at)),
     user: {
       id: user.id,
       username: user.username,

@@ -7,6 +7,7 @@
 
 import type { Database } from '../db'
 import { snowflakeToTimestamp } from '../snowflake'
+import { toDiscordTimestamp } from '../timestamp'
 import { gatewayBus } from '../gateway/bus'
 // Used for compile-time type drift detection.
 // When Renovate bumps discord-api-types, `pnpm lint:tsc` will fail if the
@@ -225,9 +226,9 @@ export function toMessageObject(
       primary_guild: null,
     },
     content: row.content,
-    timestamp: new Date(row.created_at).toISOString(),
+    timestamp: toDiscordTimestamp(new Date(row.created_at)),
     edited_timestamp: row.edited_at
-      ? new Date(row.edited_at).toISOString()
+      ? toDiscordTimestamp(new Date(row.edited_at))
       : null,
     tts: row.tts === 1,
     mention_everyone: row.mention_everyone === 1,

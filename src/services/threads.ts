@@ -7,6 +7,7 @@
 
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
+import { toDiscordTimestamp } from '../timestamp'
 import { THREAD_AUTO_ARCHIVE_DURATIONS } from '../validators/thread'
 
 /** Default thread type when the request omits `type` (Public Thread). */
@@ -127,14 +128,14 @@ export function toThreadObject(db: Database, row: ThreadRow): ThreadObject {
       // Falls back to the creation timestamp when never explicitly archived
       // (matches real Discord: archive_timestamp starts at creation time and
       // is never null — confirmed via discord-api-types' APIThreadMetadata).
-      archive_timestamp: new Date(
-        row.archive_timestamp ?? row.created_at
-      ).toISOString(),
+      archive_timestamp: toDiscordTimestamp(
+        new Date(row.archive_timestamp ?? row.created_at)
+      ),
       auto_archive_duration: normalizeAutoArchiveDuration(
         row.auto_archive_duration
       ),
       locked: row.locked === 1,
-      create_timestamp: new Date(row.created_at).toISOString(),
+      create_timestamp: toDiscordTimestamp(new Date(row.created_at)),
       invitable: row.invitable === 1,
     },
   }
@@ -149,7 +150,7 @@ export function toThreadMemberObject(row: ThreadMemberRow): ThreadMemberObject {
   return {
     id: row.thread_id,
     user_id: row.user_id,
-    join_timestamp: new Date(row.join_timestamp).toISOString(),
+    join_timestamp: toDiscordTimestamp(new Date(row.join_timestamp)),
     flags: row.flags,
   }
 }

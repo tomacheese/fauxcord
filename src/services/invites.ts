@@ -6,6 +6,7 @@
 
 import type { Database } from '../db'
 import { getUser, type UserObject } from './users'
+import { toDiscordTimestamp } from '../timestamp'
 // Used for compile-time type drift detection.
 import type { APIInvite } from 'discord-api-types/v10'
 
@@ -93,7 +94,7 @@ interface InviteChannelRow {
  * @returns ISO 8601 string
  */
 function toIso(value: string): string {
-  return new Date(`${value.replace(' ', 'T')}Z`).toISOString()
+  return toDiscordTimestamp(new Date(`${value.replace(' ', 'T')}Z`))
 }
 
 /**
@@ -105,7 +106,7 @@ function toIso(value: string): string {
 function computeExpiresAt(createdAt: string, maxAge: number): string | null {
   if (maxAge === 0) return null
   const created = new Date(`${createdAt.replace(' ', 'T')}Z`)
-  return new Date(created.getTime() + maxAge * 1000).toISOString()
+  return toDiscordTimestamp(new Date(created.getTime() + maxAge * 1000))
 }
 
 /**

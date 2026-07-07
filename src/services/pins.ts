@@ -10,6 +10,7 @@ import {
   type MessageRow,
   type MessageObject,
 } from './messages'
+import { toDiscordTimestamp } from '../timestamp'
 
 /**
  * Retrieves the list of pinned messages.
@@ -53,7 +54,7 @@ export interface PinnedMessageEntry {
  * @returns ISO-8601 UTC timestamp string
  */
 function sqliteUtcToIso(value: string): string {
-  return new Date(`${value.replace(' ', 'T')}Z`).toISOString()
+  return toDiscordTimestamp(new Date(`${value.replace(' ', 'T')}Z`))
 }
 
 /**

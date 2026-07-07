@@ -9,6 +9,7 @@ import type { Database } from '../db'
 // Used for compile-time type drift detection.
 import type { APIGuildMember, APIUser } from 'discord-api-types/v10'
 import { gatewayBus } from '../gateway/bus'
+import { toDiscordTimestamp } from '../timestamp'
 
 /**
  * Compile-time guard: ensures the safe-field subset of GuildMemberObject is
@@ -149,7 +150,7 @@ export function getGuildMember(
     banner: null,
     communication_disabled_until: null,
     flags: memberRow.flags,
-    joined_at: new Date(memberRow.joined_at).toISOString(),
+    joined_at: toDiscordTimestamp(new Date(memberRow.joined_at)),
     nick: memberRow.nick,
     pending: false,
     premium_since: null,
@@ -238,7 +239,7 @@ export function getGuildMembers(
         banner: null,
         communication_disabled_until: null,
         flags: memberRow.flags,
-        joined_at: new Date(memberRow.joined_at).toISOString(),
+        joined_at: toDiscordTimestamp(new Date(memberRow.joined_at)),
         nick: memberRow.nick,
         pending: false,
         premium_since: null,
