@@ -14,4 +14,4 @@ aiohttp
 # nextcord's health_check module imports pkg_resources, which python:3.12-slim
 # no longer provides out of the box. Newer setuptools (>=81) dropped pkg_resources
 # entirely, so pin below that ceiling to get a version that still bundles it.
-setuptools<83
+setuptools<84
