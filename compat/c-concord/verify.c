@@ -21,8 +21,9 @@
  *    `discord_cleanup()` frees it.
  *
  * 4. Concord's REST layer works without starting the Gateway: every
- *    `discord_*` wrapper issues a plain HTTP request; `discord_run()` (the
- *    Gateway event loop) is never called by this verifier.
+ *    `discord_*` wrapper issues a plain HTTP request. The Gateway phase
+ *    (added below, run after the REST phase) is the only place
+ *    `discord_run()` is called.
  *
  * 5. Synchronous ("blocking") call idiom (include/discord-response.h):
  *      - Typed responses: `.sync = &local_struct` blocks and writes the
@@ -51,6 +52,23 @@
  *    discord_execute_webhook is NOT invoked here: "POST /webhooks/{id}/{token}"
  *    is recorded as a lib-issue with this root cause, and the
  *    webhook-authored-message rows become n-a (no message id captured).
+ *
+ * 9. CONFIRMED Concord bug (upstream master @ 02fff9a7): the Gateway IDENTIFY
+ *    payload's `intents` field is sent as a JSON STRING (e.g. `"4608"`)
+ *    instead of a JSON number. `struct discord_identify.intents` is typed
+ *    `u64bitmask` in the generated codec (discord_codecs.h), the SAME type
+ *    Concord uses for REST fields like `permissions` — which real Discord
+ *    genuinely stringifies to dodge 64-bit precision loss in JSON. But the
+ *    Gateway's `intents` field is documented by Discord as a plain integer,
+ *    never a string, so Concord's generic reuse of the string-bitmask codec
+ *    for this field is non-conformant. Fauxcord's IDENTIFY validation
+ *    (`isIdentifyData()` in src/gateway/server.ts) requires `intents` to be
+ *    a JS number per the real Gateway protocol, so it rejects the payload
+ *    and closes with 4004 (Authentication failed) — a correct rejection of
+ *    a malformed payload, not an authentication problem. Root cause
+ *    confirmed by temporarily logging the raw IDENTIFY payload received by
+ *    Fauxcord. Recorded as lib-issue; Fauxcord's protocol-conformant
+ *    validation is not relaxed to accommodate this.
  *
  * ============================================================================
  * ENDPOINT COVERAGE NOTES (n-a entries, confirmed by reading the public
@@ -216,9 +234,12 @@ json_escape(char *out, size_t outsz, const char *s)
  *      section.
  *
  * @param version the Concord version string used for this run
+ * @param gw_status overall Gateway phase status ("pass" | "lib-issue" | ...)
+ * @param gw_steps_json pre-built JSON array of the Gateway phase's steps
  */
 static void
-write_report(const char *version)
+write_report(const char *version, const char *gw_status,
+            const char *gw_steps_json)
 {
     FILE *f = fopen("/results/concord.json", "w");
     if (!f) {
@@ -239,7 +260,9 @@ write_report(const char *version)
                 ep_esc, g_results[i].status, note_esc,
                 (i + 1 < g_nresults) ? "," : "");
     }
-    fprintf(f, "  ]\n");
+    fprintf(f, "  ],\n");
+    fprintf(f, "  \"gateway\": { \"status\": \"%s\", \"steps\": %s }\n",
+            gw_status, gw_steps_json);
     fprintf(f, "}\n");
     fclose(f);
 }
@@ -332,6 +355,106 @@ do_setup(const char *origin)
     fprintf(stderr, "do_setup: failed to POST /_test/setup after %d attempts (lastStatus=%ld)\n",
             max_attempts, last_status);
     return -1;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Gateway phase                                                          */
+/*                                                                         */
+/* Concord ships its own blocking Gateway event loop (discord_run()),      */
+/* driven entirely by callbacks and timers registered on the same client   */
+/* used for the REST phase above — no second client/connection needed.     */
+/* ---------------------------------------------------------------------- */
+
+static int gw_ready = 0;
+static int gw_message_received = 0;
+
+/**
+ * @brief READY handler: marks the handshake complete and immediately fires
+ *      the compat-check message so `discord_run()` can observe its own
+ *      dispatch round-trip without a second call into main().
+ */
+static void
+on_gw_ready(struct discord *client, const struct discord_ready *event)
+{
+    (void)event;
+    gw_ready = 1;
+    struct discord_create_message params = { .content = "gateway-compat-check" };
+    /* Fire-and-forget async call (ret == NULL), the same idiom Concord's own
+       examples use from within event handlers (see examples/ping-pong.c). */
+    discord_create_message(client, CHANNEL_ID, &params, NULL);
+}
+
+/**
+ * @brief MESSAGE_CREATE handler: confirms the compat-check message dispatched
+ *      above round-tripped back over the Gateway, then ends the event loop.
+ */
+static void
+on_gw_message(struct discord *client, const struct discord_message *msg)
+{
+    if (msg->content && strcmp(msg->content, "gateway-compat-check") == 0) {
+        gw_message_received = 1;
+        discord_shutdown(client);
+    }
+}
+
+/**
+ * @brief One-shot timer callback bounding how long `discord_run()` may block:
+ *      if READY or the dispatched message never arrives, this forces the
+ *      event loop to return instead of hanging forever.
+ */
+static void
+on_gw_timeout(struct discord *client, struct discord_timer *timer)
+{
+    (void)timer;
+    discord_shutdown(client);
+}
+
+/**
+ * @brief Runs the Gateway connect + dispatch verification, reusing the
+ *      already-booted REST client and blocking on `discord_run()` until
+ *      either the dispatch round-trip completes or the timeout fires.
+ *
+ * @param client the client created via discord_from_config() in main()
+ * @param status_out buffer receiving the overall gateway status
+ * @param steps_json buffer receiving the per-step JSON array
+ */
+static void
+verify_gateway(struct discord *client, char *status_out, char steps_json[1024])
+{
+    discord_set_on_ready(client, &on_gw_ready);
+    discord_set_on_message_create(client, &on_gw_message);
+    discord_timer(client, &on_gw_timeout, NULL, NULL, 30000);
+
+    discord_run(client);
+
+    const char *connect_status = "pass";
+    const char *connect_note = "";
+    if (!gw_ready) {
+        connect_status = "lib-issue";
+        connect_note = "ready timeout, or IDENTIFY rejected because Concord "
+                        "sends intents as a JSON string instead of a number "
+                        "(see CONFIRMED FACT #9 above)";
+    }
+
+    const char *dispatch_status = "n-a";
+    const char *dispatch_note = "";
+    if (gw_ready) {
+        if (gw_message_received) {
+            dispatch_status = "pass";
+        }
+        else {
+            dispatch_status = "lib-issue";
+            dispatch_note = "messageCreate timeout";
+        }
+    }
+
+    snprintf(steps_json, 1024,
+        "[{\"step\":\"connect-identify-ready\",\"status\":\"%s\",\"note\":\"%s\"},"
+        "{\"step\":\"dispatch-message-create\",\"status\":\"%s\",\"note\":\"%s\"}]",
+        connect_status, connect_note, dispatch_status, dispatch_note);
+
+    snprintf(status_out, 32, "%s",
+            strcmp(connect_status, "pass") != 0 ? connect_status : dispatch_status);
 }
 
 /* ---------------------------------------------------------------------- */
@@ -1132,7 +1255,12 @@ main(void)
     record_na("DELETE /webhooks/{webhook_id}",
               "not exercised: would delete the shared webhook other rows still need");
 
-    write_report("master (git clone --depth 1, built at image build time)");
+    char gw_status[32] = "n-a";
+    char gw_steps_json[1024] = "[]";
+    verify_gateway(client, gw_status, gw_steps_json);
+
+    write_report("master (git clone --depth 1, built at image build time)",
+                 gw_status, gw_steps_json);
 
     int pass_count = 0;
     for (int i = 0; i < g_nresults; i++) {
