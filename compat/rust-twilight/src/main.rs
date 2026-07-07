@@ -37,10 +37,13 @@
 use serde_json::Value;
 use std::fs;
 use std::time::Duration;
+use twilight_gateway::{ConfigBuilder as GwConfigBuilder, Shard, ShardId, StreamExt as _};
 use twilight_http::request::channel::reaction::RequestReactionType;
 use twilight_http::Client;
 use twilight_model::channel::thread::AutoArchiveDuration;
 use twilight_model::channel::ChannelType;
+use twilight_model::gateway::event::Event;
+use twilight_model::gateway::Intents;
 use twilight_model::guild::Permissions;
 use twilight_model::http::permission_overwrite::{PermissionOverwrite, PermissionOverwriteType};
 use twilight_model::id::marker::{
@@ -63,6 +66,21 @@ struct EndpointResult {
     note: String,
 }
 
+/// One step of the Gateway connect/dispatch verification.
+#[derive(serde::Serialize)]
+struct GatewayStep {
+    step: String,
+    status: String,
+    note: String,
+}
+
+/// The overall Gateway verification outcome.
+#[derive(serde::Serialize)]
+struct GatewayResult {
+    status: String,
+    steps: Vec<GatewayStep>,
+}
+
 /// The final JSON document written to /results/twilight.json.
 #[derive(serde::Serialize)]
 struct Report {
@@ -71,6 +89,7 @@ struct Report {
     #[serde(rename = "baseUrlOverridable")]
     base_url_overridable: bool,
     results: Vec<EndpointResult>,
+    gateway: GatewayResult,
 }
 
 /// Resources bootstrapped before the endpoint matrix runs, so later calls
@@ -119,6 +138,42 @@ fn bare_host_from(origin: &str) -> String {
         .or_else(|| origin.strip_prefix("http://"))
         .unwrap_or(origin)
         .to_string()
+}
+
+/// Derives the `ws://`/`wss://` origin (scheme+host+port, no path) that
+/// `twilight-gateway`'s `ConfigBuilder::proxy_url` expects, from the
+/// `http(s)://`-scheme origin returned by `origin_from`. Unlike
+/// `twilight-http`'s `.proxy(host, use_http)`, `proxy_url` replaces the
+/// default `wss://gateway.discord.gg` outright and keeps its own scheme, so
+/// the `http`/`https` scheme must be swapped for `ws`/`wss` rather than
+/// stripped.
+fn gateway_url_from(origin: &str) -> String {
+    if let Some(rest) = origin.strip_prefix("https://") {
+        format!("wss://{rest}")
+    } else if let Some(rest) = origin.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else {
+        origin.to_string()
+    }
+}
+
+/// Renders an error together with its full `source()` chain.
+///
+/// `twilight-gateway`'s `ReceiveMessageError::Display` only prints its own
+/// summary (e.g. "gateway event could not be deserialized: event=...") and
+/// omits the wrapped `serde_json::Error`, which is only reachable via
+/// `std::error::Error::source()`. Without walking that chain, the actual
+/// missing/mismatched-field detail needed to tell a genuine Fauxcord bug
+/// apart from a benign library quirk is lost.
+fn describe_error(err: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = err.to_string();
+    let mut source = err.source();
+    while let Some(e) = source {
+        out.push_str(" | caused by: ");
+        out.push_str(&e.to_string());
+        source = e.source();
+    }
+    out
 }
 
 /// Polls the SUT health endpoint until it responds 200 OK.
@@ -176,6 +231,138 @@ async fn do_setup(client: &reqwest::Client, origin: &str, raw: &str) {
     );
 }
 
+// --- Gateway phase ---
+// CAVEAT: written without a `cargo build` in the loop (same caveat as the
+// REST phase above).
+
+/// Runs the Gateway connect + dispatch verification for twilight: opens a
+/// `Shard` against Fauxcord's Gateway (HELLO -> IDENTIFY -> READY), then
+/// sends a message over REST and confirms a matching MESSAGE_CREATE arrives
+/// over the same shard.
+///
+/// `ws_url` (scheme `ws://`/`wss://`) is used for the Shard's `proxy_url`;
+/// `bare_host` (no scheme) and `use_http` are used for the REST client that
+/// dispatches the message, matching `twilight-http`'s `.proxy()` shape.
+/// `token` is the real `"Bot <token>"` string returned by `/_test/setup` —
+/// Fauxcord's Gateway requires a token registered against a real Bot
+/// (DISABLE_AUTH is not set for this harness), so a synthetic placeholder
+/// would fail IDENTIFY.
+async fn verify_gateway(
+    bare_host: &str,
+    use_http: bool,
+    ws_url: &str,
+    token: &str,
+    channel_id: u64,
+) -> GatewayResult {
+    let mut steps = vec![];
+    let gw_config = GwConfigBuilder::new(
+        token.to_owned(),
+        Intents::GUILDS | Intents::GUILD_MESSAGES | Intents::MESSAGE_CONTENT,
+    )
+    .proxy_url(ws_url.to_owned())
+    .build();
+    let mut shard = Shard::with_config(ShardId::ONE, gw_config);
+
+    let ready_result = tokio::time::timeout(Duration::from_secs(20), async {
+        loop {
+            match shard.next_event(twilight_gateway::EventTypeFlags::all()).await {
+                Some(Ok(Event::Ready(_))) => return Ok(()),
+                Some(Ok(_)) => continue,
+                Some(Err(e)) => return Err(describe_error(&e)),
+                None => return Err("stream ended".to_string()),
+            }
+        }
+    })
+    .await;
+
+    match ready_result {
+        Ok(Ok(())) => steps.push(GatewayStep {
+            step: "connect-identify-ready".into(),
+            status: "pass".into(),
+            note: "".into(),
+        }),
+        Ok(Err(e)) => {
+            steps.push(GatewayStep {
+                step: "connect-identify-ready".into(),
+                status: "lib-issue".into(),
+                note: e,
+            });
+            return GatewayResult {
+                status: "lib-issue".into(),
+                steps,
+            };
+        }
+        Err(_) => {
+            steps.push(GatewayStep {
+                step: "connect-identify-ready".into(),
+                status: "lib-issue".into(),
+                note: "ready timeout".into(),
+            });
+            return GatewayResult {
+                status: "lib-issue".into(),
+                steps,
+            };
+        }
+    }
+
+    // Reuse the same proxy target as the REST phase (a fresh twilight-http
+    // client, since the original `client` is not `Sync` across this scope)
+    // to send the message; then poll for MESSAGE_CREATE over the shard.
+    let http_client = Client::builder()
+        .proxy(bare_host.to_owned(), use_http)
+        .token(token.to_owned())
+        .build();
+    if let Err(e) = http_client
+        .create_message(Id::<ChannelMarker>::new(channel_id))
+        .content("gateway-compat-check")
+        .await
+    {
+        steps.push(GatewayStep {
+            step: "dispatch-message-create".into(),
+            status: "lib-issue".into(),
+            note: e.to_string(),
+        });
+    } else {
+        let msg_result = tokio::time::timeout(Duration::from_secs(15), async {
+            loop {
+                match shard.next_event(twilight_gateway::EventTypeFlags::all()).await {
+                    Some(Ok(Event::MessageCreate(m))) if m.content == "gateway-compat-check" => {
+                        return Ok(())
+                    }
+                    Some(Ok(_)) => continue,
+                    Some(Err(e)) => return Err(describe_error(&e)),
+                    None => return Err("stream ended".to_string()),
+                }
+            }
+        })
+        .await;
+        match msg_result {
+            Ok(Ok(())) => steps.push(GatewayStep {
+                step: "dispatch-message-create".into(),
+                status: "pass".into(),
+                note: "".into(),
+            }),
+            Ok(Err(e)) => steps.push(GatewayStep {
+                step: "dispatch-message-create".into(),
+                status: "lib-issue".into(),
+                note: e,
+            }),
+            Err(_) => steps.push(GatewayStep {
+                step: "dispatch-message-create".into(),
+                status: "lib-issue".into(),
+                note: "messageCreate timeout".into(),
+            }),
+        }
+    }
+
+    let status = steps
+        .iter()
+        .find(|s| s.status != "pass")
+        .map(|s| s.status.clone())
+        .unwrap_or_else(|| "pass".into());
+    GatewayResult { status, steps }
+}
+
 #[tokio::main]
 async fn main() {
     let base =
@@ -225,6 +412,12 @@ async fn main() {
     // Bearer-only endpoint (`GET /oauth2/@me`) with a Bot token, which
     // legitimately 401s; without disabling the safeguard, that would poison
     // every later probe with a false "token invalid" failure.
+    // Cloned before the moves into `.proxy()`/`.token()` below: the Gateway
+    // phase needs the same bare host and real Bot token (Fauxcord's Gateway
+    // requires a token registered via /_test/setup — DISABLE_AUTH is not set
+    // for this harness) to build its own client and shard config.
+    let bare_host_for_gateway = bare_host.clone();
+    let token_for_gateway = token.clone();
     let client = Client::builder()
         .token(token)
         .remember_invalid_token(false)
@@ -403,6 +596,16 @@ async fn main() {
     let pass_count = results.iter().filter(|r| r.status == "pass").count();
     let total = results.len();
 
+    let gateway_ws_url = gateway_url_from(&origin);
+    let gateway = verify_gateway(
+        &bare_host_for_gateway,
+        true,
+        &gateway_ws_url,
+        &token_for_gateway,
+        channel_id,
+    )
+    .await;
+
     let report = Report {
         library: "twilight",
         // Reflects the major line pinned in Cargo.toml; the exact patch
@@ -410,6 +613,7 @@ async fn main() {
         version: "0.16.x",
         base_url_overridable: true,
         results,
+        gateway,
     };
     fs::write(
         "/results/twilight.json",

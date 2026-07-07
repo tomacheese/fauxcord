@@ -18,14 +18,20 @@ publish = false
 # no `cargo build` was actually run in this offline session).
 twilight-http = "0.17"
 twilight-model = "0.17"
+# Gateway verification phase: opens a real WebSocket connection via the
+# high-level `Shard` API (HELLO -> IDENTIFY -> READY), then dispatches a
+# MESSAGE_CREATE and confirms it arrives over the socket. Pinned to the same
+# 0.17 major line as twilight-http/twilight-model above.
+twilight-gateway = "0.17"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # Used directly for the health-check poll and the /_test/setup POST (the same
 # role fetch() plays in the JS verifiers, and reqwest plays in
 # rust-serenity) — kept independent of whatever internal HTTP client
-# twilight-http's default backend uses. rustls-tls avoids needing OpenSSL.
+# twilight-http's default backend uses. rustls avoids needing OpenSSL
+# (renamed from reqwest 0.12's `rustls-tls` feature in the 0.13 line).
 reqwest = { version = "0.13", default-features = false, features = [
   "json",
-  "rustls-tls",
+  "rustls",
 ] }
