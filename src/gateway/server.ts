@@ -226,6 +226,14 @@ function handleIdentify(
         guilds: [],
         session_id: session.sessionId,
         resume_gateway_url: toWsUrl(options.baseUrl),
+        // `private_channels` is not part of discord-api-types's
+        // GatewayReadyDispatchData (long deprecated, always empty), but real
+        // Discord still sends it and Discord.Net's ReadyEvent model reads
+        // `data.PrivateChannels.Length` unconditionally, throwing a
+        // NullReferenceException ("Processing READY failed") when the field
+        // is absent. Sending an empty array matches real Discord's behavior
+        // and costs nothing for clients that ignore it.
+        private_channels: [],
         // `application` is required by the real Gateway READY payload
         // (GatewayReadyDispatchData in discord-api-types); some clients
         // (e.g. Oceanic.js) fail to parse READY without it. `flags: 0` is a

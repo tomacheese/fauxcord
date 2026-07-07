@@ -97,6 +97,25 @@ describe('IDENTIFY payload validation', () => {
     ws.close()
   })
 
+  it("includes an empty `private_channels` array in READY (Discord.Net's ReadyEvent reads .Length unconditionally)", async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    seedBot(db, 'Bot privatechannelstoken')
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot privatechannelstoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as { private_channels?: unknown[] }
+    expect(readyData.private_channels).toEqual([])
+    ws.close()
+  })
+
   it("includes a complete `user` object in READY (required by strict client models such as interactions.py's ClientUser)", async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c
