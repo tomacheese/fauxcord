@@ -220,6 +220,15 @@ describe('Users GET endpoints', () => {
     expect(res.status).toBe(200)
   })
 
+  it("GET /applications/@me includes `summary` (required by strict client models such as interactions.py's Application)", async () => {
+    const res = await app.request('/api/v10/applications/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { summary?: string }
+    expect(body.summary).toBe('')
+  })
+
   it('GET /oauth2/applications/@me returns application info (Discord.Net alias)', async () => {
     const res = await app.request('/api/v10/oauth2/applications/@me', {
       headers: { Authorization: token },
