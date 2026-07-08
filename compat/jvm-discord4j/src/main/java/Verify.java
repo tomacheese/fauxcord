@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
  * {@code RestClient.restBuilder(token).build()} is a genuine REST-only client backed by an
  * HTTP {@link discord4j.rest.request.Router} — unlike JDA's {@code JDABuilder}, building it
  * performs no Gateway WebSocket handshake (confirmed against {@code RestClientBuilder.java} at
- * tag {@code 3.2.6}), so the REST checks below never depend on a Gateway connection. (Fauxcord
+ * tag {@code 3.3.2}), so the REST checks below never depend on a Gateway connection. (Fauxcord
  * now does implement a Gateway server, exercised separately below; see "Gateway verification".)
  *
  * <h2>Base URL override</h2>
@@ -56,14 +56,14 @@ import java.util.concurrent.TimeUnit;
  *
  * <h2>API shape: low-level *Service classes, not the thinner Rest* facades</h2>
  * The thin {@code Rest*} facades (e.g. {@code RestChannel}) are missing several endpoints this
- * matrix needs (no thread support at all in 3.2.6, no bot-authenticated webhook-message
+ * matrix needs (no thread support at all in 3.3.2, no bot-authenticated webhook-message
  * helpers), while the lower-level {@code *Service} classes they delegate to
  * (e.g. {@code ChannelService}, {@code GuildService}) map 1:1 onto Discord's routes. This
  * verifier therefore calls the {@code *Service} layer directly.
  *
  * <h2>Confirmed gaps (mapped to "n-a" below, each with its own inline evidence)</h2>
  * <ul>
- *   <li>Threads: {@code ChannelService} (3.2.6) has no thread-creation/thread-member/
+ *   <li>Threads: {@code ChannelService} (3.3.2) has no thread-creation/thread-member/
  *   archived-thread-listing methods at all, so every {@code /threads*} and
  *   {@code /thread-members*} endpoint is n-a.</li>
  *   <li>Legacy pins API ({@code /channels/{id}/pins*}): as of discord4j-core 3.3.2,
@@ -376,7 +376,7 @@ public class Verify {
         calls.put("DELETE /channels/{channel_id}/messages/{message_id}/reactions", new CallEntry(
                 () -> channelService.deleteAllReactions(channelId, msgId).block()));
         calls.put("POST /channels/{channel_id}/messages/{message_id}/threads", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-creation method at all; Discord4J's thread " +
+                null, "ChannelService (3.3.2) has no thread-creation method at all; Discord4J's thread " +
                         "support does not exist in this version's REST service layer"));
         calls.put("DELETE /channels/{channel_id}/messages/{message_id}", new CallEntry(
                 () -> channelService.deleteMessage(channelId, msgId, "compat").block()));
@@ -420,29 +420,29 @@ public class Verify {
                         "PinnedMessagesResponseData instead of a Flux<MessageData>; ChannelService no " +
                         "longer exposes the legacy /channels/{id}/pins route"));
         calls.put("DELETE /channels/{channel_id}/thread-members/{user_id}", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-member methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/thread-members/{user_id}", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-member methods; no thread support in this version"));
         calls.put("PUT /channels/{channel_id}/thread-members/{user_id}", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-member methods; no thread support in this version"));
         calls.put("DELETE /channels/{channel_id}/thread-members/@me", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-member methods; no thread support in this version"));
         calls.put("PUT /channels/{channel_id}/thread-members/@me", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-member methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/thread-members", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-member methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/threads/archived/private", new CallEntry(
-                null, "ChannelService (3.2.6) has no archived-thread-listing methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no archived-thread-listing methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/threads/archived/public", new CallEntry(
-                null, "ChannelService (3.2.6) has no archived-thread-listing methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no archived-thread-listing methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/threads/search", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-search method; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-search method; no thread support in this version"));
         calls.put("POST /channels/{channel_id}/threads", new CallEntry(
-                null, "ChannelService (3.2.6) has no thread-creation method; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no thread-creation method; no thread support in this version"));
         calls.put("POST /channels/{channel_id}/typing", new CallEntry(
                 () -> channelService.triggerTypingIndicator(channelId).block()));
         calls.put("GET /channels/{channel_id}/users/@me/threads/archived/private", new CallEntry(
-                null, "ChannelService (3.2.6) has no archived-thread-listing methods; no thread support in this version"));
+                null, "ChannelService (3.3.2) has no archived-thread-listing methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/webhooks", new CallEntry(
                 () -> webhookService.getChannelWebhooks(channelId).collectList().block()));
         calls.put("POST /channels/{channel_id}/webhooks", new CallEntry(
@@ -518,16 +518,16 @@ public class Verify {
                 () -> inviteService.deleteInvite(inviteCode, null).block()));
         calls.put("GET /invites/{code}", new CallEntry(() -> inviteService.getInvite(inviteCode).block()));
         calls.put("GET /oauth2/@me", new CallEntry(
-                null, "OAuth2 user-grant '@me' authorization info has no wrapper in discord4j-rest 3.2.6's " +
+                null, "OAuth2 user-grant '@me' authorization info has no wrapper in discord4j-rest 3.3.2's " +
                         "bot-token service layer"));
         calls.put("GET /oauth2/applications/@me", new CallEntry(
                 () -> applicationService.getCurrentApplicationInfo().block()));
         calls.put("POST /oauth2/token/revoke", new CallEntry(
                 null, "OAuth2 authorization-code-flow token exchange/revocation is not exposed by any " +
-                        "discord4j-rest 3.2.6 service"));
+                        "discord4j-rest 3.3.2 service"));
         calls.put("POST /oauth2/token", new CallEntry(
                 null, "OAuth2 authorization-code-flow token exchange/revocation is not exposed by any " +
-                        "discord4j-rest 3.2.6 service"));
+                        "discord4j-rest 3.3.2 service"));
         calls.put("GET /users/{user_id}", new CallEntry(() -> userService.getUser(botId).block()));
         calls.put("GET /users/@me/guilds", new CallEntry(
                 () -> userService.getCurrentUserGuilds(Collections.emptyMap()).collectList().block()));
@@ -576,7 +576,7 @@ public class Verify {
             if (entry == null || entry.fn == null) {
                 String note = entry != null && entry.note != null
                         ? entry.note
-                        : "no Discord4J 3.2.6 service method found for this endpoint";
+                        : "no Discord4J 3.3.2 service method found for this endpoint";
                 results.add(new ResultRow(key, "n-a", note));
                 continue;
             }
@@ -594,7 +594,7 @@ public class Verify {
 
         GatewayResult gatewayResult = verifyGateway(discordClient, Long.toString(channelId));
 
-        Report report = new Report("Discord4J", "3.2.6", true, results, gatewayResult);
+        Report report = new Report("Discord4J", "3.3.2", true, results, gatewayResult);
 
         Files.createDirectories(Path.of("/results"));
         Files.writeString(Path.of("/results/discord4j.json"),
