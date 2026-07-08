@@ -7,7 +7,7 @@
  */
 
 import { Hono } from 'hono'
-import { serve } from '@hono/node-server'
+import { serveWithGateway } from './http-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
 import { createAuthMiddleware, type AppEnv } from './middleware/auth'
@@ -131,19 +131,21 @@ export async function createTestGatewayServer(): Promise<{
     disableAuth: false,
   })
 
-  const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
-    const s = serve(
-      {
-        fetch: app.fetch,
-        port: 0,
-        hostname: '127.0.0.1',
-        websocket: { server: wss },
-      },
-      () => {
-        resolve(s)
-      }
-    )
-  })
+  const server = await new Promise<ReturnType<typeof serveWithGateway>>(
+    (resolve) => {
+      const s = serveWithGateway(
+        {
+          fetch: app.fetch,
+          port: 0,
+          hostname: '127.0.0.1',
+          wss,
+        },
+        () => {
+          resolve(s)
+        }
+      )
+    }
+  )
 
   const address = server.address()
   const port = typeof address === 'object' && address ? address.port : 0
