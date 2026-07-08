@@ -1,11 +1,32 @@
-// Kord (dev.kord:kord-rest) compatibility verifier.
+// Kord (dev.kord:kord-rest, dev.kord:kord-core) compatibility verifier.
 //
-// === Why Kord is NOT gateway-blocked (unlike JDA, see ../jvm-jda/README.md) ===
+// === Why the REST phase is NOT gateway-blocked (unlike JDA, see ../jvm-jda/README.md) ===
 //
 // `kord-rest` is a standalone module: `RestClient` wraps a `RequestHandler` and exposes
 // high-level REST services with no Gateway/WebSocket dependency at all (confirmed against
-// `RestClient.kt` at tag `0.14.0`). This verifier never touches the gateway-aware `kord-core`
-// facade.
+// `RestClient.kt` at tag `0.14.0`). The REST phase below never touches the gateway-aware
+// `kord-core` facade.
+//
+// === Gateway phase ===
+//
+// The Gateway phase (verifyGateway) does use `kord-core`'s `Kord(token) { }` builder, which
+// wraps `kord-rest` + `kord-gateway` behind a high-level event API. Both the REST call
+// `Kord(token) { }` issues internally to discover shard/session info (`GET /gateway/bot`, via
+// a raw `HttpClient.get()` on `Route.baseUrl`, not through `RestClient`) and the WebSocket
+// upgrade request `DefaultGateway` issues are ordinary requests built via `HttpRequestBuilder`,
+// so a single `io.ktor.client.plugins.api.createClientPlugin` `onRequest` hook installed on the
+// `HttpClient` handed to `KordBuilder.httpClient` redirects both to Fauxcord — no need for a
+// second, gateway-specific override. This differs from the REST phase's raw
+// `HttpRequestPipeline.Before` intercept below because `KordBuilder.build()` internally calls
+// `HttpClient?.configure()`, which clones the client via `.config { }`; a raw pipeline intercept
+// added directly to a client's `requestPipeline` is NOT preserved by that clone (it isn't part of
+// the client's stored `HttpClientConfig`), whereas an installed plugin is.
+//
+// Kord's `DefaultGateway` defaults to `wss://gateway.discord.gg/?v=.../compress=zlib-stream`,
+// which enables zlib-stream inflate on incoming frames — Fauxcord's Gateway sends plain JSON
+// text frames only (see docs/getting-started.md: no ETF/zlib compression support), so the
+// Gateway phase overrides `KordBuilder.gateways { }` to supply a URL with no `compress`
+// parameter (the host/port are irrelevant, since the plugin above rewrites them regardless).
 //
 // === The override mechanism ===
 //
@@ -47,6 +68,12 @@ import dev.kord.common.entity.OverwriteType
 import dev.kord.common.entity.Permissions
 import dev.kord.common.entity.Snowflake
 import dev.kord.common.entity.optional.optional
+import dev.kord.core.Kord
+import dev.kord.core.event.gateway.ReadyEvent
+import dev.kord.core.event.message.MessageCreateEvent
+import dev.kord.core.on
+import dev.kord.gateway.DefaultGateway
+import dev.kord.gateway.ratelimit.IdentifyRateLimiter
 import dev.kord.rest.Image
 import dev.kord.rest.json.request.BulkDeleteRequest
 import dev.kord.rest.json.request.ChannelModifyPatchRequest
@@ -59,10 +86,15 @@ import dev.kord.rest.service.createTextChannel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.request.HttpRequestPipeline
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -146,6 +178,101 @@ private fun doSetup(http: JavaHttpClient, origin: String, rawSetupJson: String) 
     throw IllegalStateException("doSetup: failed to POST /_test/setup after 5 attempts", lastError)
 }
 
+/** One step of the Gateway connect/dispatch verification. */
+private data class GatewayStep(val step: String, val status: String, val note: String)
+
+/** The overall Gateway verification outcome. */
+private data class GatewayResult(val status: String, val steps: List<GatewayStep>)
+
+/**
+ * Runs the Gateway HELLO -> IDENTIFY -> READY handshake against Fauxcord using a full `Kord`
+ * instance, then verifies a `MESSAGE_CREATE` dispatch round-trip. See the file header comment
+ * for why a `createClientPlugin` (rather than the REST phase's raw pipeline intercept) is used
+ * to redirect both the bootstrap REST call and the WebSocket upgrade to Fauxcord.
+ */
+private suspend fun verifyGateway(
+    token: String,
+    channelId: Snowflake,
+    fauxcordProtocol: URLProtocol,
+    fauxcordHost: String,
+    fauxcordPort: Int,
+): GatewayResult {
+    val steps = mutableListOf<GatewayStep>()
+
+    val redirectToFauxcord = createClientPlugin("FauxcordRedirect") {
+        onRequest { request, _ ->
+            request.url.protocol = fauxcordProtocol
+            request.url.host = fauxcordHost
+            request.url.port = fauxcordPort
+        }
+    }
+    val gatewayHttpClient = HttpClient(CIO) {
+        expectSuccess = false
+        install(redirectToFauxcord)
+        install(WebSockets)
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000
+        }
+    }
+
+    val kord = try {
+        Kord(token) {
+            httpClient = gatewayHttpClient
+            // Drop the default "compress=zlib-stream" query param — Fauxcord's Gateway sends
+            // plain JSON text frames only, not zlib-deflated ones (see header comment above).
+            // The host/port here are irrelevant: the plugin installed above rewrites them.
+            gateways { resources, shards ->
+                val rateLimiter = IdentifyRateLimiter(resources.maxConcurrency, defaultDispatcher)
+                shards.map {
+                    DefaultGateway {
+                        client = resources.httpClient
+                        identifyRateLimiter = rateLimiter
+                        url = "ws://fauxcord/?v=10&encoding=json"
+                    }
+                }
+            }
+        }
+    } catch (e: Exception) {
+        steps.add(GatewayStep("connect-identify-ready", "lib-issue", e.message ?: ""))
+        return GatewayResult("lib-issue", steps)
+    }
+
+    val ready = CompletableDeferred<Unit>()
+    val messageReceived = CompletableDeferred<Unit>()
+
+    kord.on<ReadyEvent> { ready.complete(Unit) }
+    kord.on<MessageCreateEvent> {
+        if (message.content == "gateway-compat-check") messageReceived.complete(Unit)
+    }
+
+    val loginJob = kord.launch { kord.login() }
+    try {
+        withTimeout(20_000) { ready.await() }
+        steps.add(GatewayStep("connect-identify-ready", "pass", ""))
+    } catch (e: Exception) {
+        steps.add(GatewayStep("connect-identify-ready", "lib-issue", e.message ?: "ready timeout"))
+        kord.shutdown()
+        loginJob.cancel()
+        return GatewayResult("lib-issue", steps)
+    }
+
+    try {
+        kord.rest.channel.createMessage(channelId) { content = "gateway-compat-check" }
+        withTimeout(15_000) { messageReceived.await() }
+        steps.add(GatewayStep("dispatch-message-create", "pass", ""))
+    } catch (e: Exception) {
+        var message = "${e::class.simpleName}: ${e.message}"
+        if (message.length > 300) message = message.take(300)
+        steps.add(GatewayStep("dispatch-message-create", "lib-issue", message))
+    } finally {
+        kord.shutdown()
+        loginJob.cancel()
+    }
+
+    val status = steps.firstOrNull { it.status != "pass" }?.status ?: "pass"
+    return GatewayResult(status, steps)
+}
+
 fun main() {
     val jsonParser = Json { ignoreUnknownKeys = true }
 
@@ -161,7 +288,13 @@ fun main() {
     val fauxcordPort = fauxcordUrl.port
     val fauxcordProtocol = if (fauxcordUrl.protocol.name == "https") URLProtocol.HTTPS else URLProtocol.HTTP
 
-    val javaHttp = JavaHttpClient.newHttpClient()
+    // Pin HTTP/1.1: the JDK client's default (HTTP/2 with an h2c upgrade attempt over
+    // plaintext) hangs indefinitely against Fauxcord's plain HTTP/1.1 server — the upgrade
+    // is never accepted or rejected, so the response future never completes. This surfaced
+    // as waitHealthy() blocking forever in HttpClientImpl.send() with zero output, confirmed
+    // via a thread dump (main thread parked in CompletableFuture.get()) and reproduced
+    // deterministically across restarts.
+    val javaHttp = JavaHttpClient.newBuilder().version(JavaHttpClient.Version.HTTP_1_1).build()
     waitHealthy(javaHttp, origin)
 
     val setupRaw = File("common/setup.json").readText()
@@ -508,6 +641,8 @@ fun main() {
         }
     }
 
+    val gatewayResult = runBlocking { verifyGateway(token, channelId, fauxcordProtocol, fauxcordHost, fauxcordPort) }
+
     File("/results").mkdirs()
     val sb = StringBuilder()
     sb.append("{\n")
@@ -521,10 +656,24 @@ fun main() {
         sb.append("\"note\": \"${jsonEscape(r.note)}\" }")
         sb.append(if (i != results.lastIndex) ",\n" else "\n")
     }
-    sb.append("  ]\n")
+    sb.append("  ],\n")
+    sb.append("  \"gateway\": {\n")
+    sb.append("    \"status\": \"${jsonEscape(gatewayResult.status)}\",\n")
+    sb.append("    \"steps\": [\n")
+    gatewayResult.steps.forEachIndexed { i, s ->
+        sb.append("      { \"step\": \"${jsonEscape(s.step)}\", ")
+        sb.append("\"status\": \"${jsonEscape(s.status)}\", ")
+        sb.append("\"note\": \"${jsonEscape(s.note)}\" }")
+        sb.append(if (i != gatewayResult.steps.lastIndex) ",\n" else "\n")
+    }
+    sb.append("    ]\n")
+    sb.append("  }\n")
     sb.append("}\n")
     File("/results/kord.json").writeText(sb.toString())
 
     val passCount = results.count { it.status == "pass" }
-    println("kord done: $passCount/${results.size} pass (real calls: $realCallCount, n-a: $naCount)")
+    println(
+        "kord done: $passCount/${results.size} pass (real calls: $realCallCount, n-a: $naCount), " +
+            "gateway: ${gatewayResult.status}"
+    )
 }

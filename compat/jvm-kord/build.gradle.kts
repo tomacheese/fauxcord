@@ -16,9 +16,14 @@ repositories {
 
 dependencies {
     // kord-rest is the gateway-free, standalone REST client module of Kord —
-    // see the header comment in src/main/kotlin/Verify.kt for why this makes
-    // Kord (unlike JDA, see ../jvm-jda/README.md) NOT gateway-blocked.
+    // see the header comment in src/main/kotlin/Verify.kt for why the REST phase
+    // (unlike JDA, see ../jvm-jda/README.md) is NOT gateway-blocked.
     implementation("dev.kord:kord-rest:0.18.1")
+
+    // kord-core is the high-level facade built on top of kord-rest + kord-gateway,
+    // used only by the Gateway verification phase (verifyGateway in Verify.kt) via
+    // the `Kord(token) { }` builder. Pinned to the same version as kord-rest above.
+    implementation("dev.kord:kord-core:0.18.1")
 
     // CIO is a pure-JVM/coroutine Ktor engine with no native dependencies,
     // matching the ktor version kord-rest:0.14.0 was compiled against.
