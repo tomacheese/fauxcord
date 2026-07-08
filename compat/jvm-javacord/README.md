@@ -77,3 +77,24 @@ public, documented API) that reaches a runnable state against Fauxcord.
   any REST-only builder option; it was not verified by compiling/running
   Javacord in this environment (no build commands were run, per task
   constraints).
+
+## Gateway実装後の再評価（Issue #106）
+
+Fauxcordの Gateway実装後（#102/#107）に再確認したが、Javacordの
+`⛔blocked` 判定は独立した2つの理由（REST base URLのハードコード、
+Gateway接続必須のログイン）のうち、Gatewayとは無関係な (1) が引き続き
+解消しないため、`⛔blocked` 判定を維持する。
+
+現行の Javacord `master` ブランチ上流ソース（`javacord-api/src/main/java/
+org/javacord/api/Javacord.java`、`javacord-core/src/main/java/org/javacord/
+core/util/rest/RestEndpoint.java`）を直接取得し再確認した結果:
+
+- `DISCORD_DOMAIN` は現在も `public static final String` のまま（`Evidence
+  1` に記載の内容から変化なし）。ランタイムで上書きする手段は追加されて
+  いない。
+- `DiscordApiBuilder.login()` が現在も唯一のエントリポイントであり、
+  REST-only モードは追加されていない。
+
+Fauxcordの Gateway実装によって理由 (2) は理論上解消され得るが、理由 (1)
+は Gateway とは独立した別のブロッカーであるため、いずれか一方が残る限り
+`⛔blocked` の結論は変わらない。
