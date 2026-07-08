@@ -647,7 +647,7 @@ fun main() {
     val sb = StringBuilder()
     sb.append("{\n")
     sb.append("  \"library\": \"kord\",\n")
-    sb.append("  \"version\": \"0.14.0\",\n")
+    sb.append("  \"version\": \"0.18.1\",\n")
     sb.append("  \"baseUrlOverridable\": true,\n")
     sb.append("  \"results\": [\n")
     results.forEachIndexed { i, r ->

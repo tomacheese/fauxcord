@@ -1,10 +1,11 @@
 // Kord (kord-rest) compatibility verifier build config.
 //
-// Kotlin/ktor versions are pinned to what Kord 0.14.0 itself was built against
-// (confirmed via kordlib/kord's gradle/libs.versions.toml at git tag `0.14.0`:
-// kotlin = "1.9.24", ktor = "2.3.11") so the ktor-client-cio engine we add here
-// is binary-compatible with the ktor-client-core version kord-rest:0.14.0 pulls
-// in transitively.
+// Actual pinned version: kord-rest/kord-core 0.18.1 (see dependencies below).
+// Kotlin/ktor versions here were originally pinned to what Kord 0.14.0 was
+// built against (confirmed via kordlib/kord's gradle/libs.versions.toml at
+// git tag `0.14.0`: kotlin = "1.9.24", ktor = "2.3.11") so the ktor-client-cio
+// engine we add here is binary-compatible with the ktor-client-core version
+// kord-rest pulls in transitively.
 plugins {
     application
     kotlin("jvm") version "2.4.0"
@@ -26,7 +27,8 @@ dependencies {
     implementation("dev.kord:kord-core:0.18.1")
 
     // CIO is a pure-JVM/coroutine Ktor engine with no native dependencies,
-    // matching the ktor version kord-rest:0.14.0 was compiled against.
+    // matching the ktor version kord-rest was compiled against (see header
+    // comment above).
     implementation("io.ktor:ktor-client-cio:3.5.1")
     implementation("io.ktor:ktor-client-core:3.5.1")
 
