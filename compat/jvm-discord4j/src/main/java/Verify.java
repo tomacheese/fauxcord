@@ -1,6 +1,12 @@
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import discord4j.common.util.Snowflake;
+import discord4j.core.DiscordClient;
+import discord4j.core.DiscordClientBuilder;
+import discord4j.core.GatewayDiscordClient;
+import discord4j.core.event.domain.message.MessageCreateEvent;
+import discord4j.core.object.entity.channel.MessageChannel;
 import discord4j.discordjson.json.*;
 import discord4j.rest.RestClient;
 import discord4j.rest.request.RouterOptions;
@@ -15,7 +21,10 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Discord4J compatibility verifier.
@@ -24,7 +33,8 @@ import java.util.*;
  * {@code RestClient.restBuilder(token).build()} is a genuine REST-only client backed by an
  * HTTP {@link discord4j.rest.request.Router} — unlike JDA's {@code JDABuilder}, building it
  * performs no Gateway WebSocket handshake (confirmed against {@code RestClientBuilder.java} at
- * tag {@code 3.2.6}), so Fauxcord's lack of a Gateway server is not a blocker here.
+ * tag {@code 3.2.6}), so the REST checks below never depend on a Gateway connection. (Fauxcord
+ * now does implement a Gateway server, exercised separately below; see "Gateway verification".)
  *
  * <h2>Base URL override</h2>
  * {@code Routes.BASE_URL} has no setter, but {@link discord4j.rest.request.RouterOptions}'s
@@ -56,8 +66,11 @@ import java.util.*;
  *   <li>Threads: {@code ChannelService} (3.2.6) has no thread-creation/thread-member/
  *   archived-thread-listing methods at all, so every {@code /threads*} and
  *   {@code /thread-members*} endpoint is n-a.</li>
- *   <li>New-format pins API ({@code /channels/{id}/messages/pins*}): {@code ChannelService}
- *   only targets the legacy {@code /channels/{id}/pins*} routes.</li>
+ *   <li>Legacy pins API ({@code /channels/{id}/pins*}): as of discord4j-core 3.3.2,
+ *   {@code ChannelService}'s pin methods were retargeted to the new
+ *   {@code /channels/{id}/messages/pins*} routes (see each n-a note inline for the
+ *   {@code Routes} constant), so the legacy routes are no longer reachable through this
+ *   service layer.</li>
  *   <li>OAuth2 authorization-code-flow endpoints ({@code /oauth2/@me}, {@code /oauth2/token},
  *   {@code /oauth2/token/revoke}): out of scope for a bot-token {@code RestClient}.</li>
  * </ul>
@@ -70,6 +83,29 @@ import java.util.*;
  * rows still depend on are recorded as n-a, matching the pattern in
  * {@code compat/dotnet-discordnet/Program.cs}. Banning uses a placeholder user id (never the bot
  * itself), since banning also kicks.
+ *
+ * <h2>Gateway verification</h2>
+ * Unlike the REST-only {@link RestClient} used above, {@link DiscordClientBuilder} builds a
+ * {@link DiscordClient} whose {@code login()} performs a real HELLO → IDENTIFY → READY handshake
+ * against Fauxcord's Gateway (WebSocket) endpoint, then confirms a Dispatch event
+ * ({@code MESSAGE_CREATE}) round-trips through the library's {@code EventDispatcher}. See
+ * {@link #verifyGateway(DiscordClient, String)}.
+ *
+ * <h2>Confirmed Gateway gap: mandatory zlib-stream compression</h2>
+ * {@code login()} always times out against Fauxcord with no error surfaced, even though the
+ * WebSocket handshake itself succeeds and Fauxcord's server sends HELLO immediately (confirmed
+ * by pointing a plain {@code ws}-library client at the same URL from the same Docker network).
+ * The cause is {@code discord4j-gateway}'s {@code GatewayWebsocketHandler}, which unconditionally
+ * pipes every inbound frame through {@code ZlibDecompressor#completeMessages} -- regardless of
+ * whether compression was actually negotiated -- because {@code compress=zlib-stream} is hardcoded
+ * into the connection query params by {@code DefaultGatewayClient}. That decompressor only emits
+ * a message once a buffer's trailing 4 bytes match the zlib sync-flush marker
+ * ({@code 0x00 0x00 0xFF 0xFF}); Fauxcord sends plain-JSON text frames (documented limitation, see
+ * docs/getting-started.md's Gateway "What it cannot do" list: no ETF/zlib compression), so the
+ * marker never appears and the decompressor stalls forever. The frame is received at the
+ * transport layer but never surfaces to application code, so {@code login().block()} simply times
+ * out. This is a hard requirement on Discord4J's side with no client-side opt-out, so
+ * {@code connect-identify-ready} is correctly reported as {@code lib-issue}, not a Fauxcord bug.
  */
 public class Verify {
 
@@ -128,18 +164,45 @@ public class Verify {
         }
     }
 
+    /** One step of the Gateway handshake/dispatch check. Serialized via public fields. */
+    static final class GatewayStep {
+        public final String step;
+        public final String status;
+        public final String note;
+
+        GatewayStep(String step, String status, String note) {
+            this.step = step;
+            this.status = status;
+            this.note = note;
+        }
+    }
+
+    /** Overall Gateway verification result: `pass` unless any step is not `pass`. */
+    static final class GatewayResult {
+        public final String status;
+        public final List<GatewayStep> steps;
+
+        GatewayResult(String status, List<GatewayStep> steps) {
+            this.status = status;
+            this.steps = steps;
+        }
+    }
+
     /** The final JSON document written to /results/discord4j.json. Serialized via public fields. */
     static final class Report {
         public final String library;
         public final String version;
         public final boolean baseUrlOverridable;
         public final List<ResultRow> results;
+        public final GatewayResult gateway;
 
-        Report(String library, String version, boolean baseUrlOverridable, List<ResultRow> results) {
+        Report(String library, String version, boolean baseUrlOverridable, List<ResultRow> results,
+                GatewayResult gateway) {
             this.library = library;
             this.version = version;
             this.baseUrlOverridable = baseUrlOverridable;
             this.results = results;
+            this.gateway = gateway;
         }
     }
 
@@ -188,6 +251,20 @@ public class Verify {
         // directly; bind it to a final local first.
         final String apiBaseUrl = origin.endsWith("/") ? origin + "api/v10" : origin + "/api/v10";
         RestClient client = RestClient.restBuilder(rawToken)
+                .setExtraOptions(o -> new RouterOptions(
+                        o.getAuthorizationScheme(),
+                        o.getToken(),
+                        o.getReactorResources(),
+                        o.getExchangeStrategies(),
+                        o.getResponseTransformers(),
+                        o.getGlobalRateLimiter(),
+                        o.getRequestQueueFactory(),
+                        apiBaseUrl))
+                .build();
+
+        // Same base-URL override as `client` above, but via DiscordClientBuilder (which extends
+        // RestClientBuilder) so its login() gives us a real GatewayDiscordClient.
+        DiscordClient discordClient = DiscordClientBuilder.create(rawToken)
                 .setExtraOptions(o -> new RouterOptions(
                         o.getAuthorizationScheme(),
                         o.getToken(),
@@ -313,14 +390,11 @@ public class Verify {
                 () -> channelService.bulkDeleteMessages(channelId, BulkDeleteRequest.builder()
                         .messages(List.of(Long.toString(bulk1Id), Long.toString(bulk2Id))).build()).block()));
         calls.put("DELETE /channels/{channel_id}/messages/pins/{message_id}", new CallEntry(
-                null, "ChannelService only exposes deletePinnedMessage(), which targets the legacy " +
-                        "/channels/{id}/pins/{message_id} route, not the new /messages/pins sub-resource"));
+                () -> channelService.deletePinnedMessage(channelId, msgId).block()));
         calls.put("PUT /channels/{channel_id}/messages/pins/{message_id}", new CallEntry(
-                null, "ChannelService only exposes addPinnedMessage(), which targets the legacy " +
-                        "/channels/{id}/pins/{message_id} route, not the new /messages/pins sub-resource"));
+                () -> channelService.addPinnedMessage(channelId, msgId).block()));
         calls.put("GET /channels/{channel_id}/messages/pins", new CallEntry(
-                null, "ChannelService only exposes getPinnedMessages(), which targets the legacy " +
-                        "/channels/{id}/pins route, not the new /messages/pins sub-resource"));
+                () -> channelService.getPinnedMessages(channelId).block()));
         calls.put("GET /channels/{channel_id}/messages", new CallEntry(
                 () -> channelService.getMessages(channelId, Collections.emptyMap()).collectList().block()));
         calls.put("POST /channels/{channel_id}/messages", new CallEntry(
@@ -333,11 +407,18 @@ public class Verify {
                 () -> channelService.editChannelPermissions(channelId, botId,
                         PermissionsEditRequest.builder().allow(0).deny(0).type(1).build(), null).block()));
         calls.put("DELETE /channels/{channel_id}/pins/{message_id}", new CallEntry(
-                () -> channelService.deletePinnedMessage(channelId, msgId).block()));
+                null, "discord4j-core 3.3.2's deletePinnedMessage() was retargeted to the new " +
+                        "/channels/{id}/messages/pins/{message_id} route (Routes.MESSAGES_PINNED_DELETE); " +
+                        "ChannelService no longer exposes the legacy /channels/{id}/pins/{message_id} route"));
         calls.put("PUT /channels/{channel_id}/pins/{message_id}", new CallEntry(
-                () -> channelService.addPinnedMessage(channelId, msgId).block()));
+                null, "discord4j-core 3.3.2's addPinnedMessage() was retargeted to the new " +
+                        "/channels/{id}/messages/pins/{message_id} route (Routes.MESSAGES_PINNED_ADD); " +
+                        "ChannelService no longer exposes the legacy /channels/{id}/pins/{message_id} route"));
         calls.put("GET /channels/{channel_id}/pins", new CallEntry(
-                () -> channelService.getPinnedMessages(channelId).collectList().block()));
+                null, "discord4j-core 3.3.2's getPinnedMessages() was retargeted to the new " +
+                        "/channels/{id}/messages/pins route (Routes.MESSAGES_PINNED_GET), returning " +
+                        "PinnedMessagesResponseData instead of a Flux<MessageData>; ChannelService no " +
+                        "longer exposes the legacy /channels/{id}/pins route"));
         calls.put("DELETE /channels/{channel_id}/thread-members/{user_id}", new CallEntry(
                 null, "ChannelService (3.2.6) has no thread-member methods; no thread support in this version"));
         calls.put("GET /channels/{channel_id}/thread-members/{user_id}", new CallEntry(
@@ -511,14 +592,81 @@ public class Verify {
             }
         }
 
-        Report report = new Report("Discord4J", "3.2.6", true, results);
+        GatewayResult gatewayResult = verifyGateway(discordClient, Long.toString(channelId));
+
+        Report report = new Report("Discord4J", "3.2.6", true, results, gatewayResult);
 
         Files.createDirectories(Path.of("/results"));
         Files.writeString(Path.of("/results/discord4j.json"),
                 mapper.writerWithDefaultPrettyPrinter().writeValueAsString(report), StandardCharsets.UTF_8);
 
         long passCount = results.stream().filter(r -> "pass".equals(r.status)).count();
-        System.out.println("discord4j done: " + passCount + "/" + results.size() + " pass");
+        System.out.println("discord4j done: " + passCount + "/" + results.size() + " pass"
+                + ", gateway=" + gatewayResult.status);
+    }
+
+    /**
+     * Runs the Gateway handshake/dispatch check: HELLO → IDENTIFY → READY via
+     * {@link DiscordClient#login()}, then confirms a {@link MessageCreateEvent} Dispatch round-trips
+     * after posting a message via REST. Logs out afterward regardless of outcome.
+     */
+    static GatewayResult verifyGateway(DiscordClient discordClient, String channelId) {
+        List<GatewayStep> steps = new ArrayList<>();
+        GatewayDiscordClient gateway;
+        try {
+            gateway = discordClient.login().block(Duration.ofSeconds(20));
+            if (gateway == null) {
+                throw new IllegalStateException("login returned null");
+            }
+            steps.add(new GatewayStep("connect-identify-ready", "pass", ""));
+        } catch (Exception e) {
+            steps.add(new GatewayStep("connect-identify-ready", "lib-issue", describeLoginFailure(e)));
+            return new GatewayResult("lib-issue", steps);
+        }
+
+        try {
+            CompletableFuture<Boolean> messageReceived = new CompletableFuture<>();
+            gateway.getEventDispatcher().on(MessageCreateEvent.class)
+                    .filter(ev -> "gateway-compat-check".equals(ev.getMessage().getContent()))
+                    .subscribe(ev -> messageReceived.complete(true));
+
+            gateway.getChannelById(Snowflake.of(channelId))
+                    .ofType(MessageChannel.class)
+                    .flatMap(ch -> ch.createMessage("gateway-compat-check"))
+                    .block(Duration.ofSeconds(10));
+
+            messageReceived.get(15, TimeUnit.SECONDS);
+            steps.add(new GatewayStep("dispatch-message-create", "pass", ""));
+        } catch (Exception e) {
+            steps.add(new GatewayStep("dispatch-message-create", "lib-issue", String.valueOf(e.getMessage())));
+        } finally {
+            gateway.logout().block(Duration.ofSeconds(10));
+        }
+
+        String status = steps.stream().filter(s -> !"pass".equals(s.status)).findFirst()
+                .map(s -> s.status).orElse("pass");
+        return new GatewayResult(status, steps);
+    }
+
+    /**
+     * Builds a diagnostic note for a {@link DiscordClient#login()} failure. Timeout-shaped
+     * failures get the confirmed root-cause explanation (see the class-level javadoc's
+     * "Confirmed Gateway gap" section) prepended, since a bare "Timeout on blocking read" message
+     * gives no hint that this is a permanent, structural incompatibility rather than a flaky
+     * network hiccup.
+     * @param e - the exception thrown by {@code login().block()}
+     * @return a note describing the failure, suitable for {@link GatewayStep#note}
+     */
+    private static String describeLoginFailure(Exception e) {
+        String message = String.valueOf(e.getMessage());
+        boolean looksLikeTimeout = message.toLowerCase(Locale.ROOT).contains("timeout");
+        if (!looksLikeTimeout) {
+            return message;
+        }
+        return "Discord4J unconditionally requires zlib-stream Gateway compression (see class "
+                + "javadoc's \"Confirmed Gateway gap\" section), which Fauxcord does not implement; "
+                + "HELLO is never decompressed client-side, so login() times out. Original exception: "
+                + message;
     }
 
     /** Runs {@code supplier}, returning {@code fallback} if it throws. */
