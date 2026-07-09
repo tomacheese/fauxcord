@@ -216,7 +216,7 @@ The summary below reflects the latest state of that matrix.
 | Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (63/87 pass, 24 N/A, 0 lib-issue) |
 | DSharpPlus 5.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
 | DSharpPlus 4.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
-| JDA                       | JVM      | ❌ Not usable without a real Gateway WebSocket handshake | ⛔ Blocked                                    |
+| JDA                       | JVM      | `RestConfig#setBaseUrl`                                  | ✅ Verified (62/87 pass, 23 N/A, 2 lib-issue) |
 | Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | ✅ Verified (60/87 pass, 25 N/A, 2 lib-issue) |
 | Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                    |
 | Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (68/87 pass, 17 N/A, 2 lib-issue) |

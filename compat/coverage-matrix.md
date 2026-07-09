@@ -7,93 +7,93 @@ Acceptance: every `N/A`/`⛔blocked` has an evidence note below the table; every
 
 | Endpoint | discord.js | Eris | Oceanic | discord.py | Nextcord | Pycord | hikari | interactions.py | discordgo | Discord.Net | DSharpPlus5 | JDA | Discord4J | Javacord | Kord | Serenity | Twilight | Concord | DPP | Sleepy | DSharpPlus4 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| GET /channels/{channel_id}/invites | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/invites | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id} | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/messages/{message_id}/reactions | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/messages/{message_id}/threads | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/messages/bulk-delete | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/messages/pins/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /channels/{channel_id}/messages/pins/{message_id} | ❌→fix | ⛔blocked | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/messages/pins | ✅ | ⛔blocked | N/A | ✅ | ✅ | ❌→lib | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/pins/{message_id} | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /channels/{channel_id}/pins/{message_id} | ❌→fix | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/pins | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | N/A | ✅ | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | ✅ | ❌→lib | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id}/thread-members/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /channels/{channel_id}/thread-members/@me | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/thread-members | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/threads/archived/private | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/threads/archived/public | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/threads/search | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/threads | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/typing | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/users/@me/threads/archived/private | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | N/A | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id}/webhooks | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /channels/{channel_id}/webhooks | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /channels/{channel_id} | N/A | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /channels/{channel_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /channels/{channel_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /gateway/bot | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | N/A | N/A | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /gateway | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | N/A | N/A | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /guilds/{guild_id}/bans/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/bans/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ❌→lib | ⛔blocked | ❌→lib | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /guilds/{guild_id}/bans/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/bans | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/channels | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /guilds/{guild_id}/channels | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/emojis | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /guilds/{guild_id}/emojis | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| PUT /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /guilds/{guild_id}/members/{user_id} | N/A | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ❌→lib | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /guilds/{guild_id}/members/@me | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ❌→fix | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/members | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /guilds/{guild_id}/roles/{role_id} | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /guilds/{guild_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/roles | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /guilds/{guild_id}/roles | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id}/webhooks | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /guilds/{guild_id} | N/A | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /guilds/{guild_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ❌→fix | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /guilds/{guild_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ❌→fix | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /invites/{code} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /invites/{code} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /oauth2/@me | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ❌→lib | ❌→lib | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /oauth2/applications/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ❌→lib | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /oauth2/token/revoke | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /oauth2/token | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /users/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /users/@me/guilds | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /users/@me | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /users/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ❌→lib | ✅ | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| POST /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
-| DELETE /webhooks/{webhook_id} | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
-| GET /webhooks/{webhook_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
-| PATCH /webhooks/{webhook_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ⛔blocked | ⛔blocked | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/invites | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/invites | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id} | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/messages/{message_id}/reactions | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/messages/{message_id}/threads | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /channels/{channel_id}/messages/{message_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/messages/bulk-delete | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/messages/pins/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | ⛔blocked | ❌→lib | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /channels/{channel_id}/messages/pins/{message_id} | ❌→fix | ⛔blocked | N/A | ✅ | ✅ | ✅ | N/A | N/A | N/A | N/A | ⛔blocked | ✅ | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/messages/pins | ✅ | ⛔blocked | N/A | ✅ | ✅ | ❌→lib | N/A | N/A | N/A | N/A | ⛔blocked | ✅ | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/messages | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /channels/{channel_id}/permissions/{overwrite_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/pins/{message_id} | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /channels/{channel_id}/pins/{message_id} | ❌→fix | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/pins | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | N/A | ✅ | N/A | ⛔blocked | ✅ | N/A | ⛔blocked | N/A | ✅ | ❌→lib | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /channels/{channel_id}/thread-members/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id}/thread-members/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /channels/{channel_id}/thread-members/@me | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/thread-members | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ❌→lib | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/threads/archived/private | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/threads/archived/public | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/threads/search | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/threads | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/typing | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/users/@me/threads/archived/private | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | N/A | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id}/webhooks | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /channels/{channel_id}/webhooks | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /channels/{channel_id} | N/A | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /channels/{channel_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /channels/{channel_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /gateway/bot | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | N/A | N/A | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /gateway | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | N/A | N/A | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /guilds/{guild_id}/bans/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/bans/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ❌→lib | ❌→lib | ⛔blocked | ❌→lib | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /guilds/{guild_id}/bans/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/bans | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/channels | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /guilds/{guild_id}/channels | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /guilds/{guild_id}/emojis/{emoji_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/emojis | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /guilds/{guild_id}/emojis | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| PUT /guilds/{guild_id}/members/{user_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /guilds/{guild_id}/members/{user_id} | N/A | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /guilds/{guild_id}/members/{user_id} | ✅ | ⛔blocked | ✅ | ❌→lib | ❌→lib | ❌→lib | ❌→lib | ❌→lib | ✅ | ❌→fix | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /guilds/{guild_id}/members/@me | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ❌→fix | ⛔blocked | ✅ | N/A | ⛔blocked | N/A | N/A | N/A | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/members | ✅ | ⛔blocked | ✅ | ❌→lib | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /guilds/{guild_id}/roles/{role_id} | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /guilds/{guild_id}/roles/{role_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/roles | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | N/A | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /guilds/{guild_id}/roles | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id}/webhooks | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /guilds/{guild_id} | N/A | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /guilds/{guild_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ❌→fix | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /guilds/{guild_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→fix | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ❌→fix | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /invites/{code} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /invites/{code} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /oauth2/@me | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ❌→lib | ❌→lib | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | ❌→lib | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /oauth2/applications/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ❌→lib | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /oauth2/token/revoke | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /oauth2/token | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ✅ | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /users/{user_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /users/@me/guilds | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /users/@me | ✅ | ⛔blocked | ✅ | N/A | N/A | N/A | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /users/@me | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ❌→lib | ✅ | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} | ✅ | ⛔blocked | N/A | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| POST /webhooks/{webhook_id}/{webhook_token} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | N/A | ⛔blocked | N/A | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
+| DELETE /webhooks/{webhook_id} | ✅ | ⛔blocked | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ⛔blocked | N/A | N/A | ⛔blocked | N/A | N/A | N/A | N/A | ⛔blocked | ⛔blocked | ⛔blocked |
+| GET /webhooks/{webhook_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ⛔blocked | ⛔blocked | ⛔blocked |
+| PATCH /webhooks/{webhook_id} | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ✅ | ✅ | ❌→lib | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ⛔blocked | ✅ | ✅ | ✅ | ❌→lib | ⛔blocked | ⛔blocked | ⛔blocked |
 
 ## Evidence notes
 
@@ -118,7 +118,7 @@ surfaced.
 | Discord.Net | `RestClientProvider` | 63 ✅ / 24 N/A / 0 lib-issue | 3 Fauxcord bugs found — see [bugs table](#fauxcord-bugs-found-and-fixed) |
 | DSharpPlus 5.x | ❌ compile-time `const string`, needs Gateway | ⛔ blocked | No verifier; `dotnet-dsharpplus/README.md` |
 | DSharpPlus 4.x | ❌ same mechanism | ⛔ blocked | No verifier; README follow-up tracked |
-| JDA | needs a real Gateway handshake | ⛔ blocked | No verifier; `jvm-jda/README.md` |
+| JDA | `RestConfig#setBaseUrl` (Gateway now supported) | 62 ✅ / 23 N/A / 2 lib-issue | 2 Fauxcord Gateway dispatch bugs found — see [bugs table](#fauxcord-bugs-found-and-fixed). `❌→lib` = JDA-side; see `jvm-jda/README.md` |
 | Discord4J | `RouterOptions.discordBaseUrl` | 60 ✅ / 25 N/A / 2 lib-issue | High N/A: 3.2.6's `ChannelService` lacks several high-level methods |
 | Javacord | ❌ hardcoded domain, needs Gateway | ⛔ blocked | No verifier; `jvm-javacord/README.md` |
 | Kord | Ktor `HttpRequestPipeline.Before` | 68 ✅ / 17 N/A / 2 lib-issue | 1 Fauxcord bug found — see [bugs table](#fauxcord-bugs-found-and-fixed). Rest probes non-existent entities (404) |
@@ -153,6 +153,9 @@ directly in the verifier scripts (not recorded as `❌→fix`/`❌→lib`, per T
 | Role `permissions` round-tripped as `"0.0"` | hikari | Numeric `permissions` stored as SQLite REAL → decimal string → hikari's `int()` raised `ValueError` | `normalizePermissions` in `src/services/guild-roles.ts` (`817148d`) · test: `guild-roles.test.ts` |
 | Thread-members pagination never terminated | hikari | `after` cursor ignored → `ThreadMembersIterator` looped forever | `src/services/threads.ts` (`a27651a`) |
 | Webhook move to unknown channel → HTTP 500 | Concord | Unknown `channel_id` written straight to the FK column instead of being validated | `src/routes/webhooks.ts` + guard in `services/webhooks.ts` · test: `webhooks.test.ts` |
+| `MESSAGE_CREATE`/`MESSAGE_UPDATE` dispatch missing `guild_id`/`member` | JDA (Gateway) | JDA's `EntityBuilder` silently failed to build the message author `Member` without `member`; listener `CompletableFuture` timed out with no logged exception | `src/gateway/bus.ts`, `src/gateway/subscribe.ts`, `src/services/messages.ts` (`30b87c1`) · test: `bus.test.ts`, `subscribe.test.ts` |
+| `GUILD_CREATE` missing Gateway-only extra fields; `READY.guilds` always `[]` | JDA (Gateway) | JDA's entity builders require `member_count`/`large`/`channels`/`members`/etc.; `GuildSetupController` uses READY's guild-stub list to know how many `GUILD_CREATE` dispatches to await | `src/services/guilds.ts`, `src/gateway/server.ts` (`c9d67ff`) · test: `identify-resume.test.ts` |
+| Thread-members `?with_member=true` ignored | JDA | `EntityBuilder.createThreadMember` throws `DataObjectParsingException` when the `member` key is entirely absent | `src/services/threads.ts`, `src/routes/channel-threads.ts` (`fbe0926`) · test: `channel-threads.test.ts` |
 
 All commit hashes above are on `master`; regression tests live next to the
 fixed source file unless noted otherwise.

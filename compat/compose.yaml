@@ -175,6 +175,18 @@ services:
     volumes:
       - ./results:/results
 
+  verify-jda:
+    build:
+      context: .
+      dockerfile: ./jvm-jda/Dockerfile
+    depends_on:
+      fauxcord:
+        condition: service_healthy
+    environment:
+      FAUXCORD_BASE: "http://fauxcord:3000/api/v10"
+    volumes:
+      - ./results:/results
+
   verify-twilight:
     build:
       context: .
