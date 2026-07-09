@@ -335,6 +335,27 @@ describe('GET /channels/:channelId/thread-members', () => {
     const body = (await res.json()) as { user_id: string }[]
     expect(body).toEqual([])
   })
+
+  it('embeds the guild member object on each entry when with_member=true', async () => {
+    const { app, db, guildId, channelId } = setup()
+    db.prepare(
+      'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+    ).run(guildId, BOT_USER_ID)
+    const thread = await createThreadViaApi(app, channelId)
+    const threadId = thread.id as string
+
+    const res = await app.request(
+      `/channels/${threadId}/thread-members?with_member=true`,
+      { headers: AUTH }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>[]
+    expect(body.length).toBeGreaterThan(0)
+    for (const entry of body) {
+      const member = entry.member as Record<string, unknown>
+      expect(member).toBeDefined()
+    }
+  })
 })
 
 describe('GET /channels/:channelId/thread-members/:userId', () => {
@@ -378,6 +399,39 @@ describe('GET /channels/:channelId/thread-members/:userId', () => {
     expect(res.status).toBe(404)
     const body = (await res.json()) as { code: number }
     expect(body.code).toBe(10_007)
+  })
+
+  it('omits the member field by default', async () => {
+    const { app, channelId } = setup()
+    const thread = await createThreadViaApi(app, channelId)
+    const threadId = thread.id as string
+
+    const res = await app.request(
+      `/channels/${threadId}/thread-members/${BOT_USER_ID}`,
+      { headers: AUTH }
+    )
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.member).toBeUndefined()
+  })
+
+  it('embeds the guild member object when with_member=true', async () => {
+    const { app, db, guildId, channelId } = setup()
+    // The bot must be a guild member for the embed to be populated.
+    db.prepare(
+      'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+    ).run(guildId, BOT_USER_ID)
+    const thread = await createThreadViaApi(app, channelId)
+    const threadId = thread.id as string
+
+    const res = await app.request(
+      `/channels/${threadId}/thread-members/${BOT_USER_ID}?with_member=true`,
+      { headers: AUTH }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    const member = body.member as Record<string, unknown>
+    expect(member).toBeDefined()
+    expect(member.user).toMatchObject({ id: BOT_USER_ID })
   })
 })
 

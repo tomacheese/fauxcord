@@ -9,6 +9,7 @@ import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
 import { toDiscordTimestamp } from '../timestamp'
 import { THREAD_AUTO_ARCHIVE_DURATIONS } from '../validators/thread'
+import { getGuildMember, type GuildMemberObject } from './guild-members'
 
 /** Default thread type when the request omits `type` (Public Thread). */
 const DEFAULT_THREAD_TYPE = 11
@@ -76,6 +77,11 @@ export interface ThreadMemberObject {
   user_id: string
   join_timestamp: string
   flags: number
+  // Only present when the request set `with_member=true` (matches real
+  // Discord's `GET /channels/{channel_id}/thread-members[/{user_id}]`).
+  // JDA's EntityBuilder.createThreadMember always requests this and throws
+  // a DataObjectParsingException if the `member` key is absent entirely.
+  member?: GuildMemberObject
 }
 
 /**
@@ -146,12 +152,16 @@ export function toThreadObject(db: Database, row: ThreadRow): ThreadObject {
  * @param row - Thread member DB record
  * @returns Thread member object for API responses
  */
-export function toThreadMemberObject(row: ThreadMemberRow): ThreadMemberObject {
+export function toThreadMemberObject(
+  row: ThreadMemberRow,
+  member?: GuildMemberObject
+): ThreadMemberObject {
   return {
     id: row.thread_id,
     user_id: row.user_id,
     join_timestamp: toDiscordTimestamp(new Date(row.join_timestamp)),
     flags: row.flags,
+    ...(member && { member }),
   }
 }
 
@@ -225,17 +235,28 @@ export function removeThreadMember(
  * @param db - Database
  * @param threadId - Thread ID
  * @param userId - User ID
+ * @param guildId - Guild ID the thread belongs to; when provided together
+ * with `withMember`, the response embeds the guild member object (matches
+ * real Discord's `?with_member=true` query parameter)
+ * @param withMember - Whether to embed the guild member object
  * @returns Thread member object, or null if not a member
  */
 export function getThreadMember(
   db: Database,
   threadId: string,
-  userId: string
+  userId: string,
+  guildId?: string | null,
+  withMember = false
 ): ThreadMemberObject | null {
   const row = db
     .prepare('SELECT * FROM thread_members WHERE thread_id = ? AND user_id = ?')
     .get(threadId, userId) as ThreadMemberRow | undefined
-  return row ? toThreadMemberObject(row) : null
+  if (!row) return null
+  const member =
+    withMember && guildId
+      ? (getGuildMember(db, guildId, userId) ?? undefined)
+      : undefined
+  return toThreadMemberObject(row, member)
 }
 
 /**
@@ -253,13 +274,19 @@ export function getThreadMember(
  * @param threadId - Thread ID
  * @param limit - Maximum number of members to return
  * @param after - User-ID cursor; only members with a greater user ID are returned
+ * @param guildId - Guild ID the thread belongs to; when provided together
+ * with `withMember`, each entry embeds the guild member object (matches
+ * real Discord's `?with_member=true` query parameter)
+ * @param withMember - Whether to embed the guild member object
  * @returns Array of thread member objects
  */
 export function getThreadMembers(
   db: Database,
   threadId: string,
   limit = 100,
-  after = '0'
+  after = '0',
+  guildId?: string | null,
+  withMember = false
 ): ThreadMemberObject[] {
   // `limit` can arrive as NaN (e.g. `?limit=abc`) or negative; both must be
   // rejected here rather than passed to SQLite's LIMIT, which would either
@@ -275,7 +302,14 @@ export function getThreadMembers(
        ORDER BY user_id ASC LIMIT ?`
     )
     .all(threadId, after, clampedLimit) as ThreadMemberRow[]
-  return rows.map((r) => toThreadMemberObject(r))
+  return rows.map((r) =>
+    toThreadMemberObject(
+      r,
+      withMember && guildId
+        ? (getGuildMember(db, guildId, r.user_id) ?? undefined)
+        : undefined
+    )
+  )
 }
 
 /**
