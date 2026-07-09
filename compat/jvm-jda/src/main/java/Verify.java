@@ -244,7 +244,6 @@ public final class Verify {
                 .addEventListeners(listener)
                 .build();
         jda.awaitReady();
-        System.out.println("DEBUG guilds=" + jda.getGuilds() + " lookingFor=" + guildId);
 
         try {
             List<ResultRow> results = runRestChecks(jda, mapper, endpoints, botId, guildId, channelId);
