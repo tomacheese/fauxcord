@@ -5,12 +5,16 @@
  * Hello/Identify/Heartbeat/Resume/Ready/Invalid Session/Reconnect.
  */
 
+import { GatewayIntentBits } from 'discord-api-types/v10'
 import type { WSContext, WSEvents } from 'hono/ws'
 import type { Database } from '../db'
+import { getGuild } from '../services/guilds'
 import { SessionManager, type Session } from './session'
 import { GatewayOp, GatewayCloseCode } from './opcodes'
 import { encodePayload, decodePayload } from './protocol'
 import type { IdentifyData, ResumeData } from './protocol'
+import { sendDispatch } from './dispatch'
+import { hasIntent } from './intents'
 
 /** Heartbeat interval (ms) announced in HELLO; matches real Discord's default. */
 const HEARTBEAT_INTERVAL_MS = 41_250
@@ -23,6 +27,8 @@ interface IdentifiedBot {
   username: string
   discriminator: string
   avatar: string | null
+  /** Normalized (`"Bot <token>"`-prefixed) token, used to look up the bot's guilds (`guilds.bot_token`) */
+  token: string
 }
 
 /**
@@ -65,6 +71,7 @@ function resolveBotForIdentify(
       username: row.username,
       discriminator: row.discriminator,
       avatar: row.avatar,
+      token: lookupToken,
     }
   }
   if (disableAuth) {
@@ -73,6 +80,7 @@ function resolveBotForIdentify(
       username: 'MockBot',
       discriminator: '0',
       avatar: null,
+      token: lookupToken,
     }
   }
   return undefined
@@ -242,6 +250,29 @@ function handleIdentify(
       },
     })
   )
+
+  // Real Discord sends `guilds: []` (unavailable stubs) in READY, then a
+  // GUILD_CREATE Dispatch for each guild the bot belongs to shortly after.
+  // Several client libraries (e.g. JDA, Discord4J's high-level facade) never
+  // call any "fetch guild" REST route themselves -- they populate their
+  // guild/channel/role/member cache exclusively from these dispatches -- so
+  // without them, guild-scoped calls silently resolve to nothing even though
+  // the guild exists. `guild.create` on gatewayBus (see subscribe.ts) only
+  // fires for guilds created *after* this session connects (e.g. via
+  // `POST /guilds`), not for guilds that already existed at IDENTIFY time
+  // (e.g. seeded via `/_test/setup` before the client ever connects), so
+  // those need to be sent here explicitly.
+  if (hasIntent(data.intents, GatewayIntentBits.Guilds)) {
+    const existingGuildIds = db
+      .prepare('SELECT id FROM guilds WHERE bot_token = ?')
+      .all(bot.token) as { id: string }[]
+    for (const { id: guildId } of existingGuildIds) {
+      const guild = getGuild(db, guildId)
+      if (guild) {
+        sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
+      }
+    }
+  }
 }
 
 /**
