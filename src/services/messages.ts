@@ -9,6 +9,7 @@ import type { Database } from '../db'
 import { snowflakeToTimestamp } from '../snowflake'
 import { toDiscordTimestamp } from '../timestamp'
 import { gatewayBus } from '../gateway/bus'
+import { getGuildMember } from './guild-members'
 // Used for compile-time type drift detection.
 // When Renovate bumps discord-api-types, `pnpm lint:tsc` will fail if the
 // safe-field subset of MessageResponse is renamed or retyped upstream.
@@ -423,6 +424,27 @@ export interface MessageCreateParams {
 }
 
 /**
+ * Resolves the author's guild member object for a Gateway MESSAGE_CREATE /
+ * MESSAGE_UPDATE dispatch. Real Discord always embeds this for guild channel
+ * messages (absent for DM-like channels, where `guildId` is undefined).
+ * @param db - Database
+ * @param guildId - Guild ID the message's channel belongs to, if any
+ * @param authorId - Message author's user ID
+ * @returns Guild member object, or undefined when not applicable
+ */
+function dispatchMemberFor(
+  db: Database,
+  guildId: string | undefined,
+  authorId: string
+): Record<string, unknown> | undefined {
+  if (!guildId) return undefined
+  return (
+    (getGuildMember(db, guildId, authorId) as Record<string, unknown> | null) ??
+    undefined
+  )
+}
+
+/**
  * Creates a message.
  * @param db - Database
  * @param params - Message creation parameters
@@ -466,10 +488,12 @@ export function createMessage(
   const msg = getMessage(db, params.messageId, baseUrl)
   if (!msg) throw new Error('Failed to create message')
 
+  const guildId = getGuildIdForChannel(db, params.channelId)
   gatewayBus.emit('message.create', {
-    guildId: getGuildIdForChannel(db, params.channelId),
+    guildId,
     channelId: params.channelId,
     message: msg as unknown as Record<string, unknown>,
+    member: dispatchMemberFor(db, guildId, params.authorId),
   })
 
   return msg
@@ -513,10 +537,12 @@ export function updateMessage(
 
   const updated = getMessage(db, messageId, baseUrl)
   if (updated) {
+    const guildId = getGuildIdForChannel(db, row.channel_id)
     gatewayBus.emit('message.update', {
-      guildId: getGuildIdForChannel(db, row.channel_id),
+      guildId,
       channelId: row.channel_id,
       message: updated as unknown as Record<string, unknown>,
+      member: dispatchMemberFor(db, guildId, row.author_id),
     })
   }
   return updated

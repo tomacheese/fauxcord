@@ -9,11 +9,13 @@ describe('gatewayBus', () => {
       guildId: 'g1',
       channelId: 'c1',
       message: { id: 'm1' },
+      member: undefined,
     })
     expect(listener).toHaveBeenCalledWith({
       guildId: 'g1',
       channelId: 'c1',
       message: { id: 'm1' },
+      member: undefined,
     })
     gatewayBus.off('message.create', listener)
   })
