@@ -7,6 +7,8 @@
 
 import type { Database } from '../db'
 import { getGuildRoles, type RoleObject } from './guild-roles'
+import { getGuildChannels } from './channels'
+import { getGuildMembers } from './guild-members'
 
 /** Guild record type retrieved from the DB */
 interface GuildRow {
@@ -226,4 +228,50 @@ export function getBotGuilds(
     permissions: '0',
     features: [],
   }))
+}
+
+/**
+ * Builds the payload for a Gateway `GUILD_CREATE` Dispatch event.
+ *
+ * `GUILD_CREATE` sends everything the plain `GuildObject` (the REST shape)
+ * has, plus a set of Gateway-only "extra fields" (member_count, large,
+ * joined_at, channels, members, ...) that some client libraries (e.g. JDA)
+ * require to be present -- and correctly typed -- to parse the event at all.
+ * See https://discord.com/developers/docs/topics/gateway-events#guild-create-guild-create-extra-fields
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @returns The GUILD_CREATE payload, or null if the guild does not exist
+ */
+export function buildGuildCreatePayload(
+  db: Database,
+  guildId: string
+): (GuildObject & Record<string, unknown>) | null {
+  const guild = getGuild(db, guildId)
+  if (!guild) return null
+
+  const memberCount = (
+    db
+      .prepare('SELECT COUNT(*) as cnt FROM guild_members WHERE guild_id = ?')
+      .get(guildId) as { cnt: number }
+  ).cnt
+
+  return {
+    ...guild,
+    // `joined_at` is meant to record when the bot joined this guild; the
+    // mock has no such history, so "now" is used as a plausible stand-in.
+    joined_at: new Date().toISOString(),
+    // Real Discord marks a guild "large" once its member count exceeds the
+    // client's IDENTIFY `large_threshold` (default 50); the mock doesn't
+    // track per-session thresholds, so Discord's own default is used here.
+    large: memberCount > 50,
+    unavailable: false,
+    member_count: memberCount,
+    voice_states: [],
+    members: getGuildMembers(db, guildId, 1000),
+    channels: getGuildChannels(db, guildId),
+    threads: [],
+    presences: [],
+    stage_instances: [],
+    guild_scheduled_events: [],
+  }
 }

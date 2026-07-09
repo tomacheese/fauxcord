@@ -116,6 +116,28 @@ describe('IDENTIFY payload validation', () => {
     ws.close()
   })
 
+  it('lists pre-existing guilds as unavailable stubs in READY (not an empty array)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    const bot = seedBot(db, 'Bot readystubtoken')
+    const guild = seedGuild(db, bot, 'ReadyStubGuild')
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot readystubtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as {
+      guilds?: { id: string; unavailable: boolean }[]
+    }
+    expect(readyData.guilds).toEqual([{ id: guild, unavailable: true }])
+    ws.close()
+  })
+
   it("includes a complete `user` object in READY (required by strict client models such as interactions.py's ClientUser)", async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c

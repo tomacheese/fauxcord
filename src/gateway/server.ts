@@ -8,7 +8,7 @@
 import { GatewayIntentBits } from 'discord-api-types/v10'
 import type { WSContext, WSEvents } from 'hono/ws'
 import type { Database } from '../db'
-import { getGuild } from '../services/guilds'
+import { buildGuildCreatePayload } from '../services/guilds'
 import { SessionManager, type Session } from './session'
 import { GatewayOp, GatewayCloseCode } from './opcodes'
 import { encodePayload, decodePayload } from './protocol'
@@ -202,6 +202,19 @@ function handleIdentify(
   sessionIdByWs.set(ws, session.sessionId)
   armHeartbeatTimeout(sessionManager, ws, session.sessionId)
 
+  // Real Discord's READY payload lists every guild the bot belongs to as an
+  // "unavailable" stub ({id, unavailable: true}), not an empty array --
+  // guild membership itself isn't intent-gated, only the follow-up
+  // GUILD_CREATE dispatches are. Some client libraries (e.g. JDA's
+  // GuildSetupController) use this stub list to know how many GUILD_CREATE
+  // dispatches to wait for before considering the session "ready"; sending
+  // an empty list here makes such clients think there is nothing to wait
+  // for, so they report ready before the actual GUILD_CREATE dispatches
+  // (sent below) have been processed.
+  const existingGuildIds = db
+    .prepare('SELECT id FROM guilds WHERE bot_token = ?')
+    .all(bot.token) as { id: string }[]
+
   ws.send(
     encodePayload({
       op: GatewayOp.Dispatch,
@@ -231,7 +244,10 @@ function handleIdentify(
           locale: 'en-US',
           verified: true,
         },
-        guilds: [],
+        guilds: existingGuildIds.map(({ id }) => ({
+          id,
+          unavailable: true,
+        })),
         session_id: session.sessionId,
         resume_gateway_url: toWsUrl(options.baseUrl),
         // `private_channels` is not part of discord-api-types's
@@ -251,10 +267,10 @@ function handleIdentify(
     })
   )
 
-  // Real Discord sends `guilds: []` (unavailable stubs) in READY, then a
-  // GUILD_CREATE Dispatch for each guild the bot belongs to shortly after.
-  // Several client libraries (e.g. JDA, Discord4J's high-level facade) never
-  // call any "fetch guild" REST route themselves -- they populate their
+  // Real Discord follows the READY stub list above with a GUILD_CREATE
+  // Dispatch for each guild the bot belongs to shortly after. Several client
+  // libraries (e.g. JDA, Discord4J's high-level facade) never call any
+  // "fetch guild" REST route themselves -- they populate their
   // guild/channel/role/member cache exclusively from these dispatches -- so
   // without them, guild-scoped calls silently resolve to nothing even though
   // the guild exists. `guild.create` on gatewayBus (see subscribe.ts) only
@@ -263,11 +279,8 @@ function handleIdentify(
   // (e.g. seeded via `/_test/setup` before the client ever connects), so
   // those need to be sent here explicitly.
   if (hasIntent(data.intents, GatewayIntentBits.Guilds)) {
-    const existingGuildIds = db
-      .prepare('SELECT id FROM guilds WHERE bot_token = ?')
-      .all(bot.token) as { id: string }[]
     for (const { id: guildId } of existingGuildIds) {
-      const guild = getGuild(db, guildId)
+      const guild = buildGuildCreatePayload(db, guildId)
       if (guild) {
         sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
       }

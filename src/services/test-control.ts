@@ -7,7 +7,7 @@
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
-import { getGuild } from './guilds'
+import { buildGuildCreatePayload } from './guilds'
 import { getGuildMember } from './guild-members'
 
 /** Test setup request type */
@@ -103,7 +103,10 @@ export function setupTestEnvironment(
 
       pendingEvents.push(() => {
         gatewayBus.emit('guild.create', {
-          guild: getGuild(db, guildId) as unknown as Record<string, unknown>,
+          guild: buildGuildCreatePayload(db, guildId) as unknown as Record<
+            string,
+            unknown
+          >,
         })
       })
 
