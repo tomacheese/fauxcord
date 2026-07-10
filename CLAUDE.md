@@ -105,10 +105,12 @@ Route tests mount just the factory under test and seed the DB with the
 `seed*` helpers from `src/test-helpers.ts`:
 
 ```typescript
+import { Hono } from 'hono'
 import { createChannelRoutes } from './channels'
 import { initializeDatabase } from '../db'
 import { seedBot, seedGuild, seedChannel } from '../test-helpers'
 
+const BASE_URL = 'http://localhost:3000'
 const db = initializeDatabase(':memory:')
 const app = new Hono()
 app.route('/', createChannelRoutes(db, BASE_URL))
@@ -128,7 +130,7 @@ Notes:
 
 - `createTestApp()` returns a bare app (no routes); `createFullTestApp()` mounts
   every route group (used by contract tests). Most route tests build their own app.
-- WAL mode reports as `"memory"` on `:memory:` → assert `["wal","memory"]).toContain(mode)`.
+- WAL mode reports as `"memory"` on `:memory:` → `expect(["wal", "memory"]).toContain(mode)`.
 - Cover at minimum the success case plus 404, 401, and validation errors.
 
 ## Environment Variables
