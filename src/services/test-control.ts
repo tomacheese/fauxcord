@@ -7,7 +7,7 @@
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
-import { getGuild } from './guilds'
+import { buildGuildCreatePayload } from './guilds'
 import { getGuildMember } from './guild-members'
 
 /** Test setup request type */
@@ -102,8 +102,15 @@ export function setupTestEnvironment(
       ).run(guildId, guildReq.name, userId, request.token)
 
       pendingEvents.push(() => {
+        // The guild row was just inserted/updated above within this same
+        // transaction, so `buildGuildCreatePayload` should never actually
+        // return null here -- but it's still guarded explicitly (rather than
+        // cast past the type checker) so a future refactor that breaks that
+        // invariant fails loudly instead of broadcasting a null payload.
+        const guild = buildGuildCreatePayload(db, guildId)
+        if (!guild) return
         gatewayBus.emit('guild.create', {
-          guild: getGuild(db, guildId) as unknown as Record<string, unknown>,
+          guild: guild as unknown as Record<string, unknown>,
         })
       })
 

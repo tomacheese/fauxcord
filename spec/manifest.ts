@@ -751,6 +751,16 @@ export const MANIFEST: SpecEndpoint[] = [
     request: () => ({ path: '/api/v10/gateway/bot' }),
   },
 
+  // ─── Soundboard ─────────────────────────────────────────────────────────────
+
+  {
+    specPath: '/soundboard-default-sounds',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: () => ({ path: '/api/v10/soundboard-default-sounds' }),
+  },
+
   // ─── Users ──────────────────────────────────────────────────────────────────
 
   {

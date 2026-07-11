@@ -29,6 +29,10 @@
 // Discord.Net.Rest 3.20.1, so every method/overload referenced is confirmed to compile.
 // Remaining "UNCERTAIN" notes describe runtime-behavior assumptions only (e.g. paged vs. plain
 // Task) — exactly what the pass/lib-issue verdicts are meant to surface.
+//
+// Gateway verification (VerifyGatewayAsync, below) uses a separate DiscordSocketClient to
+// exercise the connect -> IDENTIFY -> READY handshake and a MESSAGE_CREATE dispatch, mirroring
+// the other object-model verifiers' gateway phase (see e.g. compat/go-discordgo/verify.go).
 
 using System.Text;
 using System.Text.Json;
@@ -36,6 +40,7 @@ using System.Text.Json.Serialization;
 using Discord;
 using Discord.Rest;
 using Discord.Net.Rest;
+using Discord.WebSocket;
 
 var jsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
@@ -656,12 +661,17 @@ foreach (var ep in ordered)
     }
 }
 
+// Separate DiscordSocketClient (not the DiscordRestClient used above): exercises the
+// Gateway connect -> IDENTIFY -> READY handshake and a MESSAGE_CREATE dispatch.
+var gatewayResult = await VerifyGatewayAsync(fauxcordBase, channelId.ToString(), rawToken);
+
 var report = new Report(
     "Discord.Net.Rest",
     // Kept in sync with DiscordNetVerify.csproj's PackageReference version.
     "3.20.1",
     true,
-    results);
+    results,
+    gatewayResult);
 
 var outputOpts = new JsonSerializerOptions
 {
@@ -733,6 +743,75 @@ static async Task DoSetupAsync(HttpClient http, string origin, string rawSetupJs
     throw new InvalidOperationException(
         $"DoSetupAsync: failed to POST /_test/setup after {maxAttempts} attempts " +
         $"(lastStatus={lastStatus}, lastError={lastError})");
+}
+
+/// <summary>
+/// Runs the Gateway connect + dispatch verification using DiscordSocketClient (separate
+/// from the DiscordRestClient used for REST verification above).
+/// </summary>
+static async Task<GatewayResult> VerifyGatewayAsync(string baseUrl, string channelId, string botToken)
+{
+    var steps = new List<GatewayStep>();
+    var config = new DiscordSocketConfig
+    {
+        RestClientProvider = _ => DefaultRestClientProvider.Instance(baseUrl),
+    };
+    var socketClient = new DiscordSocketClient(config);
+    var readyTcs = new TaskCompletionSource();
+    var messageTcs = new TaskCompletionSource();
+
+    socketClient.Ready += () => { readyTcs.TrySetResult(); return Task.CompletedTask; };
+    socketClient.MessageReceived += (msg) =>
+    {
+        if (msg.Content == "gateway-compat-check")
+        {
+            messageTcs.TrySetResult();
+        }
+        return Task.CompletedTask;
+    };
+
+    try
+    {
+        // Same raw token (no "Bot " prefix) the REST client above logs in with.
+        await socketClient.LoginAsync(TokenType.Bot, botToken);
+        await socketClient.StartAsync();
+        var readyTimeout = Task.Delay(TimeSpan.FromSeconds(20));
+        if (await Task.WhenAny(readyTcs.Task, readyTimeout) == readyTimeout)
+        {
+            throw new TimeoutException("ready timeout");
+        }
+        steps.Add(new GatewayStep { Step = "connect-identify-ready", Status = "pass", Note = "" });
+    }
+    catch (Exception ex)
+    {
+        steps.Add(new GatewayStep { Step = "connect-identify-ready", Status = "lib-issue", Note = ex.Message });
+        await socketClient.StopAsync();
+        return new GatewayResult { Status = "lib-issue", Steps = steps };
+    }
+
+    try
+    {
+        var gatewayChannel = await socketClient.GetChannelAsync(ulong.Parse(channelId)) as IMessageChannel;
+        await gatewayChannel!.SendMessageAsync("gateway-compat-check");
+        var msgTimeout = Task.Delay(TimeSpan.FromSeconds(15));
+        if (await Task.WhenAny(messageTcs.Task, msgTimeout) == msgTimeout)
+        {
+            throw new TimeoutException("messageCreate timeout");
+        }
+        steps.Add(new GatewayStep { Step = "dispatch-message-create", Status = "pass", Note = "" });
+    }
+    catch (Exception ex)
+    {
+        steps.Add(new GatewayStep { Step = "dispatch-message-create", Status = "lib-issue", Note = ex.Message });
+    }
+    finally
+    {
+        await socketClient.StopAsync();
+        await socketClient.LogoutAsync();
+    }
+
+    var failed = steps.Find(s => s.Status != "pass");
+    return new GatewayResult { Status = failed?.Status ?? "pass", Steps = steps };
 }
 
 /// <summary>
@@ -835,4 +914,28 @@ internal sealed record Report(
     [property: JsonPropertyName("library")] string Library,
     [property: JsonPropertyName("version")] string Version,
     [property: JsonPropertyName("baseUrlOverridable")] bool BaseUrlOverridable,
-    [property: JsonPropertyName("results")] List<ResultRow> Results);
+    [property: JsonPropertyName("results")] List<ResultRow> Results,
+    [property: JsonPropertyName("gateway")] GatewayResult Gateway);
+
+/// <summary>One step of the Gateway connect/dispatch verification.</summary>
+internal sealed class GatewayStep
+{
+    [JsonPropertyName("step")]
+    public string Step { get; set; } = "";
+
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "";
+
+    [JsonPropertyName("note")]
+    public string Note { get; set; } = "";
+}
+
+/// <summary>The overall Gateway verification outcome.</summary>
+internal sealed class GatewayResult
+{
+    [JsonPropertyName("status")]
+    public string Status { get; set; } = "";
+
+    [JsonPropertyName("steps")]
+    public List<GatewayStep> Steps { get; set; } = new();
+}

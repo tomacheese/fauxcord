@@ -19,14 +19,18 @@
 // here, treat it as a bug to fix, not evidence the `.proxy()` mechanism
 // itself is unsound.
 
+use serenity::all::{Context, EventHandler, GatewayIntents, Message, Ready};
 use serenity::http::{Http, HttpBuilder};
 use serenity::model::channel::{PermissionOverwrite, PermissionOverwriteType, ReactionType};
 use serenity::model::id::{ChannelId, EmojiId, GuildId, MessageId, RoleId, UserId, WebhookId};
 use serenity::model::permissions::Permissions;
+use serenity::client::ClientBuilder;
 use secrecy::ExposeSecret;
 use serde_json::{json, Map, Value};
 use std::fs;
+use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Notify;
 
 /// One canonical (method, path) pair from common/endpoints.json.
 #[derive(serde::Deserialize, Clone)]
@@ -43,6 +47,21 @@ struct EndpointResult {
     note: String,
 }
 
+/// One step of the Gateway connect/dispatch verification.
+#[derive(serde::Serialize)]
+struct GatewayStep {
+    step: String,
+    status: String,
+    note: String,
+}
+
+/// The overall Gateway verification outcome.
+#[derive(serde::Serialize)]
+struct GatewayResult {
+    status: String,
+    steps: Vec<GatewayStep>,
+}
+
 /// The final JSON document written to /results/serenity.json.
 #[derive(serde::Serialize)]
 struct Report {
@@ -51,6 +70,7 @@ struct Report {
     #[serde(rename = "baseUrlOverridable")]
     base_url_overridable: bool,
     results: Vec<EndpointResult>,
+    gateway: GatewayResult,
 }
 
 /// Resources bootstrapped before the endpoint matrix runs, so later calls
@@ -149,6 +169,142 @@ async fn do_setup(client: &reqwest::Client, origin: &str, raw: &str) {
         "do_setup: failed to POST /_test/setup after {MAX_ATTEMPTS} attempts \
          (last_status={last_status:?}, last_error={last_error:?})"
     );
+}
+
+/// `EventHandler` implementation used only for the Gateway verification
+/// phase: notifies its two `Notify` handles when `ready`/a matching
+/// `message` dispatch is observed, so `verify_gateway` can await them.
+struct GatewayVerifyHandler {
+    ready_notify: Arc<Notify>,
+    message_notify: Arc<Notify>,
+}
+
+#[serenity::async_trait]
+impl EventHandler for GatewayVerifyHandler {
+    async fn ready(&self, _ctx: Context, _ready: Ready) {
+        self.ready_notify.notify_one();
+    }
+    async fn message(&self, _ctx: Context, msg: Message) {
+        if msg.content == "gateway-compat-check" {
+            self.message_notify.notify_one();
+        }
+    }
+}
+
+/// Runs the Gateway connect + dispatch verification for serenity: opens a
+/// real Gateway connection via `Client::start`, waits for the `ready` event,
+/// then sends a REST message and confirms the `message` dispatch fires.
+async fn verify_gateway(base_url: &str, token: &str, channel_id: u64) -> GatewayResult {
+    let mut steps = vec![];
+    let ready_notify = Arc::new(Notify::new());
+    let message_notify = Arc::new(Notify::new());
+    let handler = GatewayVerifyHandler {
+        ready_notify: ready_notify.clone(),
+        message_notify: message_notify.clone(),
+    };
+
+    let intents =
+        GatewayIntents::GUILDS | GatewayIntents::GUILD_MESSAGES | GatewayIntents::MESSAGE_CONTENT;
+    let proxy_url: reqwest::Url = base_url
+        .parse()
+        .expect("verify_gateway: base_url is a valid URL");
+
+    // `ratelimiter_disabled(true)` is required alongside `.proxy()` here too
+    // (see the REST-phase `HttpBuilder` comment above): without it, requests
+    // this Http instance makes internally (e.g. GET /gateway/bot at login)
+    // go through the ratelimited path, which drops the proxy override.
+    //
+    // `ClientBuilder` has no public `.http()` setter (the field is private) —
+    // a pre-built `Http` is supplied via the `new_with_http` constructor
+    // instead (confirmed against serenity 0.12.5's `client/mod.rs`).
+    let http_for_client = HttpBuilder::new(token)
+        .proxy(proxy_url)
+        .ratelimiter_disabled(true)
+        .build();
+    let mut client = match ClientBuilder::new_with_http(http_for_client, intents)
+        .event_handler(handler)
+        .await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            steps.push(GatewayStep {
+                step: "connect-identify-ready".into(),
+                status: "lib-issue".into(),
+                note: e.to_string(),
+            });
+            return GatewayResult {
+                status: "lib-issue".into(),
+                steps,
+            };
+        }
+    };
+
+    let http = client.http.clone();
+    let shard_manager = client.shard_manager.clone();
+    let start_handle = tokio::spawn(async move { client.start().await });
+
+    let ready_wait = tokio::time::timeout(Duration::from_secs(20), ready_notify.notified()).await;
+    if ready_wait.is_err() {
+        steps.push(GatewayStep {
+            step: "connect-identify-ready".into(),
+            status: "lib-issue".into(),
+            note: "ready timeout".into(),
+        });
+        shard_manager.shutdown_all().await;
+        return GatewayResult {
+            status: "lib-issue".into(),
+            steps,
+        };
+    }
+    steps.push(GatewayStep {
+        step: "connect-identify-ready".into(),
+        status: "pass".into(),
+        note: "".into(),
+    });
+
+    match http
+        .send_message(
+            channel_id.into(),
+            Vec::new(),
+            &jmap(json!({ "content": "gateway-compat-check" })),
+        )
+        .await
+    {
+        Ok(_) => {
+            let msg_wait =
+                tokio::time::timeout(Duration::from_secs(15), message_notify.notified()).await;
+            if msg_wait.is_err() {
+                steps.push(GatewayStep {
+                    step: "dispatch-message-create".into(),
+                    status: "lib-issue".into(),
+                    note: "messageCreate timeout".into(),
+                });
+            } else {
+                steps.push(GatewayStep {
+                    step: "dispatch-message-create".into(),
+                    status: "pass".into(),
+                    note: "".into(),
+                });
+            }
+        }
+        Err(e) => {
+            steps.push(GatewayStep {
+                step: "dispatch-message-create".into(),
+                status: "lib-issue".into(),
+                note: e.to_string(),
+            });
+        }
+    }
+
+    shard_manager.shutdown_all().await;
+    let _ = start_handle.await;
+
+    let status = steps
+        .iter()
+        .find(|s| s.status != "pass")
+        .map(|s| s.status.clone())
+        .unwrap_or_else(|| "pass".into());
+    GatewayResult { status, steps }
 }
 
 #[tokio::main]
@@ -422,6 +578,11 @@ async fn main() {
     let pass_count = results.iter().filter(|r| r.status == "pass").count();
     let total = results.len();
 
+    // Gateway phase: reuses the same bare origin as the REST proxy above
+    // (serenity's Client fetches GET /gateway/bot through its own internal
+    // Http, then appends /api/vN/... itself, same as the REST phase).
+    let gateway = verify_gateway(&origin, &token, channel_id).await;
+
     let report = Report {
         library: "serenity",
         // Reflects the major line pinned in Cargo.toml; the exact patch
@@ -429,6 +590,7 @@ async fn main() {
         version: "0.12.x",
         base_url_overridable: true,
         results,
+        gateway,
     };
     fs::write(
         "/results/serenity.json",

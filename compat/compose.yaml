@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       DISABLE_AUTH: "false"
+      BASE_URL: "http://fauxcord:3000"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/_mock/health"]
       interval: 5s
@@ -166,6 +167,18 @@ services:
     build:
       context: .
       dockerfile: ./jvm-kord/Dockerfile
+    depends_on:
+      fauxcord:
+        condition: service_healthy
+    environment:
+      FAUXCORD_BASE: "http://fauxcord:3000/api/v10"
+    volumes:
+      - ./results:/results
+
+  verify-jda:
+    build:
+      context: .
+      dockerfile: ./jvm-jda/Dockerfile
     depends_on:
       fauxcord:
         condition: service_healthy

@@ -23,25 +23,46 @@ publish = false
 # `use crate::builder::{...}`, so `builder` must be enabled too even though
 # this file never calls the `CreateXxx` builder types directly (every call
 # here uses a raw `serde_json::Map` body).
+#
+# `client`/`gateway`/`model` added for the Gateway verification phase below:
+# `Client::builder`/`EventHandler`/`Ready`/`Message` all live behind them.
 serenity = { version = "0.12", default-features = false, features = [
   "http",
   "builder",
   "rustls_backend",
+  "client",
+  "gateway",
+  "model",
 ] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 # serenity 0.12 exposes `Webhook.token` as `Option<secrecy::SecretString>` and
 # does NOT publicly re-export `secrecy`, so extracting the raw token string
 # (needed to drive the token-authenticated webhook endpoints below) requires
-# the `ExposeSecret` trait directly. Pinned to the exact 0.8.0 that serenity
-# itself resolves, so this adds no new distinct version to the dependency tree.
-secrecy = "0.10"
+# the `ExposeSecret` trait directly.
+#
+# FIX: must stay pinned to the exact 0.8 line serenity 0.12.5 itself resolves
+# internally — a stale "0.10" here (already present before this task) put two
+# distinct `secrecy` majors in the dependency graph, so the `ExposeSecret`
+# impl this file imports (0.10's) didn't match the trait `Webhook.token`
+# (0.8's `Secret<String>`) actually implements, and `cargo build` rejected
+# `.expose_secret()` as "method not found".
+secrecy = "0.8"
 # Used directly for the health-check poll and the /_test/setup POST (the same
 # role fetch() plays in the JS verifiers) — kept independent of whatever
-# internal HTTP client serenity's "http" feature pulls in. rustls-tls matches
-# serenity's own rustls_backend choice so the image doesn't need OpenSSL.
-reqwest = { version = "0.13", default-features = false, features = [
+# internal HTTP client serenity's "http" feature pulls in. `rustls-tls`
+# matches serenity's own rustls_backend choice so the image doesn't need
+# OpenSSL.
+#
+# FIX: must stay pinned to the exact 0.12 line serenity 0.12.5 resolves
+# internally — a stale "0.13" here (already present before this task, using
+# the 0.13-only "rustls" feature name) put two distinct `reqwest` majors in
+# the dependency graph, so the `reqwest::Client` this file builds and passes
+# to `HttpBuilder::client()` (0.13's type) didn't match the type that method
+# actually expects (serenity's own 0.12 `reqwest::Client`), and `cargo build`
+# rejected it as a type mismatch.
+reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }

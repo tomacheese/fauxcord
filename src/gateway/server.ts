@@ -5,22 +5,45 @@
  * Hello/Identify/Heartbeat/Resume/Ready/Invalid Session/Reconnect.
  */
 
+import { GatewayIntentBits } from 'discord-api-types/v10'
+// Used for compile-time type drift detection.
+import type { GatewayReadyDispatchData } from 'discord-api-types/v10'
 import type { WSContext, WSEvents } from 'hono/ws'
 import type { Database } from '../db'
+import { buildGuildCreatePayload } from '../services/guilds'
 import { SessionManager, type Session } from './session'
 import { GatewayOp, GatewayCloseCode } from './opcodes'
 import { encodePayload, decodePayload } from './protocol'
 import type { IdentifyData, ResumeData } from './protocol'
+import { sendDispatch } from './dispatch'
+import { hasIntent } from './intents'
 
 /** Heartbeat interval (ms) announced in HELLO; matches real Discord's default. */
 const HEARTBEAT_INTERVAL_MS = 41_250
 /** Time (ms) to wait for a Heartbeat before closing the session */
 const HEARTBEAT_TIMEOUT_MS = HEARTBEAT_INTERVAL_MS * 2
 
+/** Bot info resolved from an IDENTIFY token, used to build the READY user object */
+interface IdentifiedBot {
+  userId: string
+  username: string
+  discriminator: string
+  avatar: string | null
+  /** Normalized (`"Bot <token>"`-prefixed) token, used to look up the bot's guilds (`guilds.bot_token`) */
+  token: string
+}
+
 /**
  * Resolves the Bot for an IDENTIFY token. When DISABLE_AUTH=true, any token
  * is accepted (matching REST behavior) and unregistered tokens are treated
  * as MockBot.
+ *
+ * Real Discord Gateway clients send the raw bot token in IDENTIFY's `token`
+ * field, without the `"Bot "` prefix used in the REST `Authorization`
+ * header (`bots.token` is stored with that prefix, per `/_test/setup`'s
+ * documented `"Bot <token>"` format). The lookup normalizes the IDENTIFY
+ * token by adding the prefix when missing, so both the real-protocol
+ * unprefixed form and an already-prefixed form resolve to the same row.
  * @param db - Database
  * @param disableAuth - Auth-bypass flag
  * @param token - The `token` field from IDENTIFY
@@ -30,12 +53,38 @@ function resolveBotForIdentify(
   db: Database,
   disableAuth: boolean,
   token: string
-): { userId: string; username: string } | undefined {
+): IdentifiedBot | undefined {
+  const lookupToken = token.startsWith('Bot ') ? token : `Bot ${token}`
   const row = db
-    .prepare('SELECT user_id, username FROM bots WHERE token = ?')
-    .get(token) as { user_id: string; username: string } | undefined
-  if (row) return { userId: row.user_id, username: row.username }
-  if (disableAuth) return { userId: '0', username: 'MockBot' }
+    .prepare(
+      'SELECT user_id, username, discriminator, avatar FROM bots WHERE token = ?'
+    )
+    .get(lookupToken) as
+    | {
+        user_id: string
+        username: string
+        discriminator: string
+        avatar: string | null
+      }
+    | undefined
+  if (row) {
+    return {
+      userId: row.user_id,
+      username: row.username,
+      discriminator: row.discriminator,
+      avatar: row.avatar,
+      token: lookupToken,
+    }
+  }
+  if (disableAuth) {
+    return {
+      userId: '0',
+      username: 'MockBot',
+      discriminator: '0',
+      avatar: null,
+      token: lookupToken,
+    }
+  }
   return undefined
 }
 
@@ -120,6 +169,62 @@ function armHeartbeatTimeout(
 }
 
 /**
+ * Shape of the READY (op0) Dispatch payload's `d` field. `private_channels`
+ * is deliberately excluded from the compat guard below -- see the comment
+ * on that field further down for why real Discord sends it while
+ * discord-api-types's `GatewayReadyDispatchData` does not declare it.
+ */
+interface ReadyPayload {
+  v: number
+  user: {
+    id: string
+    username: string
+    discriminator: string
+    avatar: string | null
+    bot: boolean
+    flags: number
+    public_flags: number
+    global_name: null
+    mfa_enabled: boolean
+    locale: string
+    verified: boolean
+  }
+  guilds: { id: string; unavailable: boolean }[]
+  session_id: string
+  resume_gateway_url: string
+  private_channels: never[]
+  application: { id: string; flags: number }
+}
+
+/**
+ * Compile-time guard: ensures `ReadyPayload` stays structurally compatible
+ * with `GatewayReadyDispatchData` (excluding `private_channels`, which real
+ * Discord sends but discord-api-types deliberately omits). Fails to compile
+ * when discord-api-types renames or retypes one of these fields.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _ReadyPayloadCompatGuard =
+  Pick<
+    GatewayReadyDispatchData,
+    | 'v'
+    | 'user'
+    | 'guilds'
+    | 'session_id'
+    | 'resume_gateway_url'
+    | 'application'
+  > extends Pick<
+    ReadyPayload,
+    | 'v'
+    | 'user'
+    | 'guilds'
+    | 'session_id'
+    | 'resume_gateway_url'
+    | 'application'
+  >
+    ? true
+    : never
+
+/**
  * Handles IDENTIFY (op2) and sends READY (op0) on successful authentication.
  * @param db - Database
  * @param options - baseUrl and disableAuth
@@ -155,20 +260,99 @@ function handleIdentify(
   sessionIdByWs.set(ws, session.sessionId)
   armHeartbeatTimeout(sessionManager, ws, session.sessionId)
 
+  // Real Discord's READY payload lists every guild the bot belongs to as an
+  // "unavailable" stub ({id, unavailable: true}), not an empty array --
+  // guild membership itself isn't intent-gated, only the follow-up
+  // GUILD_CREATE dispatches are. Some client libraries (e.g. JDA's
+  // GuildSetupController) use this stub list to know how many GUILD_CREATE
+  // dispatches to wait for before considering the session "ready"; sending
+  // an empty list here makes such clients think there is nothing to wait
+  // for, so they report ready before the actual GUILD_CREATE dispatches
+  // (sent below) have been processed.
+  const existingGuildIds = db
+    .prepare('SELECT id FROM guilds WHERE bot_token = ?')
+    .all(bot.token) as { id: string }[]
+
+  const readyData: ReadyPayload = {
+    v: 10,
+    // Real Discord's READY `user` is the full own-user object (matching
+    // GET /users/@me's shape), not just {id, username, bot}. Some
+    // clients build a strict own-user model straight from this field and
+    // raise before their `ready` event ever fires if it's incomplete.
+    // `verified: true` and the other dummy values mirror
+    // src/services/users.ts's getBotUser() (which independently needed
+    // the same `verified` field added, since some clients -- e.g.
+    // interactions.py -- build their own-user model from the REST
+    // `/users/@me` login response instead of this Gateway field).
+    user: {
+      id: bot.userId,
+      username: bot.username,
+      discriminator: bot.discriminator,
+      avatar: bot.avatar,
+      bot: true,
+      flags: 0,
+      public_flags: 0,
+      global_name: null,
+      mfa_enabled: false,
+      locale: 'en-US',
+      verified: true,
+    },
+    guilds: existingGuildIds.map(({ id }) => ({
+      id,
+      unavailable: true,
+    })),
+    session_id: session.sessionId,
+    resume_gateway_url: toWsUrl(options.baseUrl),
+    // `private_channels` is not part of discord-api-types's
+    // GatewayReadyDispatchData (long deprecated, always empty), but real
+    // Discord still sends it and Discord.Net's ReadyEvent model reads
+    // `data.PrivateChannels.Length` unconditionally, throwing a
+    // NullReferenceException ("Processing READY failed") when the field
+    // is absent. Sending an empty array matches real Discord's behavior
+    // and costs nothing for clients that ignore it.
+    private_channels: [],
+    // `application` is required by the real Gateway READY payload
+    // (GatewayReadyDispatchData in discord-api-types); some clients
+    // (e.g. Oceanic.js) fail to parse READY without it. `flags: 0` is a
+    // dummy value, matching the REST `/applications/@me` mock.
+    application: { id: bot.userId, flags: 0 },
+  }
+
   ws.send(
     encodePayload({
       op: GatewayOp.Dispatch,
       t: 'READY',
       s: sessionManager.nextSeq(session),
-      d: {
-        v: 10,
-        user: { id: bot.userId, username: bot.username, bot: true },
-        guilds: [],
-        session_id: session.sessionId,
-        resume_gateway_url: toWsUrl(options.baseUrl),
-      },
+      d: readyData,
     })
   )
+
+  // Real Discord follows the READY stub list above with a GUILD_CREATE
+  // Dispatch for each guild the bot belongs to shortly after. Several client
+  // libraries (e.g. JDA, Discord4J's high-level facade) never call any
+  // "fetch guild" REST route themselves -- they populate their
+  // guild/channel/role/member cache exclusively from these dispatches -- so
+  // without them, guild-scoped calls silently resolve to nothing even though
+  // the guild exists. `guild.create` on gatewayBus (see subscribe.ts) only
+  // fires for guilds created *after* this session connects (e.g. via
+  // `POST /guilds`), not for guilds that already existed at IDENTIFY time
+  // (e.g. seeded via `/_test/setup` before the client ever connects), so
+  // those need to be sent here explicitly.
+  if (hasIntent(data.intents, GatewayIntentBits.Guilds)) {
+    // buildGuildCreatePayload runs ~4 reads per guild, so an IDENTIFY from a
+    // bot in N guilds issues ~4N statements. Batch them into one SQLite
+    // transaction (a read-only transaction in WAL mode) to avoid per-statement
+    // transaction overhead, then perform the WebSocket sends outside it so no
+    // I/O happens while the transaction is open.
+    const payloads = db.transaction(() =>
+      existingGuildIds
+        .map(({ id: guildId }) => buildGuildCreatePayload(db, guildId))
+        .filter((guild) => guild !== null)
+    )()
+    for (const guild of payloads) {
+      sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
+    }
+  }
 }
 
 /**

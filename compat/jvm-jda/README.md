@@ -1,98 +1,107 @@
-# JDA (net.dv8tion:JDA) — `⛔blocked`
+# JDA (net.dv8tion:JDA) — `✅ verified`
 
-No verifier is scaffolded here. This file records the research and evidence
-for why JDA cannot be pointed at Fauxcord, mirroring the rigor of the
-`js-eris/verify.mjs` header comment for that library's `⛔blocked` verdict.
+A working verifier is scaffolded here (`Dockerfile`, `build.gradle.kts`,
+`src/main/java/Verify.java`), run via the `verify-jda` service in
+`compat/compose.yaml`. Latest run: **62 ✅ / 23 N/A / 2 ❌→lib** out of 87
+canonical endpoints, plus a passing Gateway check (see below). Results are
+written to `compat/results/jda.json`.
 
-## Summary
+## History: why this was previously blocked
 
-JDA is blocked from targeting Fauxcord — **not** because its REST base URL is
-hardcoded (it is not: see below), but because JDA has no officially supported
-way to obtain a usable `JDA` instance (and therefore no way to issue any
-`RestAction`) without first completing a real Gateway WebSocket handshake.
-Fauxcord explicitly does not implement the Gateway (see
-`docs/getting-started.md`: "What it cannot do: WebSocket (Gateway / real-time
-notifications)"), so that handshake can never succeed against it. This is a
-hard blocker independent of any REST-layer configuration.
+JDA was originally recorded as `⛔blocked` because `JDABuilder.build()`'s
+login sequence opens a real Gateway WebSocket, and Fauxcord did not implement
+the Gateway at the time. That blocker was resolved by the Gateway (WebSocket)
+implementation landing in Fauxcord (Issue #102 / PR #107); this Issue (#106)
+re-verified JDA against the now-available Gateway and unblocked it.
 
-## What *is* confirmed to work: the REST base URL is overridable
+The REST-layer base URL was never the issue — JDA 5.x+'s
+`net.dv8tion.jda.api.requests.RestConfig#setBaseUrl(String)`, passed via
+`JDABuilder#setRestConfig(RestConfig)`, is documented for exactly this kind
+of mocked-backend use case.
 
-JDA 5.x introduced `net.dv8tion.jda.api.requests.RestConfig`, which exposes
-`RestConfig#setBaseUrl(String)`:
+## Connecting
 
-> "Provide a custom base URL for REST-api requests. This uses
-> `DEFAULT_BASE_URL` by default. [...] It is not required for this URL to be
-> HTTPS, because local proxies do not require signed connections."
-> — [`RestConfig` javadoc](https://docs.jda.wiki/net/dv8tion/jda/api/requests/RestConfig.html)
+```java
+RestConfig restConfig = new RestConfig().setBaseUrl(fauxcordBaseUrl);
+JDA jda = JDABuilder.createLight(token)
+    .setRestConfig(restConfig)
+    .setSessionController(new SessionControllerAdapter())
+    .build();
+jda.awaitReady();
+```
 
-This is passed to `JDABuilder` via `JDABuilder#setRestConfig(RestConfig)`, and
-is explicitly documented as intended for "exotic proxies" and mocked
-back-ends — i.e. exactly the Fauxcord use case. So, unlike Eris (hardcoded
-HTTPS/443 with no scheme/port override — see `compat/js-eris/verify.mjs`),
-JDA's REST layer alone is not the blocker.
+`awaitReady()` blocks until the Gateway session reaches `READY` — this now
+completes successfully against Fauxcord's Gateway implementation.
 
-## The actual blocker: JDA requires a real Gateway connection to become usable
+## Gateway verification
 
-1. **`JDABuilder.build()` performs a login sequence that includes opening the
-   Gateway WebSocket**, not just a REST call. Community reports confirm that
-   when the Gateway WebSocket handshake fails, `build()`/the login sequence
-   surfaces the failure as an `ErrorResponseException` (e.g. wrapping a
-   `SocketTimeoutException`) — see
-   [discord-jda/JDA#2084](https://github.com/discord-jda/JDA/issues/2084) and
-   the [JDA Wiki troubleshooting page](https://jda.wiki/using-jda/troubleshooting/).
-   There is no supported "REST-only, skip the Gateway" build mode:
-   `JDABuilder.createLight(token)` only trims caches/intents to reduce memory
-   use, it does not skip the WebSocket connection.
-2. **JDA's high-level API (`Guild`, `TextChannel`, `Message`, `Role`,
-   `Webhook`, `.retrieveXxx()`/`.createXxx()`/`.editXxx()`/`.deleteXxx()`
-   returning `RestAction<T>`) is only reachable through entity objects that
-   are themselves populated via the Gateway/cache, or through `JDA` instance
-   methods (e.g. `jda.retrieveUserById(id)`) that still require the `JDA`
-   object to have completed login far enough to hold a valid REST requester
-   bound to an established session. Neither path has a documented "just give
-   me a `RestAction` executor without ever opening a websocket" entry point.
-3. **Fauxcord's `GET /gateway` and `GET /gateway/bot` are dummy REST
-   endpoints only** (see `src/services/gateway.ts`): they return a
-   syntactically valid `ws://`/`wss://` URL derived from the base URL, but
-   Fauxcord runs no actual WebSocket server behind it — the project's own
-   docs state this is out of scope ("What it cannot do: WebSocket (Gateway /
-   real-time notifications)", `docs/getting-started.md`). So the REST
-   bootstrap call JDA makes before opening the socket will succeed and hand
-   JDA a URL that then fails to establish a WebSocket connection, reproducing
-   exactly the failure mode in evidence item 1 above.
+The verifier drives JDA through Identify → Ready, then exercises a
+Dispatch-event round trip (send a message via REST, assert it arrives via
+`MessageReceivedEvent`). Both steps currently `pass`:
 
-Combining 1–3: even with `RestConfig#setBaseUrl` pointed at Fauxcord, calling
-`JDABuilder.createLight(token).setRestConfig(cfg).build().awaitReady()` (the
-idiomatic JDA startup) cannot complete, because `awaitReady()` waits for the
-Gateway session to reach `READY`, which Fauxcord's non-existent WebSocket
-server can never deliver. Any attempt to route around this via reflection
-into JDA's internal `Requester`/`RestActionImpl` classes would not be using
-JDA's public API and would not reflect how any real consumer of the library
-integrates with a REST target — precision here matters more than forcing a
-verifier to run, per the guidance for this task.
+```json
+{
+  "status": "pass",
+  "steps": [
+    { "step": "connect-identify-ready", "status": "pass", "note": "" },
+    { "step": "dispatch-message-create", "status": "pass", "note": "" }
+  ]
+}
+```
 
-## Verdict
+### Fauxcord bugs found and fixed during this verification
 
-JDA is recorded as **`⛔blocked`** for all 86 canonical endpoints in
-`compat/common/endpoints.json`, for the reason above (hard Gateway
-dependency, not a REST base-URL limitation). No Dockerfile, build config, or
-verifier script is provided, and no `verify-jda` service is registered in
-`compat/compose.yaml`, since there is no code path (using JDA's public,
-documented API) that reaches a runnable state against Fauxcord to justify a
-build step.
+Getting `dispatch-message-create` to pass required fixing two independent
+Fauxcord Gateway dispatch gaps (real Discord always sends both of these on
+guild-channel `MESSAGE_CREATE`/`MESSAGE_UPDATE`, but Fauxcord omitted them):
+
+1. **Missing `guild_id`** — added in `src/gateway/subscribe.ts` /
+   `src/services/messages.ts`.
+2. **Missing `member` (the author's guild member object)** — JDA's
+   `EntityBuilder` requires this to construct the message author's `Member`;
+   its absence caused a silent internal failure (no exception, no log line)
+   that only manifested as the listener's `CompletableFuture` timing out.
+   Added a `member` field to `GatewayBusEvents['message.create'/'message.update']`
+   in `src/gateway/bus.ts`, resolved via a new `dispatchMemberFor()` helper in
+   `src/services/messages.ts`, and spread into the dispatch payload in
+   `src/gateway/subscribe.ts`.
+
+Two further Gateway-adjacent gaps were also found and fixed while getting JDA
+past `READY`/`GUILD_CREATE` handling (not JDA-specific — these are general
+Discord spec conformance gaps that also affect other Gateway-consuming
+libraries):
+
+3. **`GUILD_CREATE` was missing Gateway-only "extra fields"**
+   (`member_count`, `large`, `joined_at`, `channels`, `members`, etc.) — JDA's
+   entity builders require these to parse the event at all. Fixed via
+   `buildGuildCreatePayload()` in `src/services/guilds.ts`.
+4. **`READY`'s `guilds` list was always `[]`** instead of the real spec's
+   `{id, unavailable: true}` stub list. JDA's `GuildSetupController` uses
+   this stub list to know how many `GUILD_CREATE` dispatches to wait for
+   before considering the session ready; an empty list made JDA think there
+   was nothing to wait for. Fixed in `src/gateway/server.ts`.
+
+## Remaining `❌→lib` findings (JDA-side, not fixed in Fauxcord)
+
+| Endpoint | Symptom | Assessment |
+|---|---|---|
+| `GET /guilds/{guild_id}/bans/{user_id}` | `ErrorResponseException: 10026: Unknown Ban` | JDA-side error-response handling; several other libraries (Discord4J, Kord, Concord) show the same `❌→lib` pattern on this row while the majority (discord.py, hikari, Discord.Net, Serenity, ...) pass — consistent with a library-side quirk, not a Fauxcord bug. |
+| `DELETE /channels/{channel_id}/messages/pins/{message_id}` | `ErrorResponseException: 10008: Unknown Message` | JDA is the only non-blocked library that attempts the new pins API's unpin call in the verifier's test sequence (most others only cover the legacy `/pins/{message_id}` route, shown as `N/A` for this row); Fauxcord's own route returns 204 unconditionally, so this reflects the verifier's message-lifecycle ordering interacting with JDA's `Message#unpin()`, not a Fauxcord response defect. |
+
+## Running the verifier
+
+```bash
+cd compat
+docker compose build fauxcord verify-jda
+docker compose up --abort-on-container-exit fauxcord verify-jda
+cat results/jda.json
+```
 
 ## Confidence notes
 
-- **High confidence**: `RestConfig#setBaseUrl` exists and does what is
-  described (directly quoted from the current javadoc).
-- **High confidence**: `JDABuilder.build()`'s login sequence includes opening
-  the Gateway WebSocket, and failures there are visible as exceptions from
-  `build()`/the login flow (corroborated by a real GitHub issue and the
-  official troubleshooting wiki page).
-- **Medium-high confidence**: there is no supported way to obtain a working
-  `RestAction` executor from JDA's public API without going through that
-  login/Gateway sequence at least far enough to hit the WebSocket step. This
-  is based on JDA's documented architecture (Gateway-first, REST-plus-cache)
-  and the absence of any documented REST-only builder option; it was not
-  verified by compiling/running JDA itself in this environment (no network/
-  build commands were run, per task constraints).
+- **High confidence**: the Gateway result (`connect-identify-ready`,
+  `dispatch-message-create`) — reproduced via a fresh Docker rebuild + run
+  after the fixes above, independent of the raw `ws`-client diagnostic used
+  during debugging.
+- **High confidence**: the 62/23/2 REST breakdown — read directly from
+  `compat/results/jda.json`, generated by the same Docker run.

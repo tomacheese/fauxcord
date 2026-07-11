@@ -7,7 +7,7 @@
  */
 
 import { Hono } from 'hono'
-import { serve } from '@hono/node-server'
+import { serveWithGateway } from './http-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
 import { createAuthMiddleware, type AppEnv } from './middleware/auth'
@@ -17,6 +17,7 @@ import { createChannelRoutes } from './routes/channels'
 import { createGuildRoutes } from './routes/guilds'
 import { createUserRoutes } from './routes/users'
 import { createGatewayRoutes } from './routes/gateway'
+import { createSoundboardRoutes } from './routes/soundboard'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createInviteRoutes } from './routes/invites'
 import { createOAuth2Routes } from './routes/oauth2'
@@ -99,6 +100,7 @@ export function createFullTestApp(): FullTestContext {
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
+    app.route(prefix, createSoundboardRoutes())
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
     app.route(prefix, createInviteRoutes(db))
   }
@@ -129,19 +131,21 @@ export async function createTestGatewayServer(): Promise<{
     disableAuth: false,
   })
 
-  const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
-    const s = serve(
-      {
-        fetch: app.fetch,
-        port: 0,
-        hostname: '127.0.0.1',
-        websocket: { server: wss },
-      },
-      () => {
-        resolve(s)
-      }
-    )
-  })
+  const server = await new Promise<ReturnType<typeof serveWithGateway>>(
+    (resolve) => {
+      const s = serveWithGateway(
+        {
+          fetch: app.fetch,
+          port: 0,
+          hostname: '127.0.0.1',
+          wss,
+        },
+        () => {
+          resolve(s)
+        }
+      )
+    }
+  )
 
   const address = server.address()
   const port = typeof address === 'object' && address ? address.port : 0

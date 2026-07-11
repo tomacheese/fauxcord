@@ -37,6 +37,46 @@ Each verifier writes `results/<lib>.json`:
 
 `status` ∈ `pass` | `n-a` | `blocked` | `fauxcord-fix` | `lib-issue`.
 
+## Gateway verification
+
+Each verifier that wraps a library with real Gateway client capability adds a
+`gateway` field to its `results/<lib>.json` alongside the existing REST
+`results` array:
+
+```json
+{
+  "gateway": {
+    "status": "pass",
+    "steps": [
+      { "step": "connect-identify-ready", "status": "pass", "note": "" },
+      { "step": "dispatch-message-create", "status": "pass", "note": "" }
+    ]
+  }
+}
+```
+
+`gateway.status` / each step's `status` ∈ `pass` | `n-a` | `blocked` |
+`fauxcord-fix` | `lib-issue`.
+
+The common flow every Gateway verifier follows:
+
+1. `connect-identify-ready`: open a WebSocket connection via the library's
+   high-level client, complete HELLO → IDENTIFY → READY, and confirm the
+   library's own "ready" callback/event fires.
+2. `dispatch-message-create`: after READY, send `POST
+   /channels/{channel_id}/messages` via REST, then confirm the library's
+   high-level "message create" callback/event fires with a matching message
+   within a timeout.
+
+REST-only clients with no Gateway capability (e.g. `@discordjs/rest`,
+`DiscordRestClient`, `twilight-http` alone) are not expected to add a
+`gateway` field at all — see `docs/superpowers/specs/2026-07-06-gateway-compat-verification-design.md`
+for the full list of libraries and their Gateway-capable counterpart
+(full `discord.js`, `DiscordSocketClient`, `twilight-gateway`).
+
+Libraries with no Gateway client at all remain REST-only rows in this file
+and are unaffected by this section.
+
 ## Run one verifier
 
 ```bash
@@ -122,14 +162,15 @@ Every `N/A` and `⛔blocked` cell needs an evidence note.
 
 ## Implementation status
 
-This harness spans 6 languages / 21 libraries. All 15 libraries with a
-runnable path against Fauxcord have a verifier under `compat/` and a
-populated `results/<lib>.json`; the remaining 6 are technical blockers with
-no runnable code path at all (see below) and are not scaffolded. The one
-outstanding scaffolding gap is a dedicated `dotnet-dsharpplus/README.md`
-section for the 4.x blocker, tracked as follow-up work (see the DSharpPlus
-4.x row below). Any endpoint/library left un-run in this environment is
-recorded in "Known run limitations" below.
+This harness spans 6 languages / 21 libraries. Of these, 16 have a scaffolded
+verifier under `compat/` with a populated `results/<lib>.json`, and the other
+5 are technical blockers with no runnable code path at all (see below) and are
+not scaffolded (16 + 5 = 21). Counting by outcome rather than by scaffolding,
+6 libraries are blocked overall — the 5 unscaffolded blockers plus `js-eris`,
+which is scaffolded and empirically confirms `baseUrlOverridable: false` (see
+"Known run limitations" below) — which is why the blocked-library table below
+has 6 rows. Any endpoint/library left un-run in this environment is recorded
+in "Known run limitations" below.
 
 ### Known run limitations
 
@@ -141,19 +182,27 @@ this section only summarizes *why*.
 | Library | Reason | Evidence |
 |---|---|---|
 | `js-eris` | Hardcodes HTTPS on port 443, no scheme/port override | `js-eris/verify.mjs` header |
-| `jvm-jda` | Base URL *is* overridable, but login requires a real Gateway WebSocket handshake, which Fauxcord doesn't implement | `jvm-jda/README.md` |
 | `cpp-dpp` | Internal transport hardcodes host + HTTPS, no override hook | `cpp-dpp/README.md` |
-| `dotnet-dsharpplus` (5.x) | Base URL is a compile-time `const string`; also requires a Gateway connection | `dotnet-dsharpplus/README.md` |
+| `dotnet-dsharpplus` (5.x) | Base URL is a compile-time `const string`, which alone is sufficient to block it regardless of Gateway support | `dotnet-dsharpplus/README.md` |
 | `dotnet-dsharpplus` (4.x) | Same `const string` base-URL mechanism as 5.x | entry in `coverage-matrix.md`; a dedicated README is tracked as follow-up work |
-| `jvm-javacord` | Hardcoded HTTPS domain; login requires a Gateway WebSocket | `jvm-javacord/README.md` |
+| `jvm-javacord` | Hardcoded HTTPS domain, no runtime override — this alone is sufficient to block it regardless of Gateway support | `jvm-javacord/README.md` |
 | `cpp-sleepy` | Base URL is a hardcoded string literal, no override | `cpp-sleepy/README.md` |
 
-`js-eris` is the one exception with a real, runnable verifier
-(`js-eris/verify.mjs`, `verify-eris` compose service, `results/eris.json`) —
-it actually starts and empirically confirms `baseUrlOverridable: false`
-against Fauxcord rather than being blocked on inspection alone. The other
-six rows have no Dockerfile/verifier/compose service at all — there is no
-runnable code path against Fauxcord using their public API to even attempt.
+`jvm-jda` was re-evaluated under Issue #106 once Fauxcord's Gateway
+(Issue #102) landed — its base URL was always overridable, and the Gateway
+WebSocket requirement was the only remaining blocker, so it is now
+`✅ verified` (see `jvm-jda/README.md`). `jvm-javacord` and
+`dotnet-dsharpplus` were also re-evaluated but remain blocked: both have a
+second, independent blocker (a hardcoded/compile-time-constant base URL)
+that the Gateway implementation does not affect.
+
+`js-eris` is the one exception among the remaining blockers with a real,
+runnable verifier (`js-eris/verify.mjs`, `verify-eris` compose service,
+`results/eris.json`) — it actually starts and empirically confirms
+`baseUrlOverridable: false` against Fauxcord rather than being blocked on
+inspection alone. The other rows have no Dockerfile/verifier/compose
+service at all — there is no runnable code path against Fauxcord using
+their public API to even attempt.
 
 #### Verified, with caveats
 

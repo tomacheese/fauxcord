@@ -58,6 +58,121 @@ describe('IDENTIFY payload validation', () => {
     expect(await closePromise).toBe(GatewayCloseCode.AuthenticationFailed)
   })
 
+  it('authenticates when the IDENTIFY token omits the "Bot " prefix (real client behavior)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    seedBot(db, 'Bot noprefixtoken')
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'noprefixtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    expect(ready.op).toBe(GatewayOp.Dispatch)
+    expect(ready.t).toBe('READY')
+    ws.close()
+  })
+
+  it('includes the `application` field in READY (required by GatewayReadyDispatchData)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    const userId = '999999999999999999'
+    seedBot(db, 'Bot appfieldtoken', userId)
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot appfieldtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as { application?: { id: string; flags: number } }
+    expect(readyData.application).toEqual({ id: userId, flags: 0 })
+    ws.close()
+  })
+
+  it("includes an empty `private_channels` array in READY (Discord.Net's ReadyEvent reads .Length unconditionally)", async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    seedBot(db, 'Bot privatechannelstoken')
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot privatechannelstoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as { private_channels?: unknown[] }
+    expect(readyData.private_channels).toEqual([])
+    ws.close()
+  })
+
+  it('lists pre-existing guilds as unavailable stubs in READY (not an empty array)', async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    const bot = seedBot(db, 'Bot readystubtoken')
+    const guild = seedGuild(db, bot, 'ReadyStubGuild')
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot readystubtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as {
+      guilds?: { id: string; unavailable: boolean }[]
+    }
+    expect(readyData.guilds).toEqual([{ id: guild, unavailable: true }])
+    ws.close()
+  })
+
+  it("includes a complete `user` object in READY (required by strict client models such as interactions.py's ClientUser)", async () => {
+    const { db, url, close: c } = await createTestGatewayServer()
+    close = c
+    const userId = '888888888888888888'
+    seedBot(db, 'Bot userfieldtoken', userId)
+    const ws = new WebSocket(url)
+    await nextMessage(ws) // HELLO
+
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token: 'Bot userfieldtoken', intents: 0 },
+      })
+    )
+    const ready = await nextMessage(ws)
+    const readyData = ready.d as {
+      user?: {
+        id: string
+        username: string
+        discriminator: string
+        avatar: string | null
+        bot: boolean
+        verified: boolean
+      }
+    }
+    expect(readyData.user).toMatchObject({
+      id: userId,
+      discriminator: expect.any(String),
+      avatar: null,
+      bot: true,
+      verified: true,
+    })
+    ws.close()
+  })
+
   it('closes with 4013 when intents are invalid', async () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c

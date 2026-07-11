@@ -6,11 +6,15 @@ export interface GatewayBusEvents {
     guildId: string | undefined
     channelId: string
     message: Record<string, unknown>
+    // Real Discord's MESSAGE_CREATE always embeds the author's guild member
+    // object for guild channel messages; omitted for DM-like channels.
+    member: Record<string, unknown> | undefined
   }
   'message.update': {
     guildId: string | undefined
     channelId: string
     message: Record<string, unknown>
+    member: Record<string, unknown> | undefined
   }
   'message.delete': {
     guildId: string | undefined

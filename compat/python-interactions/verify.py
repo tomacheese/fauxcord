@@ -145,6 +145,28 @@ Key decisions worth documenting explicitly:
   `remove_guild_member`, `delete_guild_role`, `delete_webhook`) -- calling
   them for real would delete a resource that other rows still depend on,
   same pattern as the other verifiers in this repo.
+* Gateway phase, separate client instance: unlike discord.py/Nextcord (whose
+  REST calls above already go through the same `Client` object that later
+  opens the gateway), the REST phase here uses a bare `HTTPClient` with no
+  gateway support at all (see the "Gateway-free client construction" bullet
+  above), so the Gateway phase constructs its own `interactions.Client`.
+  Source-verified (`interactions/client/client.py`, tag `5.16.0`):
+  `Client.__init__` takes a `token` kwarg, `astart()` calls
+  `await self.login(token)` then `await self._connection_state.start()`
+  (opens the real websocket), and the IDENTIFY payload
+  (`interactions/api/gateway/gateway.py`, `_identify()`) sends
+  `self.state.client.http.token` verbatim -- the same *raw*, unprefixed
+  token `HTTPClient.login()` uses above, not a `"Bot "`-prefixed string.
+  `TOKEN` (already stripped of its `"Bot "` prefix for the REST client) is
+  reused here for that reason.
+* Listener registration: `interactions.listen()` is the library's
+  module-level decorator (source-verified,
+  `interactions/models/internal/listener.py`) -- it does not require a bound
+  `Client` and infers the event from the decorated function's name
+  (`on_ready` -> `Ready`) unless an explicit event is given; the resulting
+  `Listener` object still has to be registered on the bot instance via
+  `bot.add_listener(...)`, which is why both are used together below rather
+  than the instance-bound `@bot.listen()` form.
 """
 
 from __future__ import annotations
@@ -158,6 +180,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 import aiohttp
+import interactions
 from interactions import ChannelType, OverwriteType, Permissions
 from interactions.api.http.http_client import HTTPClient
 from interactions.api.http.route import Route
@@ -244,6 +267,54 @@ async def do_setup() -> None:
 
 Note = Optional[str]
 CallEntry = tuple[Optional[Callable[[], Awaitable[Any]]], Note]
+
+
+def _classify_gateway_error(err: BaseException | None) -> tuple[str, str]:
+    """Classify a Gateway connect failure as a Fauxcord bug or a lib issue.
+
+    `interactions.Client.astart()` calls `login()` before it ever opens the
+    Gateway socket (source-verified, `interactions/client/client.py`, tag
+    `5.16.0`, `astart()` -> `login()` -> `_connection_state.start()`), and
+    `login()` itself does two plain REST calls and builds two strict attrs
+    models straight from their JSON: `self._user = ClientUser.from_dict(
+    await self.http.login(self.token), self)` (the REST `GET /users/@me`
+    login response) and `self._app = Application.from_dict(await self.http.
+    get_current_bot_information(), self)` (`GET /applications/@me`). Both
+    `ClientUser` and `Application` (`interactions/models/discord/user.py`,
+    `interactions/models/discord/application.py`) declare required
+    keyword-only fields with no default -- `verified` and `summary`
+    respectively -- so a `TypeError` from either one surfaces as a
+    `start_task` exception before READY is ever received, even though it
+    has nothing to do with the Gateway handshake itself. Two genuine
+    Fauxcord REST gaps were found this way (via this verifier): `getBotUser()`
+    (`GET /users/@me`, `src/services/users.ts`) was missing `verified`
+    (fixed), and `getApplication()` (`GET /applications/@me`, same file) was
+    missing the deprecated-but-required `summary` field (fixed). Both are
+    genuine Fauxcord gaps, not interactions.py issues -- real Discord always
+    returns both fields on these endpoints. This function is kept as a
+    regression guard in case either field's mock response ever drops the
+    field again; a clean run is expected to never hit either branch.
+    @param err - The exception raised while `astart()` was processing login/READY, if any.
+    @returns A `(status, note)` tuple.
+    """
+    message = str(err) if err is not None else ""
+    if isinstance(err, TypeError) and "verified" in message:
+        return (
+            "fauxcord-fix",
+            "Fauxcord's GET /users/@me response omits `verified`, which "
+            "interactions.py's ClientUser requires with no default "
+            "(src/services/users.ts's getBotUser()); real Discord always "
+            "includes it for the bot's own user",
+        )
+    if isinstance(err, TypeError) and "summary" in message:
+        return (
+            "fauxcord-fix",
+            "Fauxcord's GET /applications/@me response omits `summary`, "
+            "which interactions.py's Application requires with no default "
+            "(src/services/users.ts's getApplication()); real Discord "
+            "always includes this deprecated-but-required field",
+        )
+    return ("lib-issue", message[:300] if err is not None else "ready timeout")
 
 
 async def main() -> None:
@@ -745,11 +816,119 @@ async def main() -> None:
         # Re-key back to common/endpoints.json order for a stable matrix.
         ordered_results = [results[f"{e['method']} {e['path']}"] for e in ENDPOINTS]
 
+        async def verify_gateway() -> dict:
+            """Run the Gateway connect + dispatch verification using
+            interactions.py's high-level `Client` (separate from the raw
+            `HTTPClient` used for REST above, which has no gateway support at
+            all -- see module docstring).
+            """
+            steps: list[dict] = []
+            bot = interactions.Client(token=TOKEN)
+            ready_event = asyncio.Event()
+            message_event = asyncio.Event()
+
+            @interactions.listen()
+            async def on_ready() -> None:
+                ready_event.set()
+
+            @interactions.listen()
+            async def on_message_create(
+                event: interactions.events.MessageCreate,
+            ) -> None:
+                if event.message.content == "gateway-compat-check":
+                    message_event.set()
+
+            bot.add_listener(on_ready)
+            bot.add_listener(on_message_create)
+
+            start_task = asyncio.create_task(bot.astart())
+            ready_task = asyncio.create_task(ready_event.wait())
+            done, _pending = await asyncio.wait(
+                {start_task, ready_task},
+                timeout=20,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if ready_task not in done:
+                # Either the 20s guard elapsed, or astart() itself raised
+                # before READY (e.g. the gateway closed the socket during
+                # IDENTIFY, or READY's `user` payload failed to parse). Pull
+                # the real exception out of start_task when available
+                # instead of reporting a bare timeout, same approach as
+                # compat/python-discordpy/verify.py's verify_gateway().
+                err: BaseException | None = None
+                if start_task in done and not start_task.cancelled():
+                    err = start_task.exception()
+                status, note = _classify_gateway_error(err)
+                steps.append(
+                    {
+                        "step": "connect-identify-ready",
+                        "status": status,
+                        "note": note,
+                    }
+                )
+                ready_task.cancel()
+                start_task.cancel()
+                await asyncio.gather(ready_task, start_task, return_exceptions=True)
+                # Client.stop() -> _connection_state.stop() unconditionally
+                # calls self.gateway.close(), which raises TypeError when
+                # the connect failed before a gateway object was ever
+                # assigned (e.g. the READY parse crash above). Best-effort:
+                # the connect-phase result above is already recorded, so a
+                # cleanup-only failure here shouldn't overwrite it.
+                try:
+                    await bot.stop()
+                except Exception:  # noqa: BLE001
+                    pass
+                return {"status": status, "steps": steps}
+
+            steps.append(
+                {"step": "connect-identify-ready", "status": "pass", "note": ""}
+            )
+
+            try:
+                channel = await bot.fetch_channel(int(CH))
+                await channel.send("gateway-compat-check")
+                await asyncio.wait_for(message_event.wait(), timeout=15)
+                steps.append(
+                    {"step": "dispatch-message-create", "status": "pass", "note": ""}
+                )
+            except Exception as err:  # noqa: BLE001
+                steps.append(
+                    {
+                        "step": "dispatch-message-create",
+                        "status": "lib-issue",
+                        "note": str(err)[:300],
+                    }
+                )
+            finally:
+                # `bot.stop()` waits on interactions.py's own keep-alive task,
+                # which (observed while building this verifier) can enter a
+                # reconnect loop that never yields cleanly if the underlying
+                # transport was reset mid-session -- a bare aiohttp client
+                # doing the same REST-during-open-Gateway pattern against
+                # Fauxcord does *not* reproduce this, so it looks like
+                # interactions.py-internal behavior rather than a Fauxcord
+                # protocol violation. Either way, a graceful `bot.stop()`
+                # must never be allowed to hang the whole verifier: bound it
+                # and fall back to cancelling the task tree directly.
+                try:
+                    await asyncio.wait_for(bot.stop(), timeout=10)
+                except Exception:  # noqa: BLE001
+                    pass
+                start_task.cancel()
+                await asyncio.gather(start_task, return_exceptions=True)
+
+            failed = next((s for s in steps if s["status"] != "pass"), None)
+            return {"status": failed["status"] if failed else "pass", "steps": steps}
+
+        gateway_result = await verify_gateway()
+
         output = {
             "library": "interactions.py",
             "version": "5.16.0",
             "baseUrlOverridable": True,
             "results": ordered_results,
+            "gateway": gateway_result,
         }
         Path("/results").mkdir(parents=True, exist_ok=True)
         Path("/results/interactions.json").write_text(

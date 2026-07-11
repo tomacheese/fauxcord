@@ -14,6 +14,12 @@ used in compat/js-oceanic/verify.mjs for the same class of decisions):
   attribute (default `https://discord.com/api/v10`). We point it at
   Fauxcord before constructing the client:
   `discord.http.Route.BASE = FAUXCORD_BASE`.
+* Gateway URL override: `Route.BASE` only redirects REST calls.
+  `Client.connect()` opens its websocket via
+  `DiscordWebSocket.DEFAULT_GATEWAY`, a separate hardcoded
+  `wss://gateway.discord.gg/` class attribute that ignores `Route.BASE`
+  entirely, so it's overridden the same way (see below `Route.BASE`'s own
+  assignment).
 * Login: per docs/libraries.md, discord.py's `Client.login()` takes the bot
   token *without* the `"Bot "` prefix (unlike Discord.Net/discordgo/
   @discordjs/rest, which want the raw `"Bot ..."` string or add the prefix
@@ -72,6 +78,8 @@ from typing import Any, Awaitable, Callable, Optional
 
 import aiohttp
 import discord
+import discord.gateway as dgateway
+import yarl
 from discord.http import Route
 
 # --- configuration -----------------------------------------------------
@@ -96,6 +104,19 @@ PNG_BYTES = base64.b64decode(
 )
 
 Route.BASE = FAUXCORD_BASE
+
+# `Client.connect()` never queries `GET /gateway/bot` -- it calls
+# `DiscordWebSocket.from_client()` without a `gateway` argument, which falls
+# back to `DiscordWebSocket.DEFAULT_GATEWAY` (a hardcoded
+# `wss://gateway.discord.gg/` class attribute), so `Route.BASE` alone does
+# not redirect the actual Gateway connection to Fauxcord (confirmed by
+# tracing a real run: it opens a websocket to `wss://gateway.discord.gg/`
+# and gets closed with code 4004 by the *real* Discord servers rejecting
+# the fake token -- not a Fauxcord-side rejection). `DEFAULT_GATEWAY` is a
+# plain class attribute, so it's overridden the same way `Route.BASE` is.
+dgateway.DiscordWebSocket.DEFAULT_GATEWAY = yarl.URL(
+    f"{ORIGIN.replace('http://', 'ws://').replace('https://', 'wss://')}/"
+)
 
 
 # --- bootstrap helpers ---------------------------------------------------
@@ -149,6 +170,36 @@ async def do_setup() -> None:
         f"do_setup: failed to POST /_test/setup after {max_attempts} attempts "
         f"(last_status={last_status}, last_error={last_error})"
     )
+
+
+def _classify_gateway_error(err: BaseException | None) -> tuple[str, str]:
+    """Classify a Gateway connect failure as a Fauxcord bug or a lib issue.
+
+    Historical note: this originally classified close code 4004 as a
+    Fauxcord-side bug (`resolveBotForIdentify()` not normalizing the
+    unprefixed token discord.py sends). That row in `src/gateway/server.ts`
+    was fixed. Later tracing showed the 4004 this classifier was actually
+    seeing came from *real* Discord's gateway, not Fauxcord: `Route.BASE`
+    only redirects REST calls, and `Client.connect()` opened its websocket
+    via the separate, hardcoded `DiscordWebSocket.DEFAULT_GATEWAY` --
+    module-level code above now overrides that too, so a real client run
+    reaches Fauxcord's gateway and this path is no longer expected to
+    trigger. Kept as a defensive classifier in case of regression.
+    @param err - The exception raised by `client.connect()`, if any.
+    @returns A `(status, note)` tuple.
+    """
+    is_auth_bug = (
+        isinstance(err, discord.ConnectionClosed) and err.code == 4004
+    )
+    if is_auth_bug:
+        return (
+            "fauxcord-fix",
+            'Fauxcord gateway IDENTIFY rejects the unprefixed token discord.py '
+            'sends (matches real Discord protocol); bots.token is stored with a '
+            '"Bot " prefix and resolveBotForIdentify() compares it verbatim '
+            "(src/gateway/server.ts)",
+        )
+    return ("lib-issue", str(err)[:300] if err is not None else "ready timeout")
 
 
 # --- main verification run ------------------------------------------------
@@ -694,11 +745,92 @@ async def main() -> None:
             results[f"{e['method']} {e['path']}"] for e in ENDPOINTS
         ]
 
+        async def verify_gateway() -> dict:
+            """Run the Gateway connect + dispatch verification for discord.py.
+
+            Reuses the already-constructed `client` (already Route.BASE-patched
+            and logged in) but calls `client.connect()` in a background task
+            to open the real Gateway WebSocket, which `client.login()` alone
+            does not do.
+            """
+            steps: list[dict] = []
+            ready_event = asyncio.Event()
+            message_event = asyncio.Event()
+            received: dict[str, Any] = {}
+
+            @client.event
+            async def on_ready() -> None:
+                ready_event.set()
+
+            @client.event
+            async def on_message(message: discord.Message) -> None:
+                if message.content == "gateway-compat-check":
+                    received["message"] = message
+                    message_event.set()
+
+            connect_task = asyncio.create_task(client.connect(reconnect=False))
+            ready_task = asyncio.create_task(ready_event.wait())
+            done, _pending = await asyncio.wait(
+                {connect_task, ready_task},
+                timeout=20,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if ready_task not in done:
+                # Either the 20s guard elapsed, or client.connect() itself
+                # raised/returned first (e.g. the Gateway closed the socket
+                # before HELLO->IDENTIFY->READY completed). Pull the real
+                # exception out of connect_task when available instead of
+                # reporting a bare timeout, since that's the actionable
+                # diagnostic (mirrors compat/js-discordjs/verify.mjs's
+                # verifyGateway()).
+                err: BaseException | None = None
+                if connect_task in done and not connect_task.cancelled():
+                    err = connect_task.exception()
+                status, note = _classify_gateway_error(err)
+                steps.append(
+                    {"step": "connect-identify-ready", "status": status, "note": note}
+                )
+                ready_task.cancel()
+                connect_task.cancel()
+                await asyncio.gather(ready_task, connect_task, return_exceptions=True)
+                return {"status": status, "steps": steps}
+
+            steps.append(
+                {"step": "connect-identify-ready", "status": "pass", "note": ""}
+            )
+
+            try:
+                fetched_channel = client.get_channel(
+                    int(CH)
+                ) or await client.fetch_channel(int(CH))
+                await fetched_channel.send("gateway-compat-check")
+                await asyncio.wait_for(message_event.wait(), timeout=15)
+                steps.append(
+                    {"step": "dispatch-message-create", "status": "pass", "note": ""}
+                )
+            except Exception as err:  # noqa: BLE001
+                steps.append(
+                    {
+                        "step": "dispatch-message-create",
+                        "status": "lib-issue",
+                        "note": str(err)[:300],
+                    }
+                )
+            finally:
+                connect_task.cancel()
+                await asyncio.gather(connect_task, return_exceptions=True)
+
+            failed = next((s for s in steps if s["status"] != "pass"), None)
+            return {"status": failed["status"] if failed else "pass", "steps": steps}
+
+        gateway_result = await verify_gateway()
+
         output = {
             "library": "discord.py",
             "version": "2.7.1",
             "baseUrlOverridable": True,
             "results": ordered_results,
+            "gateway": gateway_result,
         }
         Path("/results").mkdir(parents=True, exist_ok=True)
         Path("/results/discordpy.json").write_text(

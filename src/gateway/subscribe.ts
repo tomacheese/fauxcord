@@ -19,7 +19,15 @@ export function registerGatewaySubscriptions(
     broadcastToAll(
       manager,
       'MESSAGE_CREATE',
-      payload.message,
+      // Real Discord's MESSAGE_CREATE dispatch adds `guild_id` and the
+      // author's `member` object on top of the base Message object for
+      // guild channels; libraries (e.g. JDA) rely on both to route the
+      // event and build the message's author Member.
+      {
+        ...payload.message,
+        ...(payload.guildId && { guild_id: payload.guildId }),
+        ...(payload.member && { member: payload.member }),
+      },
       GatewayIntentBits.GuildMessages
     )
   }
@@ -29,7 +37,11 @@ export function registerGatewaySubscriptions(
     broadcastToAll(
       manager,
       'MESSAGE_UPDATE',
-      payload.message,
+      {
+        ...payload.message,
+        ...(payload.guildId && { guild_id: payload.guildId }),
+        ...(payload.member && { member: payload.member }),
+      },
       GatewayIntentBits.GuildMessages
     )
   }

@@ -4,11 +4,11 @@
  * Starts the Hono app and provides a mock server for Discord REST API v10.
  */
 
-import { serve } from '@hono/node-server'
 import { loadConfig } from './config'
 import { initializeDatabase } from './db'
 import { buildApp } from './app'
 import { sendReconnect } from './gateway/server'
+import { serveWithGateway } from './http-server'
 import { readFile } from 'node:fs/promises'
 import { setupTestEnvironment } from './services/test-control'
 
@@ -58,11 +58,11 @@ const hostname = config.host
 
 console.info(`Discord Mock Server starting on ${hostname}:${port}`)
 
-const server = serve({
+const server = serveWithGateway({
   fetch: app.fetch,
   port,
   hostname,
-  websocket: { server: wss },
+  wss,
 })
 
 // Gracefully reconnect all Gateway sessions before exiting on termination signals

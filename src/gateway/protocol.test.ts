@@ -11,7 +11,29 @@ describe('encodePayload / decodePayload', () => {
     expect(JSON.parse(json)).toEqual({
       op: 10,
       d: { heartbeat_interval: 41_250 },
+      s: null,
+      t: null,
     })
+  })
+
+  it('always includes explicit `s`/`t` keys (real Discord never omits them)', () => {
+    // Some strict clients (e.g. Nextcord) index message["s"] directly and
+    // raise a KeyError if the key is missing entirely, so `s`/`t` must be
+    // present as `null` rather than omitted for non-Dispatch payloads.
+    const json = encodePayload({ op: GatewayOp.HeartbeatAck, d: null })
+    const parsed = JSON.parse(json) as Record<string, unknown>
+    expect(parsed).toHaveProperty('s', null)
+    expect(parsed).toHaveProperty('t', null)
+  })
+
+  it('preserves explicit `s`/`t` values for Dispatch payloads', () => {
+    const json = encodePayload({
+      op: GatewayOp.Dispatch,
+      t: 'READY',
+      s: 1,
+      d: {},
+    })
+    expect(JSON.parse(json)).toEqual({ op: 0, t: 'READY', s: 1, d: {} })
   })
 
   it('decodes valid JSON text into a payload', () => {

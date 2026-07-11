@@ -23,6 +23,7 @@ describe('registerGatewaySubscriptions', () => {
       guildId: 'g1',
       channelId: 'c1',
       message: { id: 'm1' },
+      member: { nick: 'author-nick' },
     })
 
     expect(ws.send).toHaveBeenCalledTimes(1)
@@ -30,7 +31,14 @@ describe('registerGatewaySubscriptions', () => {
       (ws.send as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     ) as { t: string; d: unknown }
     expect(sent.t).toBe('MESSAGE_CREATE')
-    expect(sent.d).toEqual({ id: 'm1' })
+    // Real Discord's MESSAGE_CREATE dispatch adds guild_id and the author's
+    // member object on top of the base Message object; the fixture's
+    // `guildId`/`member` above must survive into the broadcast payload.
+    expect(sent.d).toEqual({
+      id: 'm1',
+      guild_id: 'g1',
+      member: { nick: 'author-nick' },
+    })
 
     unsubscribe()
   })

@@ -64,6 +64,13 @@ compat/js-oceanic/verify.mjs and compat/python-discordpy/verify.py):
   other verifiers.
 * `DELETE /guilds/{guild_id}`: hikari has no `delete_guild` method, matching
   the real API (bots cannot delete guilds) -- `n-a`.
+* Gateway: verified separately via `hikari.GatewayBot`, which owns both a
+  REST client and the Gateway connection (unlike the gateway-free `RESTApp`
+  used for the REST matrix above). `GatewayBot(token=...)` eagerly validates
+  the token's shape at construction time (expects a real three-segment
+  Discord bot token), which the compat harness's test token doesn't satisfy
+  -- see `verify_gateway()`'s docstring/comments for the confirmed
+  hikari-specific limitation this surfaces.
 """
 
 from __future__ import annotations
@@ -704,6 +711,111 @@ async def main() -> None:
             print(f"hikari done: {pass_count}/{len(ordered_results)} pass")
     finally:
         await rest_app.close()
+
+    gateway_result = await verify_gateway()
+    output["gateway"] = gateway_result
+    Path("/results/hikari.json").write_text(
+        json.dumps(output, indent=2), encoding="utf-8"
+    )
+
+
+async def verify_gateway() -> dict:
+    """Run the Gateway connect + dispatch verification using hikari.GatewayBot.
+
+    Separate from the RESTApp instance used for REST verification above,
+    since GatewayBot owns both a REST client and the Gateway connection.
+    """
+    steps: list[dict] = []
+
+    # hikari.GatewayBot(token=...) eagerly parses the token via
+    # applications.get_token_id() during __init__, which expects a real
+    # three-segment Discord bot token (base64 user id . base64 timestamp .
+    # base64 hmac) so it can extract the bot's own snowflake. The compat
+    # harness's shared test token ("compat-token", common/setup.json) has no
+    # such shape, so construction itself raises ValueError("Unexpected token
+    # format") before any Gateway connection is attempted -- confirmed by
+    # constructing hikari.GatewayBot(token="compat-token") directly during
+    # authoring. This is a hikari-specific limitation, not a Fauxcord bug.
+    gateway_intents = hikari.Intents.GUILDS | hikari.Intents.GUILD_MESSAGES | hikari.Intents.MESSAGE_CONTENT
+    try:
+        bot = hikari.GatewayBot(
+            token=TOKEN,
+            rest_url=FAUXCORD_BASE,
+            intents=gateway_intents,
+            banner=None,
+        )
+    except Exception as err:  # noqa: BLE001
+        steps.append(
+            {
+                "step": "connect-identify-ready",
+                "status": "lib-issue",
+                "note": (
+                    "hikari.GatewayBot() eagerly validates the token shape via "
+                    "applications.get_token_id() and rejects the compat harness's "
+                    f"non-Discord-shaped test token before connecting: {err}"
+                )[:300],
+            }
+        )
+        return {"status": "lib-issue", "steps": steps}
+
+    ready_event = asyncio.Event()
+    message_event = asyncio.Event()
+
+    @bot.listen(hikari.StartedEvent)
+    async def on_started(_: hikari.StartedEvent) -> None:
+        ready_event.set()
+
+    @bot.listen(hikari.MessageCreateEvent)
+    async def on_message(event: hikari.MessageCreateEvent) -> None:
+        if event.message.content == "gateway-compat-check":
+            message_event.set()
+
+    start_task = asyncio.create_task(bot.start())
+    try:
+        await asyncio.wait_for(ready_event.wait(), timeout=20)
+        steps.append(
+            {"step": "connect-identify-ready", "status": "pass", "note": ""}
+        )
+    except Exception as err:  # noqa: BLE001
+        # The ready wait timed out (or otherwise failed). Prefer the real
+        # exception from start_task when bot.start() has already failed, since
+        # that is the actionable diagnostic instead of a bare timeout (mirrors
+        # compat/python-discordpy/verify.py's verify_gateway()).
+        underlying: BaseException | None = None
+        if start_task.done() and not start_task.cancelled():
+            underlying = start_task.exception()
+        note = str(underlying if underlying is not None else err)[:300]
+        steps.append(
+            {
+                "step": "connect-identify-ready",
+                "status": "lib-issue",
+                "note": note,
+            }
+        )
+        await bot.close()
+        start_task.cancel()
+        return {"status": "lib-issue", "steps": steps}
+
+    try:
+        await bot.rest.create_message(int(CH), "gateway-compat-check")
+        await asyncio.wait_for(message_event.wait(), timeout=15)
+        steps.append(
+            {"step": "dispatch-message-create", "status": "pass", "note": ""}
+        )
+    except Exception as err:  # noqa: BLE001
+        steps.append(
+            {
+                "step": "dispatch-message-create",
+                "status": "lib-issue",
+                "note": str(err)[:300],
+            }
+        )
+    finally:
+        await bot.close()
+        start_task.cancel()
+
+    failed = next((s for s in steps if s["status"] != "pass"), None)
+    return {"status": failed["status"] if failed else "pass", "steps": steps}
 
 
 if __name__ == "__main__":

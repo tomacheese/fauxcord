@@ -40,12 +40,26 @@ type result struct {
 	Note     string `json:"note"`
 }
 
+// gatewayStep is one step of the Gateway connect/dispatch verification.
+type gatewayStep struct {
+	Step   string `json:"step"`
+	Status string `json:"status"`
+	Note   string `json:"note"`
+}
+
+// gatewayResult is the overall Gateway verification outcome.
+type gatewayResult struct {
+	Status string        `json:"status"`
+	Steps  []gatewayStep `json:"steps"`
+}
+
 // report is the final JSON document written to /results/discordgo.json.
 type report struct {
-	Library            string   `json:"library"`
-	Version            string   `json:"version"`
-	BaseUrlOverridable bool     `json:"baseUrlOverridable"`
-	Results            []result `json:"results"`
+	Library            string        `json:"library"`
+	Version            string        `json:"version"`
+	BaseUrlOverridable bool          `json:"baseUrlOverridable"`
+	Results            []result      `json:"results"`
+	Gateway            gatewayResult `json:"gateway"`
 }
 
 // setupChannel mirrors one channel entry in common/setup.json.
@@ -131,6 +145,78 @@ func doSetup(origin string, raw []byte) {
 // strPtr returns a pointer to the given string, for the pointer-typed
 // partial-update fields used throughout discordgo's *Params structs.
 func strPtr(s string) *string { return &s }
+
+// verifyGateway runs the Gateway connect + dispatch verification for
+// discordgo, reusing the same *discordgo.Session created for REST above but
+// actually opening the Gateway connection via Session.Open().
+func verifyGateway(session *discordgo.Session, channelID string) gatewayResult {
+	steps := []gatewayStep{}
+	ready := make(chan struct{})
+	msgReceived := make(chan struct{})
+
+	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
+		select {
+		case <-ready:
+		default:
+			close(ready)
+		}
+	})
+	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+		if m.Content == "gateway-compat-check" {
+			select {
+			case <-msgReceived:
+			default:
+				close(msgReceived)
+			}
+		}
+	})
+
+	if err := session.Open(); err != nil {
+		steps = append(steps, gatewayStep{
+			Step: "connect-identify-ready", Status: "lib-issue",
+			Note: err.Error(),
+		})
+		return gatewayResult{Status: "lib-issue", Steps: steps}
+	}
+	defer session.Close()
+
+	select {
+	case <-ready:
+		steps = append(steps, gatewayStep{Step: "connect-identify-ready", Status: "pass"})
+	case <-time.After(20 * time.Second):
+		steps = append(steps, gatewayStep{
+			Step: "connect-identify-ready", Status: "lib-issue",
+			Note: "ready timeout",
+		})
+		return gatewayResult{Status: "lib-issue", Steps: steps}
+	}
+
+	if _, err := session.ChannelMessageSend(channelID, "gateway-compat-check"); err != nil {
+		steps = append(steps, gatewayStep{
+			Step: "dispatch-message-create", Status: "lib-issue",
+			Note: err.Error(),
+		})
+	} else {
+		select {
+		case <-msgReceived:
+			steps = append(steps, gatewayStep{Step: "dispatch-message-create", Status: "pass"})
+		case <-time.After(15 * time.Second):
+			steps = append(steps, gatewayStep{
+				Step: "dispatch-message-create", Status: "lib-issue",
+				Note: "messageCreate timeout",
+			})
+		}
+	}
+
+	status := "pass"
+	for _, s := range steps {
+		if s.Status != "pass" {
+			status = s.Status
+			break
+		}
+	}
+	return gatewayResult{Status: status, Steps: steps}
+}
 
 func main() {
 	base := os.Getenv("FAUXCORD_BASE")
@@ -637,11 +723,14 @@ func main() {
 		results = append(results, result{Endpoint: key, Status: "pass", Note: ""})
 	}
 
+	gw := verifyGateway(sess, CH)
+
 	out := report{
 		Library:            "discordgo",
 		Version:            "v0.29.0",
 		BaseUrlOverridable: true,
 		Results:            results,
+		Gateway:            gw,
 	}
 	outRaw, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {

@@ -19,8 +19,10 @@
 
   <ItemGroup>
     <!--
-      Discord.Net.Rest only (no Discord.Net.WebSocket, no Discord.Net.Webhook):
-      this verifier exercises the bot-authenticated REST surface only.
+      Discord.Net.Rest for the bot-authenticated REST surface, plus
+      Discord.Net.WebSocket for the Gateway (DiscordSocketClient) verification
+      below. No Discord.Net.Webhook: token-authenticated webhook endpoints
+      are out of scope (see the notes at the top of Program.cs).
 
       Version note: confirmed via the NuGet flat-container index
       (https://api.nuget.org/v3-flatcontainer/discord.net.rest/index.json)
@@ -31,8 +33,11 @@
       (confirmed by a real CS1061 compile failure against 3.15.2), which the
       official docs.discordnet.dev API reference documents as present on
       RestTextChannel — so this bump is required, not just a nice-to-have.
+      Discord.Net.WebSocket is pinned to the same 3.20.1 version since it
+      ships from the same Discord.Net release train as Discord.Net.Rest.
     -->
     <PackageReference Include="Discord.Net.Rest" Version="3.20.1" />
+    <PackageReference Include="Discord.Net.WebSocket" Version="3.20.1" />
   </ItemGroup>
 
 </Project>

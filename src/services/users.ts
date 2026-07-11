@@ -53,6 +53,13 @@ export interface UserObject {
   mfa_enabled?: boolean
   /** User locale (always "en-US" in the mock) */
   locale?: string
+  /**
+   * Whether the account's email has been verified. Real Discord only
+   * includes this for the current authenticated user's own `/users/@me`
+   * response (never for arbitrary user lookups), so `getBotUser()` sets it
+   * and `getUser()` deliberately omits it.
+   */
+  verified?: boolean
 }
 
 /**
@@ -92,6 +99,7 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
     global_name: null,
     mfa_enabled: false,
     locale: 'en-US',
+    verified: true,
   }
 }
 
@@ -195,6 +203,8 @@ export function getApplication(
   name: string
   icon: null
   description: string
+  /** Deprecated field, always empty (matches discord-api-types' APIApplication) */
+  summary: string
   type: null
   verify_key: string
   flags: number
@@ -224,6 +234,14 @@ export function getApplication(
     name: bot.username,
     icon: null,
     description: '',
+    // `summary` is a required field on real Discord's application object,
+    // deprecated and always empty (discord-api-types' APIApplication types
+    // it as the literal `''`). interactions.py's `Application` model
+    // declares it as required with no default, and constructs it from this
+    // response during login -- before the Gateway ever connects -- so
+    // omitting it crashed with a `TypeError` (found via compat harness
+    // Task 8's interactions.py verifier).
+    summary: '',
     type: null,
     verify_key:
       '0000000000000000000000000000000000000000000000000000000000000000',

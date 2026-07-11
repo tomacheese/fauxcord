@@ -133,8 +133,12 @@ describe('Channel Pins API', () => {
       expect(body.has_more).toBe(false)
       expect(body.items).toHaveLength(1)
       expect(body.items[0].message.id).toBe(messageId)
-      // pinned_at must be a valid ISO-8601 UTC timestamp (ends with Z).
-      expect(body.items[0].pinned_at).toMatch(/Z$/)
+      // pinned_at must be a valid Discord-style ISO-8601 UTC timestamp
+      // (microseconds + explicit +00:00 offset, matching real Discord and
+      // twilight-model's strict parser, not a "Z"-suffixed toISOString()).
+      expect(body.items[0].pinned_at).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\+00:00$/
+      )
       expect(Number.isNaN(Date.parse(body.items[0].pinned_at))).toBe(false)
     })
   })

@@ -196,6 +196,43 @@ async def do_setup() -> None:
     )
 
 
+def _classify_gateway_error(
+    err: BaseException | None, background_note: str | None = None
+) -> tuple[str, str]:
+    """Classify a Gateway connect failure as a Fauxcord bug or a lib issue.
+
+    Pycord is assumed, like discord.py (the pre-fork codebase this verifier's
+    Gateway handling mirrors), to send the raw bot token (no "Bot " prefix)
+    in the IDENTIFY payload's `token` field, matching real Discord's Gateway
+    protocol -- the "Bot " prefix is an HTTP Authorization-header convention
+    only. Fauxcord's gateway now accepts the IDENTIFY token with or without
+    the "Bot " prefix, so this classifier is expected to be dead code in
+    normal operation; kept (same as compat/python-discordpy/verify.py and
+    compat/js-discordjs/verify.mjs) as a diagnostic in case a regression
+    reintroduces the close-code-4004 rejection.
+    @param err - The exception raised by `client.connect()`, if any.
+    @param background_note - A pre-formatted note captured from an unhandled
+        exception in a background asyncio task (e.g. Pycord's internal
+        `_delay_ready()`), used when `err` itself is empty because the
+        failure happened outside `client.connect()`'s own coroutine.
+    @returns A `(status, note)` tuple.
+    """
+    is_auth_bug = (
+        isinstance(err, discord.ConnectionClosed) and err.code == 4004
+    )
+    if is_auth_bug:
+        return (
+            "fauxcord-fix",
+            "Fauxcord gateway IDENTIFY rejected the token Pycord sent with "
+            "close code 4004 (Authentication Failed); see "
+            "compat/python-discordpy/verify.py's _classify_gateway_error for "
+            "the original finding against src/gateway/server.ts",
+        )
+    if err is None and background_note is not None:
+        return ("lib-issue", background_note)
+    return ("lib-issue", str(err)[:300] if err is not None else "ready timeout")
+
+
 # --- main verification run ------------------------------------------------
 
 Note = Optional[str]
@@ -745,11 +782,132 @@ async def main() -> None:
             results[f"{e['method']} {e['path']}"] for e in ENDPOINTS
         ]
 
+        async def verify_gateway() -> dict:
+            """Run the Gateway connect + dispatch verification for Pycord.
+
+            Reuses the already-constructed `client` (already Route.base-patched
+            and logged in) but calls `client.connect()` in a background task
+            to open the real Gateway WebSocket, which `client.login()` alone
+            does not do. Same structure as
+            compat/python-discordpy/verify.py's verify_gateway() (Pycord
+            preserves discord.py's public Client/event API for this surface).
+            """
+            steps: list[dict] = []
+            ready_event = asyncio.Event()
+            message_event = asyncio.Event()
+            received: dict[str, Any] = {}
+
+            @client.event
+            async def on_ready() -> None:
+                ready_event.set()
+
+            @client.event
+            async def on_message(message: discord.Message) -> None:
+                if message.content == "gateway-compat-check":
+                    received["message"] = message
+                    message_event.set()
+
+            # Pycord's ConnectionState._delay_ready() (Pycord-only; not
+            # present in discord.py) awaits _add_default_sounds() -- which
+            # calls GET /soundboard-default-sounds -- as part of its
+            # internal ready sequence, *before* dispatching the public
+            # on_ready event. Fauxcord does not implement that endpoint
+            # (spec/manifest.ts has no soundboard routes), so the 404
+            # raises inside that background task and on_ready never fires;
+            # neither connect_task nor ready_task ever surfaces the real
+            # exception in that case (asyncio only logs it via the loop's
+            # default exception handler as "Task exception was never
+            # retrieved"). Install a temporary handler to capture it so the
+            # timeout branch below can report the actual root cause instead
+            # of a bare "ready timeout".
+            captured_bg_note: list[str] = []
+            loop = asyncio.get_running_loop()
+            prev_handler = loop.get_exception_handler()
+
+            def _capture_bg_exception(
+                _loop: asyncio.AbstractEventLoop, context: dict[str, Any]
+            ) -> None:
+                exc = context.get("exception")
+                if exc is not None:
+                    captured_bg_note.append(
+                        f"{type(exc).__name__}: {exc}"[:300]
+                    )
+                elif prev_handler is not None:
+                    prev_handler(_loop, context)
+                else:
+                    loop.default_exception_handler(context)
+
+            loop.set_exception_handler(_capture_bg_exception)
+
+            connect_task = asyncio.create_task(client.connect(reconnect=False))
+            ready_task = asyncio.create_task(ready_event.wait())
+            try:
+                done, _pending = await asyncio.wait(
+                    {connect_task, ready_task},
+                    timeout=20,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+            finally:
+                loop.set_exception_handler(prev_handler)
+            if ready_task not in done:
+                # Either the 20s guard elapsed, or client.connect() itself
+                # raised/returned first (e.g. the Gateway closed the socket
+                # before HELLO->IDENTIFY->READY completed). Pull the real
+                # exception out of connect_task when available instead of
+                # reporting a bare timeout, since that's the actionable
+                # diagnostic (mirrors compat/python-discordpy/verify.py's
+                # verify_gateway()); failing that, fall back to whatever
+                # background-task exception _capture_bg_exception caught
+                # (e.g. the soundboard-default-sounds 404 above).
+                err: BaseException | None = None
+                if connect_task in done and not connect_task.cancelled():
+                    err = connect_task.exception()
+                background_note = captured_bg_note[-1] if captured_bg_note else None
+                status, note = _classify_gateway_error(err, background_note)
+                steps.append(
+                    {"step": "connect-identify-ready", "status": status, "note": note}
+                )
+                ready_task.cancel()
+                connect_task.cancel()
+                await asyncio.gather(ready_task, connect_task, return_exceptions=True)
+                return {"status": status, "steps": steps}
+
+            steps.append(
+                {"step": "connect-identify-ready", "status": "pass", "note": ""}
+            )
+
+            try:
+                fetched_channel = client.get_channel(
+                    int(CH)
+                ) or await client.fetch_channel(int(CH))
+                await fetched_channel.send("gateway-compat-check")
+                await asyncio.wait_for(message_event.wait(), timeout=15)
+                steps.append(
+                    {"step": "dispatch-message-create", "status": "pass", "note": ""}
+                )
+            except Exception as err:  # noqa: BLE001
+                steps.append(
+                    {
+                        "step": "dispatch-message-create",
+                        "status": "lib-issue",
+                        "note": str(err)[:300],
+                    }
+                )
+            finally:
+                connect_task.cancel()
+                await asyncio.gather(connect_task, return_exceptions=True)
+
+            failed = next((s for s in steps if s["status"] != "pass"), None)
+            return {"status": failed["status"] if failed else "pass", "steps": steps}
+
+        gateway_result = await verify_gateway()
+
         output = {
             "library": "pycord",
             "version": "2.6.1",
             "baseUrlOverridable": True,
             "results": ordered_results,
+            "gateway": gateway_result,
         }
         Path("/results").mkdir(parents=True, exist_ok=True)
         Path("/results/pycord.json").write_text(
