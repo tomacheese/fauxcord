@@ -1,9 +1,8 @@
 # Library Compatibility Harness
 
 Drives every Fauxcord endpoint through the high-level API of each Discord library,
-inside per-language Docker containers. See the spec (Confluence "Spec - Issue #68")
-for the full methodology, and the plan (Confluence "Plan - Issue #68") for the task
-breakdown.
+inside per-language Docker containers. See "Implementation status" below for the
+task breakdown, and the sections that follow for the full methodology.
 
 ## Why Docker-only
 
