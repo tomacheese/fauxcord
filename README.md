@@ -51,7 +51,7 @@ curl http://localhost:3000/_mock/health
 
 ### Running locally
 
-**Requirements:** Node.js 22 or later (recommended: 24 LTS), pnpm
+**Requirements:** Node.js 22 or later, pnpm (see `.node-version` for the version used in development/CI)
 
 ```bash
 # Install dependencies
