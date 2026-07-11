@@ -199,35 +199,37 @@ language-specific container, so results are reproducible and independent of the
 host's installed toolchains.
 
 The full per-endpoint, per-library breakdown lives in
-[`compat/coverage-matrix.md`](../compat/coverage-matrix.md) (source of truth).
+[`compat/coverage-matrix.md`](../compat/coverage-matrix.md) (source of truth),
+including the Gateway-specific verification matrix added for Issue #106.
 The summary below reflects the latest state of that matrix.
 
-| Library                   | Language | Base URL override                                        | Status                                        |
-| ------------------------- | -------- | -------------------------------------------------------- | --------------------------------------------- |
-| @discordjs/rest           | JS/TS    | `new REST({ api: "..." })`                               | ✅ Verified (81/87 pass, 6 N/A, 0 lib-issue)  |
-| Eris                      | JS/TS    | ❌ Not possible (hardcodes HTTPS on port 443)            | ⛔ Blocked                                    |
-| Oceanic.js                | JS/TS    | Fully overridable client option                          | ✅ Verified (67/87 pass, 20 N/A, 0 lib-issue) |
-| discord.py                | Python   | `Route.BASE = "..."`                                     | ✅ Verified (63/87 pass, 18 N/A, 6 lib-issue) |
-| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | ✅ Verified (61/87 pass, 18 N/A, 8 lib-issue) |
-| Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | ✅ Verified (49/87 pass, 18 N/A, 20 lib-issue) |
-| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | ✅ Verified (66/87 pass, 11 N/A, 10 lib-issue) |
-| interactions.py           | Python   | `interactions.api.http.route.Route.BASE`                 | ✅ Verified (66/87 pass, 14 N/A, 7 lib-issue) |
-| discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | ✅ Verified (73/87 pass, 14 N/A, 0 lib-issue) |
-| Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (63/87 pass, 24 N/A, 0 lib-issue) |
-| DSharpPlus 5.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
-| DSharpPlus 4.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                    |
-| JDA                       | JVM      | `RestConfig#setBaseUrl`                                  | ✅ Verified (62/87 pass, 23 N/A, 2 lib-issue) |
-| Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | ✅ Verified (60/87 pass, 25 N/A, 2 lib-issue) |
-| Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                    |
-| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (68/87 pass, 17 N/A, 2 lib-issue) |
-| Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | ✅ Verified (71/87 pass, 16 N/A, 0 lib-issue) |
-| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | ✅ Verified (55/87 pass, 16 N/A, 16 lib-issue) |
-| DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                    |
-| Concord                   | C        | `struct discord_config.base_url`                         | ✅ Verified (53/87 pass, 16 N/A, 18 lib-issue) |
-| Sleepy Discord            | C++      | ❌ Not possible (hardcoded host + scheme literal)        | ⛔ Blocked                                    |
+| Library                   | Language | Base URL override                                        | REST status                                   | Gateway   |
+| ------------------------- | -------- | -------------------------------------------------------- | ---------------------------------------------- | --------- |
+| @discordjs/rest           | JS/TS    | `new REST({ api: "..." })`                               | ✅ Verified (81/87 pass, 6 N/A, 0 lib-issue)   | ✅ pass   |
+| Eris                      | JS/TS    | ❌ Not possible (hardcodes HTTPS on port 443)            | ⛔ Blocked                                      | ⛔ blocked |
+| Oceanic.js                | JS/TS    | Fully overridable client option                          | ✅ Verified (67/87 pass, 20 N/A, 0 lib-issue)  | ✅ pass   |
+| discord.py                | Python   | `Route.BASE = "..."` (+ `DiscordWebSocket.DEFAULT_GATEWAY`) | ✅ Verified (63/87 pass, 18 N/A, 6 lib-issue) | ✅ pass   |
+| Nextcord                  | Python   | `nextcord.http.Route.BASE = "..."` (discord.py fork)     | ✅ Verified (61/87 pass, 18 N/A, 8 lib-issue)  | ✅ pass   |
+| Pycord                    | Python   | `discord.http.Route.BASE = "..."` (discord.py fork)      | ✅ Verified (51/87 pass, 18 N/A, 18 lib-issue) | ✅ pass   |
+| hikari                    | Python   | `hikari.RESTApp(url=...)`                                | ✅ Verified (66/87 pass, 11 N/A, 10 lib-issue) | ❌ lib-issue (client-side token-shape check) |
+| interactions.py           | Python   | `interactions.api.http.route.Route.BASE`                 | ✅ Verified (66/87 pass, 14 N/A, 7 lib-issue)  | ✅ pass   |
+| discordgo                 | Go       | `discordgo.EndpointAPI` + per-resource endpoint vars     | ✅ Verified (73/87 pass, 14 N/A, 0 lib-issue)  | ✅ pass   |
+| Discord.Net.Rest          | C#       | `RestClientProvider`                                     | ✅ Verified (62/87 pass, 25 N/A, 0 lib-issue)  | ✅ pass   |
+| DSharpPlus 5.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                      | ⛔ blocked |
+| DSharpPlus 4.x            | C#       | ❌ Not possible (compile-time `const string`)            | ⛔ Blocked                                      | ⛔ blocked |
+| JDA                       | JVM      | `RestConfig#setBaseUrl`                                  | ✅ Verified (62/87 pass, 23 N/A, 2 lib-issue)  | ✅ pass (2 Fauxcord Gateway bugs found & fixed) |
+| Discord4J                 | JVM      | Custom `discordBaseUrl` via `RouterOptions`              | ✅ Verified (61/87 pass, 25 N/A, 1 lib-issue)  | ❌ lib-issue (requires zlib-stream compression) |
+| Javacord                  | JVM      | ❌ Not usable (hardcoded host + requires Gateway login)  | ⛔ Blocked                                      | ⛔ blocked |
+| Kord                      | JVM      | Ktor `HttpRequestPipeline.Before` interceptor            | ✅ Verified (68/87 pass, 17 N/A, 2 lib-issue)  | ❌ lib-issue (client-side token-shape check) |
+| Serenity                  | Rust     | `HttpBuilder::proxy(url)`                                | ✅ Verified (71/87 pass, 16 N/A, 0 lib-issue)  | ✅ pass   |
+| Twilight                  | Rust     | `ClientBuilder::proxy(host, use_http)`                   | ✅ Verified (72/87 pass, 13 N/A, 2 lib-issue)  | ✅ pass (required a genuine Fauxcord fix) |
+| DPP                       | C++      | ❌ Not possible (hardcoded transport, no override hook)  | ⛔ Blocked                                      | ⛔ blocked |
+| Concord                   | C        | `struct discord_config.base_url`                         | ✅ Verified (53/87 pass, 16 N/A, 18 lib-issue) | ❌ lib-issue (sends `intents` as a string) |
+| Sleepy Discord            | C++      | ❌ Not possible (hardcoded host + scheme literal)        | ⛔ Blocked                                      | ⛔ blocked |
 
-Legend: ✅ verified and working ·
-⛔ confirmed technical blocker (cannot point the library at Fauxcord at all).
+Legend: ✅ verified and working · ❌ lib-issue (genuine library-side limitation,
+not a Fauxcord bug) · ⛔ confirmed technical blocker (cannot point the library
+at Fauxcord at all).
 
 ### How verification runs
 
