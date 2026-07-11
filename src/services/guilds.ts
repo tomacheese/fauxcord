@@ -9,6 +9,7 @@ import type { Database } from '../db'
 import { getGuildRoles, type RoleObject } from './guild-roles'
 import { getGuildChannels } from './channels'
 import { getGuildMembers } from './guild-members'
+import { toDiscordTimestamp } from '../timestamp'
 
 /** Guild record type retrieved from the DB */
 interface GuildRow {
@@ -259,7 +260,14 @@ export function buildGuildCreatePayload(
     ...guild,
     // `joined_at` is meant to record when the bot joined this guild; the
     // mock has no such history, so "now" is used as a plausible stand-in.
-    joined_at: new Date().toISOString(),
+    // Uses `toDiscordTimestamp` (matching every other timestamp field in the
+    // mock) rather than `Date#toISOString()`: real Discord always emits
+    // ISO 8601 with microsecond precision and an explicit "+00:00" offset
+    // (e.g. "2021-01-01T01:01:01.010000+00:00"), never the "Z"-suffixed,
+    // millisecond-precision form `toISOString()` produces. Some strict
+    // clients (e.g. twilight-model's `Timestamp` parser) reject the "Z" form
+    // outright for being too short.
+    joined_at: toDiscordTimestamp(new Date()),
     // Real Discord marks a guild "large" once its member count exceeds the
     // client's IDENTIFY `large_threshold` (default 50); the mock doesn't
     // track per-session thresholds, so Discord's own default is used here.
