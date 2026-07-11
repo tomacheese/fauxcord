@@ -304,7 +304,7 @@ src/
 
 | Item             | Technology                                                              |
 | ---------------- | ----------------------------------------------------------------------- |
-| Runtime          | Node.js 24 (LTS)                                                        |
+| Runtime          | Node.js (see `.node-version`)                                           |
 | Framework        | [Hono](https://hono.dev/)                                               |
 | DB               | SQLite + [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)   |
 | Type definitions | [discord-api-types](https://github.com/discordjs/discord-api-types) v10 |
