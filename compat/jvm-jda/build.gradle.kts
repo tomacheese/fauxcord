@@ -19,7 +19,7 @@ dependencies {
     implementation("net.dv8tion:JDA:6.5.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.2")
     // JDA logs a "no SLF4J binding" warning without one; slf4j-simple silences it.
-    implementation("org.slf4j:slf4j-simple:2.0.16")
+    implementation("org.slf4j:slf4j-simple:2.0.18")
 }
 
 application {
