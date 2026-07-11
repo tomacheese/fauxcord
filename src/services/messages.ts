@@ -427,6 +427,13 @@ export interface MessageCreateParams {
  * Resolves the author's guild member object for a Gateway MESSAGE_CREATE /
  * MESSAGE_UPDATE dispatch. Real Discord always embeds this for guild channel
  * messages (absent for DM-like channels, where `guildId` is undefined).
+ *
+ * This performs a dedicated `getGuildMember` query rather than reusing data
+ * from the message object: the hydrated message only carries the author *user*
+ * (id/username/avatar/…), whereas the dispatch's `member` field is the distinct
+ * guild *member* record (nick, roles, joined_at, …). That member data is not
+ * loaded anywhere else on the create/update path, so a separate lookup here is
+ * genuinely required.
  * @param db - Database
  * @param guildId - Guild ID the message's channel belongs to, if any
  * @param authorId - Message author's user ID

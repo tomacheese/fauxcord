@@ -1,6 +1,6 @@
 /**
- * `@hono/node-server` の `serve()` を Gateway (WebSocket) 対応のまま安全に
- * ラップするヘルパー。
+ * Helper that safely wraps `@hono/node-server`'s `serve()` while keeping
+ * Gateway (WebSocket) support intact.
  */
 
 import { serve } from '@hono/node-server'
@@ -10,19 +10,19 @@ import type { Duplex } from 'node:stream'
 import type { Hono } from 'hono'
 import type { WebSocketServer } from 'ws'
 
-/** {@link serveWithGateway} に渡すオプション */
+/** Options passed to {@link serveWithGateway} */
 export interface ServeWithGatewayOptions {
-  /** Hono アプリの fetch ハンドラ */
+  /** The Hono app's fetch handler */
   fetch: Hono['fetch']
-  /** リッスンポート */
+  /** The port to listen on */
   port: number
-  /** バインドするホスト名 */
+  /** The hostname to bind to */
   hostname: string
-  /** Gateway (WebSocket) 用の `ws` サーバーインスタンス */
+  /** The `ws` server instance for the Gateway (WebSocket) */
   wss: WebSocketServer
 }
 
-/** `Connection`/`Upgrade` ネゴシエーションに関するヘッダー名（大文字小文字を区別しない） */
+/** Header names related to `Connection`/`Upgrade` negotiation (case-insensitive) */
 const UPGRADE_RELATED_HEADER_NAMES = new Set([
   'upgrade',
   'connection',
@@ -30,28 +30,29 @@ const UPGRADE_RELATED_HEADER_NAMES = new Set([
 ])
 
 /**
- * `serve()` に `websocket` オプションを渡すと `@hono/node-server` が
- * `http.Server` へ独自の `upgrade` リスナーを登録するが、そのリスナーは
- * `Upgrade: websocket` 以外のリクエストを黙って無視する（何もせず return
- * する）。Node の `http.Server` は `upgrade` リスナーが 1 つでも登録されると、
- * 他の `Upgrade` ヘッダーを持つリクエストに対しても `request` イベントを
- * 一切発火しなくなるため、Java の `HttpClient` がデフォルトで送る
- * `Upgrade: h2c`（HTTP/2 平文アップグレードの機会主義的プローブ）のような
- * リクエストは、応答もクローズもされないまま永久にハングしてしまう。
+ * When the `websocket` option is passed to `serve()`, `@hono/node-server`
+ * registers its own `upgrade` listener on the `http.Server`, but that listener
+ * silently ignores (returns without doing anything for) any request other than
+ * `Upgrade: websocket`. Once even a single `upgrade` listener is registered on
+ * Node's `http.Server`, it stops firing the `request` event entirely for any
+ * request carrying an `Upgrade` header. As a result, requests such as the
+ * `Upgrade: h2c` (an opportunistic probe for a cleartext HTTP/2 upgrade) that
+ * Java's `HttpClient` sends by default hang forever, never getting a response
+ * or being closed.
  *
- * このラッパーは `@hono/node-server` 自身の `upgrade` リスナーの後に
- * フォールバック用のリスナーを追加する。素朴に既存の `req`（`IncomingMessage`）を
- * 通常のリクエストハンドラへそのまま渡す方法は成立しない ―― `upgrade` イベントが
- * 発火した時点で Node の HTTP パーサーは既に `req` から切り離されており、
- * リクエストボディがそれ以上 `req` へ流れ込むことはないため（例えば JSON ボディを
- * 持つ POST がこの経路に落ちると、ボディが空のまま扱われてしまう）。代わりに、
- * アップグレード関連ヘッダーを取り除いた上でリクエストを生の HTTP バイト列として
- * 再構築し、同じソケットに対して `connection` イベントを再発火させることで、
- * Node 自身の HTTP パーサーに最初からパースし直させる（Content-Length /
- * チャンク転送などのボディ形式を正しく扱えるのは本物のパーサーだけなので）。
- * @param options - serve に渡すオプション
- * @param listeningListener - リッスン開始時に呼ばれるコールバック
- * @returns 起動した http.Server
+ * This wrapper adds a fallback listener after `@hono/node-server`'s own
+ * `upgrade` listener. Naively handing the existing `req` (`IncomingMessage`)
+ * straight to the normal request handler does not work — by the time the
+ * `upgrade` event fires, Node's HTTP parser has already been detached from
+ * `req`, so no more request body flows into `req` (e.g. a POST with a JSON body
+ * that falls into this path would be treated as having an empty body). Instead,
+ * we strip the upgrade-related headers, reconstruct the request as raw HTTP
+ * bytes, and re-emit the `connection` event on the same socket so that Node's
+ * own HTTP parser parses it again from scratch (only the real parser can
+ * correctly handle body encodings such as Content-Length / chunked transfer).
+ * @param options - the options to pass to serve
+ * @param listeningListener - callback invoked when listening starts
+ * @returns the started http.Server
  */
 export function serveWithGateway(
   options: ServeWithGatewayOptions,
@@ -69,7 +70,7 @@ export function serveWithGateway(
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     if (req.headers.upgrade?.toLowerCase() === 'websocket') {
-      return // @hono/node-server 自身のリスナーが処理する
+      return // @hono/node-server's own listener handles this
     }
 
     const statusLine = `${req.method ?? 'GET'} ${req.url ?? '/'} HTTP/${req.httpVersion}\r\n`
@@ -77,7 +78,7 @@ export function serveWithGateway(
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
       const name = req.rawHeaders[i]
       if (UPGRADE_RELATED_HEADER_NAMES.has(name.toLowerCase())) {
-        continue // 再パース後にまた upgrade 扱いされて無限ループしないよう除去する
+        continue // Strip these so re-parsing is not treated as an upgrade again, avoiding an infinite loop
       }
       headerLines.push(`${name}: ${req.rawHeaders[i + 1]}`)
     }
@@ -85,8 +86,9 @@ export function serveWithGateway(
       statusLine + headerLines.join('\r\n') + '\r\n\r\n',
       'latin1'
     )
-    // パーサーが既に読み進めていた分（ヘッダー再構築分 + ボディの先頭分）を
-    // ソケットの先頭へ戻し、新規接続として最初からパースさせる
+    // Unshift what the parser had already consumed (the reconstructed headers
+    // plus the leading part of the body) back to the front of the socket, so it
+    // is parsed from scratch as a new connection
     socket.unshift(Buffer.concat([replayedHeader, head]))
     server.emit('connection', socket)
   })

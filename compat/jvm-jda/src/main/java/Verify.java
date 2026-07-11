@@ -104,7 +104,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * {@link Guild#getRoles()}, {@link Guild#getMemberCache()}, etc.), which is how any real bot
  * built on JDA actually reads this data. Since the cache is populated from Fauxcord's own
  * Gateway dispatches (the same handshake proven in Step 1), these are recorded "pass" when the
- * cached value matches the fixture, not "n-a".
+ * cache read completes without throwing, not "n-a".
  *
  * <h2>Gateway verification</h2>
  * {@code verifyGateway(...)} confirms {@code connect-identify-ready} (already proven by the Step
@@ -530,6 +530,9 @@ public final class Verify {
 
         try {
             String marker = "gateway-compat-check";
+            // Arm the listener BEFORE posting: otherwise a fast MESSAGE_CREATE dispatch could
+            // arrive before the listener is registered, get dropped, and cause a false timeout.
+            CompletableFuture<String> dispatch = listener.arm(marker);
             HttpRequest req = HttpRequest.newBuilder(URI.create(origin + "/api/v10/channels/" + channelId + "/messages"))
                     .header("Authorization", "Bot compat-token")
                     .header("Content-Type", "application/json")
@@ -539,7 +542,7 @@ public final class Verify {
             if (res.statusCode() < 200 || res.statusCode() >= 300) {
                 throw new IllegalStateException("REST message post failed: " + res.statusCode() + " " + res.body());
             }
-            String content = listener.await(marker, 15, TimeUnit.SECONDS);
+            String content = dispatch.get(15, TimeUnit.SECONDS);
             if (!marker.equals(content)) {
                 throw new IllegalStateException("expected content '" + marker + "', got '" + content + "'");
             }
@@ -555,7 +558,7 @@ public final class Verify {
 
     /**
      * Listens for {@link MessageReceivedEvent}s and hands the content of the first message
-     * matching a given marker string to whoever is waiting via {@link #await}.
+     * matching a given marker string to whoever is waiting via {@link #arm}.
      */
     static final class MessageListener extends ListenerAdapter {
         private final AtomicReference<CompletableFuture<String>> pending = new AtomicReference<>();
@@ -569,12 +572,16 @@ public final class Verify {
             }
         }
 
-        /** Blocks until a {@link MessageReceivedEvent} with the given content arrives, or times out. */
-        String await(String marker, long timeout, TimeUnit unit) throws Exception {
+        /**
+         * Arms the listener for the given marker, returning a future that completes with the
+         * content of the first matching {@link MessageReceivedEvent}. Must be called before the
+         * message is triggered so a fast dispatch cannot arrive before the listener is armed.
+         */
+        CompletableFuture<String> arm(String marker) {
             CompletableFuture<String> future = new CompletableFuture<>();
             awaitedMarker = marker;
             pending.set(future);
-            return future.get(timeout, unit);
+            return future;
         }
     }
 

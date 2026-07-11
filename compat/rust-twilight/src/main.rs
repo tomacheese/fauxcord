@@ -306,8 +306,9 @@ async fn verify_gateway(
     }
 
     // Reuse the same proxy target as the REST phase (a fresh twilight-http
-    // client, since the original `client` is not `Sync` across this scope)
-    // to send the message; then poll for MESSAGE_CREATE over the shard.
+    // client, since this function's signature does not receive the caller's
+    // REST `client` — only the bare host/scheme/token) to send the message;
+    // then poll for MESSAGE_CREATE over the shard.
     let http_client = Client::builder()
         .proxy(bare_host.to_owned(), use_http)
         .token(token.to_owned())

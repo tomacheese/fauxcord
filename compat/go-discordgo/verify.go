@@ -155,7 +155,11 @@ func verifyGateway(session *discordgo.Session, channelID string) gatewayResult {
 	msgReceived := make(chan struct{})
 
 	session.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
-		close(ready)
+		select {
+		case <-ready:
+		default:
+			close(ready)
+		}
 	})
 	session.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if m.Content == "gateway-compat-check" {

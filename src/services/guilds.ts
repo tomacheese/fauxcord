@@ -10,6 +10,8 @@ import { getGuildRoles, type RoleObject } from './guild-roles'
 import { getGuildChannels } from './channels'
 import { getGuildMembers } from './guild-members'
 import { toDiscordTimestamp } from '../timestamp'
+// Used for compile-time type drift detection.
+import type { GatewayGuildCreateDispatchData } from 'discord-api-types/v10'
 
 /** Guild record type retrieved from the DB */
 interface GuildRow {
@@ -232,13 +234,68 @@ export function getBotGuilds(
 }
 
 /**
+ * Compile-time guard: ensures the Gateway-only "extra fields" this function
+ * adds on top of GuildObject stay structurally compatible with
+ * GatewayGuildCreateDispatchData. Fails to compile when discord-api-types
+ * renames or retypes these fields (deliberately not listing every field
+ * added below by name, to avoid the enumeration itself going stale).
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _GuildCreateExtraFieldsCompatGuard =
+  Pick<
+    GatewayGuildCreateDispatchData,
+    | 'joined_at'
+    | 'large'
+    | 'unavailable'
+    | 'member_count'
+    | 'voice_states'
+    | 'members'
+    | 'channels'
+    | 'threads'
+    | 'presences'
+    | 'stage_instances'
+    | 'guild_scheduled_events'
+  > extends Pick<
+    GuildCreateExtraFields,
+    | 'joined_at'
+    | 'large'
+    | 'unavailable'
+    | 'member_count'
+    | 'voice_states'
+    | 'members'
+    | 'channels'
+    | 'threads'
+    | 'presences'
+    | 'stage_instances'
+    | 'guild_scheduled_events'
+  >
+    ? true
+    : never
+
+/** Shape of the Gateway-only "extra fields" added by `buildGuildCreatePayload`. */
+interface GuildCreateExtraFields {
+  joined_at: string
+  large: boolean
+  unavailable: boolean
+  member_count: number
+  voice_states: never[]
+  members: unknown[]
+  channels: unknown[]
+  threads: never[]
+  presences: never[]
+  stage_instances: never[]
+  guild_scheduled_events: never[]
+}
+
+/**
  * Builds the payload for a Gateway `GUILD_CREATE` Dispatch event.
  *
  * `GUILD_CREATE` sends everything the plain `GuildObject` (the REST shape)
- * has, plus a set of Gateway-only "extra fields" (member_count, large,
- * joined_at, channels, members, ...) that some client libraries (e.g. JDA)
- * require to be present -- and correctly typed -- to parse the event at all.
- * See https://discord.com/developers/docs/topics/gateway-events#guild-create-guild-create-extra-fields
+ * has, plus a set of Gateway-only "extra fields" that some client libraries
+ * (e.g. JDA) require to be present -- and correctly typed -- to parse the
+ * event at all. See `GuildCreateExtraFields` above for the exact field list,
+ * and https://discord.com/developers/docs/topics/gateway-events#guild-create-guild-create-extra-fields
+ * for their spec definitions.
  * @param db - Database
  * @param guildId - Guild ID
  * @returns The GUILD_CREATE payload, or null if the guild does not exist
@@ -246,7 +303,7 @@ export function getBotGuilds(
 export function buildGuildCreatePayload(
   db: Database,
   guildId: string
-): (GuildObject & Record<string, unknown>) | null {
+): (GuildObject & GuildCreateExtraFields) | null {
   const guild = getGuild(db, guildId)
   if (!guild) return null
 

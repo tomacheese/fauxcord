@@ -777,14 +777,23 @@ async def verify_gateway() -> dict:
             {"step": "connect-identify-ready", "status": "pass", "note": ""}
         )
     except Exception as err:  # noqa: BLE001
+        # The ready wait timed out (or otherwise failed). Prefer the real
+        # exception from start_task when bot.start() has already failed, since
+        # that is the actionable diagnostic instead of a bare timeout (mirrors
+        # compat/python-discordpy/verify.py's verify_gateway()).
+        underlying: BaseException | None = None
+        if start_task.done() and not start_task.cancelled():
+            underlying = start_task.exception()
+        note = str(underlying if underlying is not None else err)[:300]
         steps.append(
             {
                 "step": "connect-identify-ready",
                 "status": "lib-issue",
-                "note": str(err)[:300],
+                "note": note,
             }
         )
         await bot.close()
+        start_task.cancel()
         return {"status": "lib-issue", "steps": steps}
 
     try:

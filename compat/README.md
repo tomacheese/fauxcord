@@ -163,14 +163,15 @@ Every `N/A` and `⛔blocked` cell needs an evidence note.
 
 ## Implementation status
 
-This harness spans 6 languages / 21 libraries. All 16 libraries with a
-runnable path against Fauxcord have a verifier under `compat/` and a
-populated `results/<lib>.json`; the remaining 5 are technical blockers with
-no runnable code path at all (see below) and are not scaffolded. The one
-outstanding scaffolding gap is a dedicated `dotnet-dsharpplus/README.md`
-section for the 4.x blocker, tracked as follow-up work (see the DSharpPlus
-4.x row below). Any endpoint/library left un-run in this environment is
-recorded in "Known run limitations" below.
+This harness spans 6 languages / 21 libraries. Of these, 16 have a scaffolded
+verifier under `compat/` with a populated `results/<lib>.json`, and the other
+5 are technical blockers with no runnable code path at all (see below) and are
+not scaffolded (16 + 5 = 21). Counting by outcome rather than by scaffolding,
+6 libraries are blocked overall — the 5 unscaffolded blockers plus `js-eris`,
+which is scaffolded and empirically confirms `baseUrlOverridable: false` (see
+"Known run limitations" below) — which is why the blocked-library table below
+has 6 rows. Any endpoint/library left un-run in this environment is recorded
+in "Known run limitations" below.
 
 ### Known run limitations
 

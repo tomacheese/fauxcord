@@ -85,8 +85,7 @@ Fauxcordの Gateway実装後（#102/#107）に再確認したが、DSharpPlus 4.
 コンパイル時定数、Gateway接続必須）のうち、Gatewayとは無関係な (1) が
 引き続き解消しないため、`⛔blocked` 判定を維持する。
 
-現行の DSharpPlus `master` ブランチ上流ソース（`DSharpPlus/Net/Rest/
-Endpoints.cs`）を直接取得し再確認した結果:
+現行の DSharpPlus `master` ブランチ上流ソース（`DSharpPlus/Net/Rest/Endpoints.cs`）を直接取得し再確認した結果:
 
 ```csharp
 public const string API_VERSION = "10";
@@ -97,7 +96,3 @@ public const string BASE_URI = "https://discord.com/api/v" + API_VERSION;
 変化なし）。C# の `const` はコンパイル時に呼び出し側アセンブリへインライン
 展開されるため、ランタイムでの上書き手段は原理的に存在しない。この結論は
 4.x/5.x 共通のメカニズムであり、両バージョンに等しく適用される。
-
-Fauxcordの Gateway実装によって理由 (2) は理論上解消され得るが、理由 (1)
-は Gateway とは独立した別のブロッカーであるため、いずれか一方が残る限り
-`⛔blocked` の結論は変わらない。

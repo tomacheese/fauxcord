@@ -1,10 +1,9 @@
 // Kord (kord-rest) compatibility verifier build config.
 //
-// Actual pinned version: kord-rest/kord-core 0.18.1 (see dependencies below).
-// Kotlin/ktor versions here were originally pinned to what Kord 0.14.0 was
-// built against (confirmed via kordlib/kord's gradle/libs.versions.toml at
-// git tag `0.14.0`: kotlin = "1.9.24", ktor = "2.3.11") so the ktor-client-cio
-// engine we add here is binary-compatible with the ktor-client-core version
+// Actual pinned version: kord-rest/kord-core 0.18.1 (see dependencies below),
+// which is built against the Ktor 3.x line. The ktor-client-cio engine we add
+// here is pinned to the same 3.5.1 version as ktor-client-core (see below), so
+// the CIO engine stays binary-compatible with the ktor-client-core that
 // kord-rest pulls in transitively.
 plugins {
     application

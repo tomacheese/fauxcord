@@ -440,32 +440,35 @@ async function verifyGateway() {
     ])
     steps.push({ step: 'connect-identify-ready', status: 'pass', note: '' })
   } catch (err) {
-    // discord.js sends the raw token (no "Bot " prefix) in the IDENTIFY
-    // payload's `token` field, matching real Discord's Gateway protocol —
-    // the "Bot " prefix is an HTTP Authorization-header convention only.
-    // Fauxcord's gateway looks up `bots.token` with that raw value, but the
-    // table stores the full "Bot <token>" string (as passed to
-    // /_test/setup), so every real-token Gateway client is rejected with
-    // 4004 Authentication failed. This is a Fauxcord-side bug, not a
-    // discord.js issue (confirmed by connecting a raw `ws` client: sending
-    // "Bot <token>" in IDENTIFY succeeds, sending the real, unprefixed
-    // token fails).
+    // The handshake is expected to succeed: discord.js sends the raw token
+    // (no "Bot " prefix) in the IDENTIFY payload's `token` field, matching
+    // real Discord's Gateway protocol, and resolveBotForIdentify() in
+    // src/gateway/server.ts normalizes it against the "Bot "-prefixed
+    // bots.token. If IDENTIFY still fails with an authentication error, that
+    // points to a Fauxcord-side regression rather than a discord.js issue.
     const message = String(err?.message ?? err)
-    const isPrefixBug = message.includes('Authentication failed')
+    const isAuthFailure = message.includes('Authentication failed')
     steps.push({
       step: 'connect-identify-ready',
-      status: isPrefixBug ? 'fauxcord-fix' : 'lib-issue',
-      note: isPrefixBug
-        ? 'Fauxcord gateway IDENTIFY rejects the unprefixed token discord.js sends (matches real Discord protocol); bots.token is stored with a "Bot " prefix and resolveBotForIdentify() compares it verbatim (src/gateway/server.ts)'
+      status: isAuthFailure ? 'fauxcord-fix' : 'lib-issue',
+      note: isAuthFailure
+        ? 'Fauxcord gateway IDENTIFY rejected the token; resolveBotForIdentify() (src/gateway/server.ts) normalizes the raw IDENTIFY token against the "Bot "-prefixed bots.token, so a failure here indicates a regression'
         : message.slice(0, 300),
     })
-    return { status: isPrefixBug ? 'fauxcord-fix' : 'lib-issue', steps }
+    return { status: isAuthFailure ? 'fauxcord-fix' : 'lib-issue', steps }
   }
 
   try {
-    const dispatchWait = new Promise((resolve) =>
-      djs.once('messageCreate', resolve)
-    )
+    const dispatchWait = new Promise((resolve) => {
+      // Filter by the exact content we're about to send so an unrelated
+      // message arriving first in a shared run can't produce a false pass.
+      const onMessage = (msg) => {
+        if (msg.content !== 'gateway-compat-check') return
+        djs.off('messageCreate', onMessage)
+        resolve(msg)
+      }
+      djs.on('messageCreate', onMessage)
+    })
     await rest.post(`/channels/${CH}/messages`, {
       body: { content: 'gateway-compat-check' },
     })

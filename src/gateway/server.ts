@@ -6,6 +6,8 @@
  */
 
 import { GatewayIntentBits } from 'discord-api-types/v10'
+// Used for compile-time type drift detection.
+import type { GatewayReadyDispatchData } from 'discord-api-types/v10'
 import type { WSContext, WSEvents } from 'hono/ws'
 import type { Database } from '../db'
 import { buildGuildCreatePayload } from '../services/guilds'
@@ -167,6 +169,62 @@ function armHeartbeatTimeout(
 }
 
 /**
+ * Shape of the READY (op0) Dispatch payload's `d` field. `private_channels`
+ * is deliberately excluded from the compat guard below -- see the comment
+ * on that field further down for why real Discord sends it while
+ * discord-api-types's `GatewayReadyDispatchData` does not declare it.
+ */
+interface ReadyPayload {
+  v: number
+  user: {
+    id: string
+    username: string
+    discriminator: string
+    avatar: string | null
+    bot: boolean
+    flags: number
+    public_flags: number
+    global_name: null
+    mfa_enabled: boolean
+    locale: string
+    verified: boolean
+  }
+  guilds: { id: string; unavailable: boolean }[]
+  session_id: string
+  resume_gateway_url: string
+  private_channels: never[]
+  application: { id: string; flags: number }
+}
+
+/**
+ * Compile-time guard: ensures `ReadyPayload` stays structurally compatible
+ * with `GatewayReadyDispatchData` (excluding `private_channels`, which real
+ * Discord sends but discord-api-types deliberately omits). Fails to compile
+ * when discord-api-types renames or retypes one of these fields.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type _ReadyPayloadCompatGuard =
+  Pick<
+    GatewayReadyDispatchData,
+    | 'v'
+    | 'user'
+    | 'guilds'
+    | 'session_id'
+    | 'resume_gateway_url'
+    | 'application'
+  > extends Pick<
+    ReadyPayload,
+    | 'v'
+    | 'user'
+    | 'guilds'
+    | 'session_id'
+    | 'resume_gateway_url'
+    | 'application'
+  >
+    ? true
+    : never
+
+/**
  * Handles IDENTIFY (op2) and sends READY (op0) on successful authentication.
  * @param db - Database
  * @param options - baseUrl and disableAuth
@@ -215,55 +273,57 @@ function handleIdentify(
     .prepare('SELECT id FROM guilds WHERE bot_token = ?')
     .all(bot.token) as { id: string }[]
 
+  const readyData: ReadyPayload = {
+    v: 10,
+    // Real Discord's READY `user` is the full own-user object (matching
+    // GET /users/@me's shape), not just {id, username, bot}. Some
+    // clients build a strict own-user model straight from this field and
+    // raise before their `ready` event ever fires if it's incomplete.
+    // `verified: true` and the other dummy values mirror
+    // src/services/users.ts's getBotUser() (which independently needed
+    // the same `verified` field added, since some clients -- e.g.
+    // interactions.py -- build their own-user model from the REST
+    // `/users/@me` login response instead of this Gateway field).
+    user: {
+      id: bot.userId,
+      username: bot.username,
+      discriminator: bot.discriminator,
+      avatar: bot.avatar,
+      bot: true,
+      flags: 0,
+      public_flags: 0,
+      global_name: null,
+      mfa_enabled: false,
+      locale: 'en-US',
+      verified: true,
+    },
+    guilds: existingGuildIds.map(({ id }) => ({
+      id,
+      unavailable: true,
+    })),
+    session_id: session.sessionId,
+    resume_gateway_url: toWsUrl(options.baseUrl),
+    // `private_channels` is not part of discord-api-types's
+    // GatewayReadyDispatchData (long deprecated, always empty), but real
+    // Discord still sends it and Discord.Net's ReadyEvent model reads
+    // `data.PrivateChannels.Length` unconditionally, throwing a
+    // NullReferenceException ("Processing READY failed") when the field
+    // is absent. Sending an empty array matches real Discord's behavior
+    // and costs nothing for clients that ignore it.
+    private_channels: [],
+    // `application` is required by the real Gateway READY payload
+    // (GatewayReadyDispatchData in discord-api-types); some clients
+    // (e.g. Oceanic.js) fail to parse READY without it. `flags: 0` is a
+    // dummy value, matching the REST `/applications/@me` mock.
+    application: { id: bot.userId, flags: 0 },
+  }
+
   ws.send(
     encodePayload({
       op: GatewayOp.Dispatch,
       t: 'READY',
       s: sessionManager.nextSeq(session),
-      d: {
-        v: 10,
-        // Real Discord's READY `user` is the full own-user object (matching
-        // GET /users/@me's shape), not just {id, username, bot}. Some
-        // clients build a strict own-user model straight from this field and
-        // raise before their `ready` event ever fires if it's incomplete.
-        // `verified: true` and the other dummy values mirror
-        // src/services/users.ts's getBotUser() (which independently needed
-        // the same `verified` field added, since some clients -- e.g.
-        // interactions.py -- build their own-user model from the REST
-        // `/users/@me` login response instead of this Gateway field).
-        user: {
-          id: bot.userId,
-          username: bot.username,
-          discriminator: bot.discriminator,
-          avatar: bot.avatar,
-          bot: true,
-          flags: 0,
-          public_flags: 0,
-          global_name: null,
-          mfa_enabled: false,
-          locale: 'en-US',
-          verified: true,
-        },
-        guilds: existingGuildIds.map(({ id }) => ({
-          id,
-          unavailable: true,
-        })),
-        session_id: session.sessionId,
-        resume_gateway_url: toWsUrl(options.baseUrl),
-        // `private_channels` is not part of discord-api-types's
-        // GatewayReadyDispatchData (long deprecated, always empty), but real
-        // Discord still sends it and Discord.Net's ReadyEvent model reads
-        // `data.PrivateChannels.Length` unconditionally, throwing a
-        // NullReferenceException ("Processing READY failed") when the field
-        // is absent. Sending an empty array matches real Discord's behavior
-        // and costs nothing for clients that ignore it.
-        private_channels: [],
-        // `application` is required by the real Gateway READY payload
-        // (GatewayReadyDispatchData in discord-api-types); some clients
-        // (e.g. Oceanic.js) fail to parse READY without it. `flags: 0` is a
-        // dummy value, matching the REST `/applications/@me` mock.
-        application: { id: bot.userId, flags: 0 },
-      },
+      d: readyData,
     })
   )
 
@@ -279,11 +339,18 @@ function handleIdentify(
   // (e.g. seeded via `/_test/setup` before the client ever connects), so
   // those need to be sent here explicitly.
   if (hasIntent(data.intents, GatewayIntentBits.Guilds)) {
-    for (const { id: guildId } of existingGuildIds) {
-      const guild = buildGuildCreatePayload(db, guildId)
-      if (guild) {
-        sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
-      }
+    // buildGuildCreatePayload runs ~4 reads per guild, so an IDENTIFY from a
+    // bot in N guilds issues ~4N statements. Batch them into one SQLite
+    // transaction (a read-only transaction in WAL mode) to avoid per-statement
+    // transaction overhead, then perform the WebSocket sends outside it so no
+    // I/O happens while the transaction is open.
+    const payloads = db.transaction(() =>
+      existingGuildIds
+        .map(({ id: guildId }) => buildGuildCreatePayload(db, guildId))
+        .filter((guild) => guild !== null)
+    )()
+    for (const guild of payloads) {
+      sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
     }
   }
 }

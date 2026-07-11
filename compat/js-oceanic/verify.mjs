@@ -474,16 +474,18 @@ async function verifyOceanicGateway() {
   // so it never surfaces as a rejection of connect()/the 'ready' listener
   // below, nor as an 'error' event — it's a raw uncaughtException. The
   // shard also auto-reconnects and retries IDENTIFY after this crash, so
-  // the same exception can recur; this handler is left installed (not
-  // removed) for the rest of the process's lifetime so a retry-triggered
-  // recurrence logs instead of killing the whole verifier.
+  // the same exception can recur while this function is running. The handler
+  // is scoped to this function: it is removed before every return (see
+  // `process.removeListener` below) so it cannot silently swallow an
+  // unrelated fatal error later in the run.
   gwClient.on('error', () => {
     // swallowed: outcome is captured via the promises below instead
   })
   let onUncaughtGatewayError
-  process.on('uncaughtException', (error) => {
+  const onProcessUncaught = (error) => {
     onUncaughtGatewayError?.(error)
-  })
+  }
+  process.on('uncaughtException', onProcessUncaught)
 
   const connectOutcome = await new Promise((resolve) => {
     let settled = false
@@ -517,6 +519,7 @@ async function verifyOceanicGateway() {
     // the shard is marked ready), which would otherwise keep the process
     // alive forever.
     gwClient.shards?.forEach((s) => s.disconnect())
+    process.removeListener('uncaughtException', onProcessUncaught)
     return { status: 'lib-issue', steps }
   }
   steps.push({ step: 'connect-identify-ready', status: 'pass', note: '' })
@@ -527,10 +530,15 @@ async function verifyOceanicGateway() {
         () => reject(new Error('messageCreate timeout')),
         15000
       )
-      gwClient.once('messageCreate', (msg) => {
+      // Filter by the exact content we're about to send so an unrelated
+      // message arriving first in a shared run can't produce a false pass.
+      const onMessage = (msg) => {
+        if (msg.content !== 'gateway-compat-check') return
+        gwClient.off('messageCreate', onMessage)
         clearTimeout(t)
         resolve(msg)
-      })
+      }
+      gwClient.on('messageCreate', onMessage)
     })
     await rest.channels.createMessage(CH, {
       content: 'gateway-compat-check',
@@ -548,6 +556,7 @@ async function verifyOceanicGateway() {
   }
 
   const failed = steps.find((s) => s.status !== 'pass')
+  process.removeListener('uncaughtException', onProcessUncaught)
   return { status: failed ? failed.status : 'pass', steps }
 }
 
