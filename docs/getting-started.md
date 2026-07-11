@@ -44,7 +44,7 @@ curl -O https://raw.githubusercontent.com/tomacheese/fauxcord/master/compose.yam
 docker compose up -d
 ```
 
-### Local (Node.js 24 + pnpm)
+### Local (Node.js + pnpm; see `.node-version` for the exact version)
 
 ```bash
 git clone https://github.com/tomacheese/fauxcord
