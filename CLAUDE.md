@@ -6,7 +6,7 @@ tests without connecting to the live service.
 
 ## Tech Stack
 
-- **Runtime**: Node.js (version pinned in `.node-version`; `Dockerfile` and CI follow it) + TypeScript (`target: ES2024`, `moduleResolution: bundler`, `strict`, `skipLibCheck: false`)
+- **Runtime**: Node.js (version pinned in `.node-version`; CI reads it directly, `Dockerfile` hardcodes the same major version manually) + TypeScript (`target: ES2024`, `moduleResolution: bundler`, `strict`, `skipLibCheck: false`)
 - **HTTP framework**: Hono, served via `@hono/node-server`
 - **Gateway**: `ws` (`WebSocketServer`), handled by `@hono/node-server`'s `upgradeWebSocket`
 - **DB**: SQLite via `better-sqlite3` (WAL mode, `foreign_keys = ON`)
