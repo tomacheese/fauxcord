@@ -14,6 +14,12 @@ used in compat/js-oceanic/verify.mjs for the same class of decisions):
   attribute (default `https://discord.com/api/v10`). We point it at
   Fauxcord before constructing the client:
   `discord.http.Route.BASE = FAUXCORD_BASE`.
+* Gateway URL override: `Route.BASE` only redirects REST calls.
+  `Client.connect()` opens its websocket via
+  `DiscordWebSocket.DEFAULT_GATEWAY`, a separate hardcoded
+  `wss://gateway.discord.gg/` class attribute that ignores `Route.BASE`
+  entirely, so it's overridden the same way (see below `Route.BASE`'s own
+  assignment).
 * Login: per docs/libraries.md, discord.py's `Client.login()` takes the bot
   token *without* the `"Bot "` prefix (unlike Discord.Net/discordgo/
   @discordjs/rest, which want the raw `"Bot ..."` string or add the prefix
@@ -72,6 +78,8 @@ from typing import Any, Awaitable, Callable, Optional
 
 import aiohttp
 import discord
+import discord.gateway as dgateway
+import yarl
 from discord.http import Route
 
 # --- configuration -----------------------------------------------------
@@ -96,6 +104,19 @@ PNG_BYTES = base64.b64decode(
 )
 
 Route.BASE = FAUXCORD_BASE
+
+# `Client.connect()` never queries `GET /gateway/bot` -- it calls
+# `DiscordWebSocket.from_client()` without a `gateway` argument, which falls
+# back to `DiscordWebSocket.DEFAULT_GATEWAY` (a hardcoded
+# `wss://gateway.discord.gg/` class attribute), so `Route.BASE` alone does
+# not redirect the actual Gateway connection to Fauxcord (confirmed by
+# tracing a real run: it opens a websocket to `wss://gateway.discord.gg/`
+# and gets closed with code 4004 by the *real* Discord servers rejecting
+# the fake token -- not a Fauxcord-side rejection). `DEFAULT_GATEWAY` is a
+# plain class attribute, so it's overridden the same way `Route.BASE` is.
+dgateway.DiscordWebSocket.DEFAULT_GATEWAY = yarl.URL(
+    f"{ORIGIN.replace('http://', 'ws://').replace('https://', 'wss://')}/"
+)
 
 
 # --- bootstrap helpers ---------------------------------------------------
@@ -154,17 +175,16 @@ async def do_setup() -> None:
 def _classify_gateway_error(err: BaseException | None) -> tuple[str, str]:
     """Classify a Gateway connect failure as a Fauxcord bug or a lib issue.
 
-    discord.py sends the raw bot token (no "Bot " prefix) in the IDENTIFY
-    payload's `token` field, matching real Discord's Gateway protocol -- the
-    "Bot " prefix is an HTTP Authorization-header convention only. Fauxcord's
-    gateway looks up `bots.token` with that raw value, but the table stores
-    the full "Bot <token>" string (as passed to /_test/setup), so every
-    real-token Gateway client is rejected with close code 4004
-    (Authentication Failed). This is a Fauxcord-side bug, not a discord.py
-    issue (confirmed by connecting a raw `websockets` client directly:
-    sending "Bot <token>" in IDENTIFY succeeds, sending the real, unprefixed
-    token fails) -- same finding as compat/js-discordjs/verify.mjs's
-    verifyGateway().
+    Historical note: this originally classified close code 4004 as a
+    Fauxcord-side bug (`resolveBotForIdentify()` not normalizing the
+    unprefixed token discord.py sends). That row in `src/gateway/server.ts`
+    was fixed. Later tracing showed the 4004 this classifier was actually
+    seeing came from *real* Discord's gateway, not Fauxcord: `Route.BASE`
+    only redirects REST calls, and `Client.connect()` opened its websocket
+    via the separate, hardcoded `DiscordWebSocket.DEFAULT_GATEWAY` --
+    module-level code above now overrides that too, so a real client run
+    reaches Fauxcord's gateway and this path is no longer expected to
+    trigger. Kept as a defensive classifier in case of regression.
     @param err - The exception raised by `client.connect()`, if any.
     @returns A `(status, note)` tuple.
     """
