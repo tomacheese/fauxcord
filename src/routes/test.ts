@@ -11,15 +11,18 @@ import {
   deleteTestSetup,
   resetTestData,
   getTestMessages,
+  createTestUser,
+  injectTestMessage,
 } from '../services/test-control'
 import { getChannelWebhooks } from '../services/webhooks'
 
 /**
  * Creates the test control API routes.
  * @param db - Database
+ * @param baseUrl - Base URL (used for injected message attachment URL generation)
  * @returns Hono router instance
  */
-export function createTestRoutes(db: Database): Hono {
+export function createTestRoutes(db: Database, baseUrl: string): Hono {
   const app = new Hono()
 
   // POST /_test/setup — Set up Bot, Guild, and Channel
@@ -60,6 +63,33 @@ export function createTestRoutes(db: Database): Hono {
     return c.body(null, 204)
   })
 
+  // POST /_test/users — Register a non-bot user for testing
+  app.post('/_test/users', async (c) => {
+    const payload = await c.req.json<{
+      id?: string
+      username?: string
+      discriminator?: string
+    }>()
+
+    if (!payload.username) {
+      return c.json({ message: '400: Bad Request', code: 0 }, 400)
+    }
+
+    try {
+      const result = createTestUser(db, {
+        id: payload.id,
+        username: payload.username,
+        discriminator: payload.discriminator,
+      })
+      return c.json(result, 201)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'CONFLICT') {
+        return c.json({ message: '409: Conflict', code: 0 }, 409)
+      }
+      throw err
+    }
+  })
+
   // POST /_test/reset — Reset test data (messages, etc.)
   app.post('/_test/reset', async (c) => {
     let token: string | undefined
@@ -86,6 +116,33 @@ export function createTestRoutes(db: Database): Hono {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)
     return c.json(webhooks)
+  })
+
+  // POST /_test/channels/:channelId/messages — Inject a message authored by
+  // a pre-registered user (see POST /_test/users)
+  app.post('/_test/channels/:channelId/messages', async (c) => {
+    const { channelId } = c.req.param()
+    const payload = await c.req.json<{
+      content?: string
+      author?: { id?: string }
+    }>()
+
+    if (!payload.content || !payload.author?.id) {
+      return c.json({ message: '400: Bad Request', code: 0 }, 400)
+    }
+
+    const result = injectTestMessage(
+      db,
+      channelId,
+      { content: payload.content, author: { id: payload.author.id } },
+      baseUrl
+    )
+
+    if (result === 'UNKNOWN_CHANNEL' || result === 'UNKNOWN_USER') {
+      return c.json({ message: '404: Not Found', code: 0 }, 404)
+    }
+
+    return c.json(result, 201)
   })
 
   return app

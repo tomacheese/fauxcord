@@ -4,6 +4,8 @@ import { createTestRoutes } from './test'
 import { initializeDatabase, closeDatabase } from '../db'
 import type { Database } from '../db'
 
+const BASE_URL = 'http://localhost:3000'
+
 describe('Test Control API', () => {
   let db: Database
   let app: Hono
@@ -11,7 +13,7 @@ describe('Test Control API', () => {
   beforeEach(() => {
     db = initializeDatabase(':memory:')
     app = new Hono()
-    app.route('/', createTestRoutes(db))
+    app.route('/', createTestRoutes(db, BASE_URL))
   })
 
   afterEach(() => {
@@ -116,6 +118,104 @@ describe('Test Control API', () => {
       })
       expect(res.status).toBe(409)
     })
+
+    it('forces bot=1 when the user id was already registered as a non-bot user', async () => {
+      // POST /_test/users can create a non-bot user (bot=0) with an
+      // explicit id ahead of time. If a later /_test/setup call reuses that
+      // same id as the bot's own user.id, the row must end up bot=1 -- it
+      // must not silently keep the stale bot=0 value (regression for #120).
+      await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: '666666666666666666',
+          username: 'Collider',
+        }),
+      })
+
+      const res = await app.request('/_test/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: 'Bot collisiontoken',
+          user: { id: '666666666666666666', username: 'CollisionBot' },
+          guilds: [],
+        }),
+      })
+      expect(res.status).toBe(201)
+
+      const row = db
+        .prepare('SELECT bot FROM users WHERE id = ?')
+        .get('666666666666666666') as { bot: number }
+      expect(row.bot).toBe(1)
+    })
+  })
+
+  describe('POST /_test/users', () => {
+    it('registers a non-bot user with an auto-generated ID', async () => {
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'TestHuman' }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as {
+        id: string
+        username: string
+        discriminator: string
+      }
+      expect(body.id).toBeTruthy()
+      expect(body.username).toBe('TestHuman')
+      expect(body.discriminator).toBe('0')
+
+      const row = db
+        .prepare('SELECT bot FROM users WHERE id = ?')
+        .get(body.id) as { bot: number }
+      expect(row.bot).toBe(0)
+    })
+
+    it('registers a non-bot user with an explicit ID', async () => {
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: '555555555555555555',
+          username: 'TestHuman',
+          discriminator: '1234',
+        }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as { id: string; discriminator: string }
+      expect(body.id).toBe('555555555555555555')
+      expect(body.discriminator).toBe('1234')
+    })
+
+    it('returns 409 when the explicit ID already exists', async () => {
+      const payload = JSON.stringify({
+        id: '555555555555555555',
+        username: 'TestHuman',
+      })
+      await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      })
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      })
+      expect(res.status).toBe(409)
+    })
+
+    it('returns 400 when username is missing', async () => {
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      expect(res.status).toBe(400)
+    })
   })
 
   describe('POST /_test/reset', () => {
@@ -136,6 +236,111 @@ describe('Test Control API', () => {
       const body = (await res.json()) as Record<string, unknown>
       expect(body).toHaveProperty('messages')
       expect(Array.isArray(body.messages)).toBe(true)
+    })
+  })
+
+  describe('POST /_test/channels/:channelId/messages', () => {
+    const channelId = '333333333333333333'
+
+    beforeEach(async () => {
+      await app.request('/_test/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: 'Bot msgtoken',
+          user: { id: '111111111111111111', username: 'TestBot' },
+          guilds: [
+            {
+              id: '222222222222222222',
+              name: 'Test Guild',
+              channels: [{ id: channelId, name: 'general', type: 0 }],
+            },
+          ],
+        }),
+      })
+    })
+
+    it('injects a message authored by a pre-registered non-bot user', async () => {
+      const userRes = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'TestHuman' }),
+      })
+      const user = (await userRes.json()) as { id: string }
+
+      const res = await app.request(`/_test/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'Hello from a human!',
+          author: { id: user.id },
+        }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as {
+        content: string
+        author: { id: string; bot: boolean }
+      }
+      expect(body.content).toBe('Hello from a human!')
+      expect(body.author.id).toBe(user.id)
+      expect(body.author.bot).toBe(false)
+
+      const memberRow = db
+        .prepare(
+          'SELECT * FROM guild_members WHERE guild_id = ? AND user_id = ?'
+        )
+        .get('222222222222222222', user.id)
+      expect(memberRow).toBeTruthy()
+    })
+
+    it('returns 404 for an unknown channel', async () => {
+      const userRes = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'TestHuman' }),
+      })
+      const user = (await userRes.json()) as { id: string }
+
+      const res = await app.request(
+        '/_test/channels/999999999999999999/messages',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content: 'Hello',
+            author: { id: user.id },
+          }),
+        }
+      )
+      expect(res.status).toBe(404)
+    })
+
+    it('returns 404 for an unregistered author id', async () => {
+      const res = await app.request(`/_test/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'Hello',
+          author: { id: '999999999999999999' },
+        }),
+      })
+      expect(res.status).toBe(404)
+    })
+
+    it('returns 400 when content is missing', async () => {
+      const userRes = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'TestHuman' }),
+      })
+      const user = (await userRes.json()) as { id: string }
+
+      const res = await app.request(`/_test/channels/${channelId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ author: { id: user.id } }),
+      })
+      expect(res.status).toBe(400)
     })
   })
 })

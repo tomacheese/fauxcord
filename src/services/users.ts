@@ -92,7 +92,7 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
     username: user.username,
     discriminator: user.discriminator,
     avatar: user.avatar,
-    bot: true,
+    bot: user.bot === 1,
     flags: 0,
     public_flags: 0,
     global_name: null,

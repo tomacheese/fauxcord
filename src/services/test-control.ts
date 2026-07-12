@@ -9,6 +9,12 @@ import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
 import { buildGuildCreatePayload } from './guilds'
 import { getGuildMember } from './guild-members'
+import { getChannel } from './channels'
+import {
+  createMessage,
+  getGuildIdForChannel,
+  type MessageObject,
+} from './messages'
 
 /** Test setup request type */
 export interface SetupRequest {
@@ -77,9 +83,13 @@ export function setupTestEnvironment(
   // Run inside a transaction so that a partial setup state
   // (e.g. only the Bot registered) is not left behind if an error occurs midway
   const setup = db.transaction((): SetupResponse => {
-    // Create the user
+    // Create the user. ON CONFLICT forces bot=1 rather than leaving the
+    // existing row untouched -- POST /_test/users can register this same id
+    // beforehand as a non-bot user (bot=0), and this row is now the bot's
+    // own account, so it must win regardless of what existed before.
     db.prepare(
-      'INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 1)'
+      `INSERT INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 1)
+       ON CONFLICT(id) DO UPDATE SET bot = 1`
     ).run(userId, username, discriminator)
 
     // Create the bot
@@ -257,4 +267,109 @@ export function getTestMessages(
     author_token: string | null
     created_at: string
   }[]
+}
+
+/** Request payload for registering a non-bot test user */
+export interface CreateTestUserRequest {
+  id?: string
+  username: string
+  discriminator?: string
+}
+
+/** Response for a newly registered non-bot test user */
+export interface CreateTestUserResponse {
+  id: string
+  username: string
+  discriminator: string
+}
+
+/**
+ * Registers a non-bot user for testing (e.g. to later author an injected
+ * message via injectTestMessage). Unlike POST /_test/setup, an explicit ID
+ * collision is a hard error -- this endpoint never silently reuses an
+ * existing row, since callers are expected to track the users they create.
+ * @param db - Database
+ * @param request - User creation request
+ * @returns Created user info
+ * @throws Error with message 'CONFLICT' if the explicit ID already exists
+ */
+export function createTestUser(
+  db: Database,
+  request: CreateTestUserRequest
+): CreateTestUserResponse {
+  const id = request.id ?? generateSnowflake()
+  const discriminator = request.discriminator ?? '0'
+
+  if (request.id) {
+    const existing = db
+      .prepare('SELECT id FROM users WHERE id = ?')
+      .get(request.id)
+    if (existing) {
+      throw new Error('CONFLICT')
+    }
+  }
+
+  db.prepare(
+    'INSERT INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 0)'
+  ).run(id, request.username, discriminator)
+
+  return { id, username: request.username, discriminator }
+}
+
+/** Request payload for injecting a message authored by a pre-registered user */
+export interface InjectTestMessageRequest {
+  content: string
+  author: { id: string }
+}
+
+/**
+ * Injects a message into a channel, authored by a pre-registered user
+ * (typically a non-bot user created via createTestUser), letting a caller
+ * pick an arbitrary non-bot author -- unlike the bot/webhook message paths,
+ * which always resolve the author to a bot/webhook account.
+ *
+ * If the channel belongs to a guild, the author is also registered as a
+ * guild member (INSERT OR IGNORE), matching how a real Discord member
+ * would already be present before posting.
+ * @param db - Database
+ * @param channelId - Target channel ID
+ * @param request - Message injection request
+ * @param baseUrl - Base URL (for attachment URL generation)
+ * @returns Created message object, or an error code when the channel or
+ * author is unknown
+ */
+export function injectTestMessage(
+  db: Database,
+  channelId: string,
+  request: InjectTestMessageRequest,
+  baseUrl: string
+): MessageObject | 'UNKNOWN_CHANNEL' | 'UNKNOWN_USER' {
+  const channel = getChannel(db, channelId)
+  if (!channel) return 'UNKNOWN_CHANNEL'
+
+  const author = db
+    .prepare('SELECT id FROM users WHERE id = ?')
+    .get(request.author.id)
+  if (!author) return 'UNKNOWN_USER'
+
+  const guildId = getGuildIdForChannel(db, channelId)
+  if (guildId) {
+    db.prepare(
+      'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+    ).run(guildId, request.author.id)
+  }
+
+  return createMessage(
+    db,
+    {
+      channelId,
+      authorId: request.author.id,
+      // Neither a real bot token nor the webhook sentinel value, so this
+      // message resolves to a plain, non-bot, non-webhook author.
+      authorToken: '',
+      messageId: generateSnowflake(),
+      content: request.content,
+    },
+    baseUrl
+  )
 }
