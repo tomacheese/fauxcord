@@ -104,3 +104,73 @@ describe('Application Commands routes (global)', () => {
     expect(res.status).toBe(400)
   })
 })
+
+describe('Application Commands routes (guild-scoped)', () => {
+  let db: Database
+  let app: Hono<AppEnv>
+  let token: string
+  let applicationId: string
+  let guildId: string
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono<AppEnv>()
+    app.use('*', async (c, next) => {
+      const bot = db
+        .prepare('SELECT * FROM bots WHERE token = ?')
+        .get(c.req.header('Authorization'))
+      if (bot) c.set('bot', bot as never)
+      await next()
+    })
+    app.route('/', createApplicationCommandRoutes(db))
+    token = 'Bot testtoken'
+    // seedBot() returns the token it was passed, not the bot's user ID —
+    // capture the (default) user ID explicitly instead of misusing the
+    // return value, since requireOwnApplication compares applicationId
+    // against bots.user_id, not the token.
+    applicationId = '111111111111111111'
+    seedBot(db, token, applicationId)
+    guildId = '333333333333333333'
+    db.prepare(
+      'INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
+    ).run(guildId, 'Test Guild', applicationId, token)
+  })
+
+  it('creates a guild command and returns 404 for an unknown guild', async () => {
+    const res = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'ping', description: 'x' }),
+      }
+    )
+    expect(res.status).toBe(201)
+
+    const missingGuild = await app.request(
+      `/applications/${applicationId}/guilds/999/commands`,
+      { headers: { Authorization: token } }
+    )
+    expect(missingGuild.status).toBe(404)
+  })
+
+  it('bulk overwrites guild commands', async () => {
+    const res = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([{ name: 'ping', description: 'x' }]),
+      }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as unknown[]
+    expect(body).toHaveLength(1)
+  })
+})

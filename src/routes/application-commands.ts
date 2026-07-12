@@ -20,6 +20,7 @@ import {
 } from '../services/application-commands'
 import { validateApplicationCommandCreate } from '../validators/application-command'
 import type { ApplicationCommandCreatePayload } from '../validators/application-command'
+import { getGuild } from '../services/guilds'
 
 /** Shared 400 body for a name-collision on create/update */
 const DUPLICATE_NAME_ERROR = validationError({
@@ -163,6 +164,154 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
     }
     return c.body(null, 204)
   })
+
+  // ── Guild-scoped commands ─────────────────────────────────────────────
+
+  // GET /applications/:applicationId/guilds/:guildId/commands
+  app.get('/applications/:applicationId/guilds/:guildId/commands', (c) => {
+    const { applicationId, guildId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+    if (!getGuild(db, guildId)) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_GUILD,
+        'Unknown Guild',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.json(getCommands(db, applicationId, guildId))
+  })
+
+  // PUT /applications/:applicationId/guilds/:guildId/commands
+  app.put(
+    '/applications/:applicationId/guilds/:guildId/commands',
+    async (c) => {
+      const { applicationId, guildId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+      if (!getGuild(db, guildId)) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_GUILD,
+          'Unknown Guild',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+
+      const payloads = await c.req.json<ApplicationCommandCreatePayload[]>()
+      for (const payload of payloads) {
+        const errors = validateApplicationCommandCreate(payload)
+        if (Object.keys(errors).length > 0) {
+          return c.json(validationError(errors).body, 400)
+        }
+      }
+      return c.json(bulkOverwriteCommands(db, applicationId, guildId, payloads))
+    }
+  )
+
+  // POST /applications/:applicationId/guilds/:guildId/commands
+  app.post(
+    '/applications/:applicationId/guilds/:guildId/commands',
+    async (c) => {
+      const { applicationId, guildId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+      if (!getGuild(db, guildId)) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_GUILD,
+          'Unknown Guild',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+
+      const payload = await c.req.json<ApplicationCommandCreatePayload>()
+      const errors = validateApplicationCommandCreate(payload)
+      if (Object.keys(errors).length > 0) {
+        return c.json(validationError(errors).body, 400)
+      }
+
+      const result = createCommand(db, applicationId, guildId, payload)
+      if (!result.ok) return c.json(DUPLICATE_NAME_ERROR, 400)
+      return c.json(result.command, 201)
+    }
+  )
+
+  // GET /applications/:applicationId/guilds/:guildId/commands/:commandId
+  app.get(
+    '/applications/:applicationId/guilds/:guildId/commands/:commandId',
+    (c) => {
+      const { applicationId, guildId, commandId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+
+      const command = getCommand(db, applicationId, guildId, commandId)
+      if (!command) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+          'Unknown Application Command',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+      return c.json(command)
+    }
+  )
+
+  // PATCH /applications/:applicationId/guilds/:guildId/commands/:commandId
+  app.patch(
+    '/applications/:applicationId/guilds/:guildId/commands/:commandId',
+    async (c) => {
+      const { applicationId, guildId, commandId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+
+      const payload = await c.req.json<
+        Partial<ApplicationCommandCreatePayload>
+      >()
+      const result = updateCommand(
+        db,
+        applicationId,
+        guildId,
+        commandId,
+        payload
+      )
+      if (!result.ok) {
+        if (result.reason === 'not_found') {
+          const err = discordError(
+            DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+            'Unknown Application Command',
+            404
+          )
+          return c.json(err.body, 404)
+        }
+        return c.json(DUPLICATE_NAME_ERROR, 400)
+      }
+      return c.json(result.command)
+    }
+  )
+
+  // DELETE /applications/:applicationId/guilds/:guildId/commands/:commandId
+  app.delete(
+    '/applications/:applicationId/guilds/:guildId/commands/:commandId',
+    (c) => {
+      const { applicationId, guildId, commandId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+
+      const deleted = deleteCommand(db, applicationId, guildId, commandId)
+      if (!deleted) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+          'Unknown Application Command',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+      return c.body(null, 204)
+    }
+  )
 
   return app
 }
