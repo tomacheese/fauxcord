@@ -137,8 +137,7 @@ export function getGuild(
   withCounts = false
 ): GuildObject | null {
   const row = db.prepare('SELECT * FROM guilds WHERE id = ?').get(guildId) as
-    | GuildRow
-    | undefined
+    GuildRow | undefined
   if (!row) return null
 
   const guild = toGuildObject(row, getGuildRoles(db, guildId))

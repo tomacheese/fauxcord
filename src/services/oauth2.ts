@@ -212,8 +212,7 @@ export function getOAuth2Me(
   const botToken = client?.bot_token
   const bot = botToken
     ? (db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
-        | { user_id: string; username: string }
-        | undefined)
+        { user_id: string; username: string } | undefined)
     : undefined
 
   const user = accessToken.user_id
