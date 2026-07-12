@@ -116,6 +116,8 @@ curl http://localhost:3000/_test/messages/333333333333333333
 ```
 
 If `author_token` is `"webhook"`, the message was posted via a Webhook.
+If `author_token` is an empty string, the message was injected via
+`POST /_test/channels/:channelId/messages` (see below) as a non-bot user.
 
 ---
 
@@ -136,6 +138,63 @@ curl http://localhost:3000/_test/webhooks/333333333333333333
   ]
 }
 ```
+
+---
+
+## `POST /_test/users` — Register a non-bot user
+
+Registers a plain (non-bot) user, for use as the `author` of an injected
+message (see below). Unlike `/_test/setup`, an explicit `id` collision is a
+hard error — this endpoint never silently reuses an existing row.
+
+```bash
+curl -X POST http://localhost:3000/_test/users \
+  -H "Content-Type: application/json" \
+  -d '{"username": "TestHuman"}'
+```
+
+```json
+{
+  "id": "555555555555555555",
+  "username": "TestHuman",
+  "discriminator": "0"
+}
+```
+
+**Fields**
+
+| Field           | Required | Description                                             |
+| --------------- | -------- | --------------------------------------------------------|
+| `id`            | —        | User ID. A Snowflake is auto-generated if omitted. Returns `409 Conflict` if an explicit `id` already exists. |
+| `username`      | ✅       | Username.                                                |
+| `discriminator` | —        | Defaults to `"0"`.                                       |
+
+---
+
+## `POST /_test/channels/:channelId/messages` — Inject a message from a specific user
+
+Creates a message in a channel authored by a pre-registered user (typically
+one created via `POST /_test/users`). This is the only way to produce a
+message whose `author.bot` is `false` — every other message-creation path
+(`POST /channels/:id/messages`, Webhook execution) always resolves the
+author to a bot or Webhook account. If the channel belongs to a Guild, the
+author is also registered as a Guild member.
+
+```bash
+curl -X POST http://localhost:3000/_test/channels/333333333333333333/messages \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hello from a human!", "author": {"id": "555555555555555555"}}'
+```
+
+Returns the created message object (same shape as
+`POST /channels/:channelId/messages`), with `author.bot: false`.
+
+**Fields**
+
+| Field       | Required | Description                                                                 |
+| ----------- | -------- | ----------------------------------------------------------------------------|
+| `content`   | ✅       | Message content.                                                             |
+| `author.id` | ✅       | ID of a user already registered via `POST /_test/users` (or any other existing user). Returns `404` if unregistered. |
 
 ---
 
