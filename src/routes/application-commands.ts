@@ -17,6 +17,9 @@ import {
   updateCommand,
   deleteCommand,
   bulkOverwriteCommands,
+  getAllCommandPermissions,
+  getCommandPermissions,
+  setCommandPermissions,
 } from '../services/application-commands'
 import { validateApplicationCommandCreate } from '../validators/application-command'
 import type { ApplicationCommandCreatePayload } from '../validators/application-command'
@@ -238,6 +241,28 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
     }
   )
 
+  // GET /applications/:applicationId/guilds/:guildId/commands/permissions
+  // Registered before GET .../commands/:commandId below (Hono is
+  // first-match-wins), so the literal "permissions" segment is never
+  // mistaken for a commandId.
+  app.get(
+    '/applications/:applicationId/guilds/:guildId/commands/permissions',
+    (c) => {
+      const { applicationId, guildId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+      if (!getGuild(db, guildId)) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_GUILD,
+          'Unknown Guild',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+      return c.json(getAllCommandPermissions(db, applicationId, guildId))
+    }
+  )
+
   // GET /applications/:applicationId/guilds/:guildId/commands/:commandId
   app.get(
     '/applications/:applicationId/guilds/:guildId/commands/:commandId',
@@ -310,6 +335,67 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
         return c.json(err.body, 404)
       }
       return c.body(null, 204)
+    }
+  )
+
+  // GET /applications/:applicationId/guilds/:guildId/commands/:commandId/permissions
+  app.get(
+    '/applications/:applicationId/guilds/:guildId/commands/:commandId/permissions',
+    (c) => {
+      const { applicationId, guildId, commandId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+
+      const permissions = getCommandPermissions(
+        db,
+        applicationId,
+        guildId,
+        commandId
+      )
+      if (!permissions) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+          'Unknown Application Command',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+      return c.json(permissions)
+    }
+  )
+
+  // PUT /applications/:applicationId/guilds/:guildId/commands/:commandId/permissions
+  app.put(
+    '/applications/:applicationId/guilds/:guildId/commands/:commandId/permissions',
+    async (c) => {
+      const { applicationId, guildId, commandId } = c.req.param()
+      const denied = requireOwnApplication(c, applicationId)
+      if (denied) return denied
+
+      const command =
+        getCommand(db, applicationId, guildId, commandId) ??
+        getCommand(db, applicationId, null, commandId)
+      if (!command) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+          'Unknown Application Command',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+
+      const payload = await c.req.json<{
+        permissions: { id: string; type: number; permission: boolean }[]
+      }>()
+      return c.json(
+        setCommandPermissions(
+          db,
+          applicationId,
+          guildId,
+          commandId,
+          payload.permissions
+        )
+      )
     }
   )
 

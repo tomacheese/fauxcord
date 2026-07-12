@@ -174,3 +174,89 @@ describe('Application Commands routes (guild-scoped)', () => {
     expect(body).toHaveLength(1)
   })
 })
+
+describe('Application Commands routes (permissions)', () => {
+  let db: Database
+  let app: Hono<AppEnv>
+  let token: string
+  let applicationId: string
+  let guildId: string
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono<AppEnv>()
+    app.use('*', async (c, next) => {
+      const bot = db
+        .prepare('SELECT * FROM bots WHERE token = ?')
+        .get(c.req.header('Authorization'))
+      if (bot) c.set('bot', bot as never)
+      await next()
+    })
+    app.route('/', createApplicationCommandRoutes(db))
+    token = 'Bot testtoken'
+    // seedBot() returns the token it was passed, not the bot's user ID —
+    // capture the (default) user ID explicitly instead of misusing the
+    // return value, since requireOwnApplication compares applicationId
+    // against bots.user_id, not the token.
+    applicationId = '111111111111111111'
+    seedBot(db, token, applicationId)
+    guildId = '444444444444444444'
+    db.prepare(
+      'INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
+    ).run(guildId, 'Test Guild', applicationId, token)
+  })
+
+  it('lists, gets, and sets command permissions', async () => {
+    const create = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'ping', description: 'x' }),
+      }
+    )
+    const command = (await create.json()) as { id: string }
+
+    const list = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands/permissions`,
+      { headers: { Authorization: token } }
+    )
+    expect(list.status).toBe(200)
+    expect(await list.json()).toEqual([])
+
+    const put = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands/${command.id}/permissions`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          permissions: [{ id: 'role1', type: 1, permission: true }],
+        }),
+      }
+    )
+    expect(put.status).toBe(200)
+
+    const get = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands/${command.id}/permissions`,
+      { headers: { Authorization: token } }
+    )
+    const body = (await get.json()) as { permissions: unknown[] }
+    expect(body.permissions).toEqual([
+      { id: 'role1', type: 1, permission: true },
+    ])
+  })
+
+  it('404s permissions for an unknown command', async () => {
+    const res = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands/missing/permissions`,
+      { headers: { Authorization: token } }
+    )
+    expect(res.status).toBe(404)
+  })
+})

@@ -9,6 +9,9 @@ import {
   updateCommand,
   deleteCommand,
   bulkOverwriteCommands,
+  getAllCommandPermissions,
+  getCommandPermissions,
+  setCommandPermissions,
 } from './application-commands'
 
 describe('application-commands service (global scope)', () => {
@@ -145,5 +148,70 @@ describe('application-commands service (guild scope + bulk overwrite)', () => {
     ])
 
     expect(getCommands(db, applicationId, guildId)).toHaveLength(1)
+  })
+})
+
+describe('application-commands service (permissions)', () => {
+  let db: Database
+  const applicationId = '111111111111111111'
+  const guildId = '222222222222222222'
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    seedBot(db, 'Bot testtoken', applicationId)
+    db.prepare(
+      "INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, 'g', ?, 'Bot testtoken')"
+    ).run(guildId, applicationId)
+  })
+
+  it('returns an empty permissions array for a command with no overrides', () => {
+    const created = createCommand(db, applicationId, guildId, {
+      name: 'ping',
+      description: 'x',
+    })
+    if (!created.ok) throw new Error('setup failed')
+    const permissions = getCommandPermissions(
+      db,
+      applicationId,
+      guildId,
+      created.command.id
+    )
+    expect(permissions).toEqual({
+      id: created.command.id,
+      application_id: applicationId,
+      guild_id: guildId,
+      permissions: [],
+    })
+  })
+
+  it('returns null for permissions of an unknown command', () => {
+    expect(
+      getCommandPermissions(db, applicationId, guildId, 'missing')
+    ).toBeNull()
+  })
+
+  it('sets and retrieves command permissions', () => {
+    const created = createCommand(db, applicationId, guildId, {
+      name: 'ping',
+      description: 'x',
+    })
+    if (!created.ok) throw new Error('setup failed')
+
+    setCommandPermissions(db, applicationId, guildId, created.command.id, [
+      { id: 'role1', type: 1, permission: true },
+    ])
+
+    const permissions = getCommandPermissions(
+      db,
+      applicationId,
+      guildId,
+      created.command.id
+    )
+    expect(permissions?.permissions).toEqual([
+      { id: 'role1', type: 1, permission: true },
+    ])
+    expect(getAllCommandPermissions(db, applicationId, guildId)).toHaveLength(
+      1
+    )
   })
 })

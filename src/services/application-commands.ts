@@ -450,3 +450,130 @@ export function bulkOverwriteCommands(
 
   return overwrite()
 }
+
+/** A single per-role/user/channel permission override */
+export interface CommandPermissionEntry {
+  id: string
+  type: number
+  permission: boolean
+}
+
+/** Guild command permissions object for API responses */
+export interface GuildApplicationCommandPermissionsObject {
+  id: string
+  application_id: string
+  guild_id: string
+  permissions: CommandPermissionEntry[]
+}
+
+/** Permission record type retrieved from the DB */
+interface PermissionRow {
+  application_id: string
+  guild_id: string
+  command_id: string
+  permissions: string
+}
+
+/**
+ * Converts a DB permissions record into the API response format.
+ * @param row - DB record
+ * @returns Object for API responses
+ */
+function toPermissionsObject(
+  row: PermissionRow
+): GuildApplicationCommandPermissionsObject {
+  return {
+    id: row.command_id,
+    application_id: row.application_id,
+    guild_id: row.guild_id,
+    permissions: JSON.parse(row.permissions) as CommandPermissionEntry[],
+  }
+}
+
+/**
+ * Retrieves all command permission overrides in a guild.
+ * @param db - Database
+ * @param applicationId - Application ID
+ * @param guildId - Guild ID
+ * @returns Permission objects for every command that has explicit overrides
+ */
+export function getAllCommandPermissions(
+  db: Database,
+  applicationId: string,
+  guildId: string
+): GuildApplicationCommandPermissionsObject[] {
+  const rows = db
+    .prepare(
+      'SELECT * FROM application_command_permissions WHERE application_id = ? AND guild_id = ?'
+    )
+    .all(applicationId, guildId) as PermissionRow[]
+  return rows.map((row) => toPermissionsObject(row))
+}
+
+/**
+ * Retrieves permission overrides for one command. A command with no
+ * explicit overrides yet still returns an object with an empty
+ * `permissions` array, matching real Discord; only a genuinely unknown
+ * command returns null.
+ * @param db - Database
+ * @param applicationId - Application ID
+ * @param guildId - Guild ID
+ * @param commandId - Command ID
+ * @returns Permissions object, or null if the command does not exist
+ */
+export function getCommandPermissions(
+  db: Database,
+  applicationId: string,
+  guildId: string,
+  commandId: string
+): GuildApplicationCommandPermissionsObject | null {
+  const row = db
+    .prepare(
+      'SELECT * FROM application_command_permissions WHERE application_id = ? AND guild_id = ? AND command_id = ?'
+    )
+    .get(applicationId, guildId, commandId) as PermissionRow | undefined
+  if (row) return toPermissionsObject(row)
+
+  const command =
+    getCommand(db, applicationId, guildId, commandId) ??
+    getCommand(db, applicationId, null, commandId)
+  if (!command) return null
+
+  return {
+    id: commandId,
+    application_id: applicationId,
+    guild_id: guildId,
+    permissions: [],
+  }
+}
+
+/**
+ * Sets (upserts) permission overrides for one command in a guild.
+ * @param db - Database
+ * @param applicationId - Application ID
+ * @param guildId - Guild ID
+ * @param commandId - Command ID
+ * @param permissions - The full desired set of permission overrides
+ * @returns The resulting permissions object
+ */
+export function setCommandPermissions(
+  db: Database,
+  applicationId: string,
+  guildId: string,
+  commandId: string,
+  permissions: CommandPermissionEntry[]
+): GuildApplicationCommandPermissionsObject {
+  db.prepare(
+    `INSERT INTO application_command_permissions (application_id, guild_id, command_id, permissions)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(guild_id, command_id) DO UPDATE SET
+       permissions = excluded.permissions`
+  ).run(applicationId, guildId, commandId, JSON.stringify(permissions))
+
+  const row = db
+    .prepare(
+      'SELECT * FROM application_command_permissions WHERE guild_id = ? AND command_id = ?'
+    )
+    .get(guildId, commandId) as PermissionRow
+  return toPermissionsObject(row)
+}
