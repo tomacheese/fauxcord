@@ -1,0 +1,170 @@
+/**
+ * Application Commands API routing
+ *
+ * Implements global and guild-scoped command CRUD, bulk overwrite, and
+ * command permission endpoints under /applications/*.
+ */
+
+import { Hono } from 'hono'
+import type { Context } from 'hono'
+import type { Database } from '../db'
+import type { AppEnv } from '../middleware/auth'
+import { DiscordErrorCode, discordError, validationError } from '../errors'
+import {
+  getCommands,
+  getCommand,
+  createCommand,
+  updateCommand,
+  deleteCommand,
+} from '../services/application-commands'
+import { validateApplicationCommandCreate } from '../validators/application-command'
+import type { ApplicationCommandCreatePayload } from '../validators/application-command'
+
+/** Shared 400 body for a name-collision on create/update */
+const DUPLICATE_NAME_ERROR = validationError({
+  name: {
+    _errors: [
+      {
+        code: 'APPLICATION_COMMAND_NAME_ALREADY_EXISTS',
+        message: 'A command with that name already exists.',
+      },
+    ],
+  },
+}).body
+
+/**
+ * Returns a 403 Missing Access response unless the authenticated bot owns
+ * `applicationId` (the mock's convention: application_id === bot.user_id).
+ * @param c - Hono context
+ * @param applicationId - `:applicationId` route param
+ * @returns A 403 Response, or undefined when access is allowed
+ */
+function requireOwnApplication(
+  c: Context<AppEnv>,
+  applicationId: string
+): Response | undefined {
+  const bot = c.get('bot')
+  if (bot?.user_id !== applicationId) {
+    const err = discordError(
+      DiscordErrorCode.MISSING_ACCESS,
+      'Missing Access',
+      403
+    )
+    return c.json(err.body, 403)
+  }
+  return undefined
+}
+
+/**
+ * Creates the Application Commands API routes.
+ * @param db - Database
+ * @returns Hono router instance
+ */
+export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
+  const app = new Hono<AppEnv>()
+
+  // GET /applications/:applicationId/commands — list global commands
+  app.get('/applications/:applicationId/commands', (c) => {
+    const { applicationId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+    return c.json(getCommands(db, applicationId, null))
+  })
+
+  // PUT /applications/:applicationId/commands — bulk overwrite global commands
+  app.put('/applications/:applicationId/commands', async (c) => {
+    const { applicationId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+
+    const payloads = await c.req.json<ApplicationCommandCreatePayload[]>()
+    for (const payload of payloads) {
+      const errors = validateApplicationCommandCreate(payload)
+      if (Object.keys(errors).length > 0) {
+        return c.json(validationError(errors).body, 400)
+      }
+    }
+    const { bulkOverwriteCommands } = await import(
+      '../services/application-commands'
+    )
+    return c.json(bulkOverwriteCommands(db, applicationId, null, payloads))
+  })
+
+  // POST /applications/:applicationId/commands — create a global command
+  app.post('/applications/:applicationId/commands', async (c) => {
+    const { applicationId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+
+    const payload = await c.req.json<ApplicationCommandCreatePayload>()
+    const errors = validateApplicationCommandCreate(payload)
+    if (Object.keys(errors).length > 0) {
+      return c.json(validationError(errors).body, 400)
+    }
+
+    const result = createCommand(db, applicationId, null, payload)
+    if (!result.ok) return c.json(DUPLICATE_NAME_ERROR, 400)
+    return c.json(result.command, 201)
+  })
+
+  // GET /applications/:applicationId/commands/:commandId
+  app.get('/applications/:applicationId/commands/:commandId', (c) => {
+    const { applicationId, commandId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+
+    const command = getCommand(db, applicationId, null, commandId)
+    if (!command) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+        'Unknown Application Command',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.json(command)
+  })
+
+  // PATCH /applications/:applicationId/commands/:commandId
+  app.patch('/applications/:applicationId/commands/:commandId', async (c) => {
+    const { applicationId, commandId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+
+    const payload =
+      await c.req.json<Partial<ApplicationCommandCreatePayload>>()
+    const result = updateCommand(db, applicationId, null, commandId, payload)
+    if (!result.ok) {
+      if (result.reason === 'not_found') {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+          'Unknown Application Command',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+      return c.json(DUPLICATE_NAME_ERROR, 400)
+    }
+    return c.json(result.command)
+  })
+
+  // DELETE /applications/:applicationId/commands/:commandId
+  app.delete('/applications/:applicationId/commands/:commandId', (c) => {
+    const { applicationId, commandId } = c.req.param()
+    const denied = requireOwnApplication(c, applicationId)
+    if (denied) return denied
+
+    const deleted = deleteCommand(db, applicationId, null, commandId)
+    if (!deleted) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND,
+        'Unknown Application Command',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.body(null, 204)
+  })
+
+  return app
+}
