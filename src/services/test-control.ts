@@ -9,6 +9,12 @@ import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
 import { buildGuildCreatePayload } from './guilds'
 import { getGuildMember } from './guild-members'
+import { getChannel } from './channels'
+import {
+  createMessage,
+  getGuildIdForChannel,
+  type MessageObject,
+} from './messages'
 
 /** Test setup request type */
 export interface SetupRequest {
@@ -304,4 +310,64 @@ export function createTestUser(
   ).run(id, request.username, discriminator)
 
   return { id, username: request.username, discriminator }
+}
+
+/** Request payload for injecting a message authored by a pre-registered user */
+export interface InjectTestMessageRequest {
+  content: string
+  author: { id: string }
+}
+
+/**
+ * Injects a message into a channel, authored by a pre-registered user
+ * (typically a non-bot user created via createTestUser). This is the only
+ * way in fauxcord to produce a message whose author.bot is false, since
+ * every other message-creation path (POST /channels/:id/messages, webhook
+ * execution) always resolves the author to a bot/webhook account.
+ *
+ * If the channel belongs to a guild, the author is also registered as a
+ * guild member (INSERT OR IGNORE), matching how a real Discord member
+ * would already be present before posting.
+ * @param db - Database
+ * @param channelId - Target channel ID
+ * @param request - Message injection request
+ * @param baseUrl - Base URL (for attachment URL generation)
+ * @returns Created message object, or an error code when the channel or
+ * author is unknown
+ */
+export function injectTestMessage(
+  db: Database,
+  channelId: string,
+  request: InjectTestMessageRequest,
+  baseUrl: string
+): MessageObject | 'UNKNOWN_CHANNEL' | 'UNKNOWN_USER' {
+  const channel = getChannel(db, channelId)
+  if (!channel) return 'UNKNOWN_CHANNEL'
+
+  const author = db
+    .prepare('SELECT id FROM users WHERE id = ?')
+    .get(request.author.id)
+  if (!author) return 'UNKNOWN_USER'
+
+  const guildId = getGuildIdForChannel(db, channelId)
+  if (guildId) {
+    db.prepare(
+      'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+    ).run(guildId, request.author.id)
+  }
+
+  return createMessage(
+    db,
+    {
+      channelId,
+      authorId: request.author.id,
+      // Not a real bot token and not the 'webhook' sentinel -- toMessageObject
+      // only special-cases 'webhook' (adds webhook_id), so an empty string
+      // here produces a plain, non-bot, non-webhook authored message.
+      authorToken: '',
+      messageId: generateSnowflake(),
+      content: request.content,
+    },
+    baseUrl
+  )
 }

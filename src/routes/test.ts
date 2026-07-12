@@ -12,6 +12,7 @@ import {
   resetTestData,
   getTestMessages,
   createTestUser,
+  injectTestMessage,
 } from '../services/test-control'
 import { getChannelWebhooks } from '../services/webhooks'
 
@@ -115,6 +116,33 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)
     return c.json(webhooks)
+  })
+
+  // POST /_test/channels/:channelId/messages — Inject a message authored by
+  // a pre-registered user (see POST /_test/users)
+  app.post('/_test/channels/:channelId/messages', async (c) => {
+    const { channelId } = c.req.param()
+    const payload = await c.req.json<{
+      content?: string
+      author?: { id?: string }
+    }>()
+
+    if (!payload.content || !payload.author?.id) {
+      return c.json({ message: '400: Bad Request', code: 0 }, 400)
+    }
+
+    const result = injectTestMessage(
+      db,
+      channelId,
+      { content: payload.content, author: { id: payload.author.id } },
+      baseUrl
+    )
+
+    if (result === 'UNKNOWN_CHANNEL' || result === 'UNKNOWN_USER') {
+      return c.json({ message: '404: Not Found', code: 0 }, 404)
+    }
+
+    return c.json(result, 201)
   })
 
   return app
