@@ -1,12 +1,14 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { initializeDatabase } from '../db'
 import type { Database } from '../db'
+import { seedBot } from '../test-helpers'
 import {
   getCommands,
   getCommand,
   createCommand,
   updateCommand,
   deleteCommand,
+  bulkOverwriteCommands,
 } from './application-commands'
 
 describe('application-commands service (global scope)', () => {
@@ -87,5 +89,61 @@ describe('application-commands service (global scope)', () => {
       true
     )
     expect(getCommand(db, applicationId, null, created.command.id)).toBeNull()
+  })
+})
+
+describe('application-commands service (guild scope + bulk overwrite)', () => {
+  let db: Database
+  const applicationId = '111111111111111111'
+  const guildId = '222222222222222222'
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    // guilds.bot_token references bots(token), so a bot row must exist first.
+    seedBot(db, 'Bot testtoken', applicationId)
+    db.prepare(
+      "INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, 'g', ?, 'Bot testtoken')"
+    ).run(guildId, applicationId)
+  })
+
+  it('creates a guild-scoped command independent from global commands of the same name', () => {
+    createCommand(db, applicationId, null, { name: 'ping', description: 'x' })
+    const guildResult = createCommand(db, applicationId, guildId, {
+      name: 'ping',
+      description: 'y',
+    })
+    expect(guildResult.ok).toBe(true)
+    expect(getCommands(db, applicationId, null)).toHaveLength(1)
+    expect(getCommands(db, applicationId, guildId)).toHaveLength(1)
+  })
+
+  it('bulk-overwrites commands, preserving the ID of an unchanged name+type match', () => {
+    const first = createCommand(db, applicationId, guildId, {
+      name: 'ping',
+      description: 'x',
+    })
+    if (!first.ok) throw new Error('setup failed')
+
+    const overwritten = bulkOverwriteCommands(db, applicationId, guildId, [
+      { name: 'ping', description: 'updated' },
+      { name: 'pong', description: 'new' },
+    ])
+
+    expect(overwritten).toHaveLength(2)
+    const ping = overwritten.find((cmd) => cmd.name === 'ping')
+    expect(ping?.id).toBe(first.command.id)
+    expect(ping?.description).toBe('updated')
+    expect(getCommands(db, applicationId, guildId)).toHaveLength(2)
+  })
+
+  it('removes commands absent from the bulk overwrite payload', () => {
+    createCommand(db, applicationId, guildId, { name: 'ping', description: 'x' })
+    createCommand(db, applicationId, guildId, { name: 'pong', description: 'y' })
+
+    bulkOverwriteCommands(db, applicationId, guildId, [
+      { name: 'ping', description: 'x' },
+    ])
+
+    expect(getCommands(db, applicationId, guildId)).toHaveLength(1)
   })
 })

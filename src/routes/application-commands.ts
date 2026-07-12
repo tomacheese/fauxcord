@@ -16,6 +16,7 @@ import {
   createCommand,
   updateCommand,
   deleteCommand,
+  bulkOverwriteCommands,
 } from '../services/application-commands'
 import { validateApplicationCommandCreate } from '../validators/application-command'
 import type { ApplicationCommandCreatePayload } from '../validators/application-command'
@@ -84,9 +85,6 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
         return c.json(validationError(errors).body, 400)
       }
     }
-    const { bulkOverwriteCommands } = await import(
-      '../services/application-commands'
-    )
     return c.json(bulkOverwriteCommands(db, applicationId, null, payloads))
   })
 

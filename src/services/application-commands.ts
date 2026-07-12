@@ -333,3 +333,120 @@ export function deleteCommand(
           .run(applicationId, guildId, commandId)
   return result.changes > 0
 }
+
+/**
+ * Bulk-overwrites all commands in a scope (global, or a specific guild),
+ * diff-matching existing rows by `(type, name)` so unchanged commands keep
+ * their ID (and therefore their command-permission rows); commands present
+ * in `payloads` but not previously registered are inserted, and previously
+ * registered commands absent from `payloads` are deleted.
+ * @param db - Database
+ * @param applicationId - Application ID
+ * @param guildId - Guild ID, or `null` for the global scope
+ * @param payloads - The full desired set of commands for this scope
+ * @returns The resulting command objects, in payload order
+ */
+export function bulkOverwriteCommands(
+  db: Database,
+  applicationId: string,
+  guildId: string | null,
+  payloads: ApplicationCommandCreatePayload[]
+): ApplicationCommandObject[] {
+  const overwrite = db.transaction((): ApplicationCommandObject[] => {
+    const existingRows = (
+      guildId === null
+        ? db
+            .prepare(
+              'SELECT * FROM application_commands WHERE application_id = ? AND guild_id IS NULL'
+            )
+            .all(applicationId)
+        : db
+            .prepare(
+              'SELECT * FROM application_commands WHERE application_id = ? AND guild_id = ?'
+            )
+            .all(applicationId, guildId)
+    ) as ApplicationCommandRow[]
+
+    const existingByKey = new Map<string, ApplicationCommandRow>()
+    for (const row of existingRows) {
+      existingByKey.set(`${row.type}:${row.name}`, row)
+    }
+
+    const keepIds = new Set<string>()
+    const results: ApplicationCommandObject[] = []
+
+    for (const payload of payloads) {
+      const type = payload.type ?? 1
+      const name = normalizeName(payload.name, type)
+      const description = type === 1 ? (payload.description ?? '') : ''
+      const existing = existingByKey.get(`${type}:${name}`)
+
+      if (existing) {
+        keepIds.add(existing.id)
+        db.prepare(
+          `UPDATE application_commands SET
+             description = ?, options = ?, default_member_permissions = ?,
+             dm_permission = ?, nsfw = ?
+           WHERE id = ?`
+        ).run(
+          description,
+          JSON.stringify(payload.options ?? []),
+          payload.default_member_permissions ?? null,
+          payload.dm_permission === undefined || payload.dm_permission === null
+            ? null
+            : payload.dm_permission
+              ? 1
+              : 0,
+          payload.nsfw ? 1 : 0,
+          existing.id
+        )
+        const row = db
+          .prepare('SELECT * FROM application_commands WHERE id = ?')
+          .get(existing.id) as ApplicationCommandRow
+        results.push(toApplicationCommandObject(row))
+      } else {
+        const id = generateSnowflake()
+        const version = generateSnowflake()
+        db.prepare(
+          `INSERT INTO application_commands
+             (id, application_id, guild_id, type, name, description, options,
+              default_member_permissions, dm_permission, nsfw, version)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          id,
+          applicationId,
+          guildId,
+          type,
+          name,
+          description,
+          JSON.stringify(payload.options ?? []),
+          payload.default_member_permissions ?? null,
+          payload.dm_permission === undefined || payload.dm_permission === null
+            ? null
+            : payload.dm_permission
+              ? 1
+              : 0,
+          payload.nsfw ? 1 : 0,
+          version
+        )
+        keepIds.add(id)
+        const row = db
+          .prepare('SELECT * FROM application_commands WHERE id = ?')
+          .get(id) as ApplicationCommandRow
+        results.push(toApplicationCommandObject(row))
+      }
+    }
+
+    for (const row of existingRows) {
+      if (!keepIds.has(row.id)) {
+        db.prepare('DELETE FROM application_commands WHERE id = ?').run(
+          row.id
+        )
+      }
+    }
+
+    return results
+  })
+
+  return overwrite()
+}
