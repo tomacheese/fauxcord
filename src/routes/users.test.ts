@@ -168,6 +168,21 @@ describe('Users GET endpoints', () => {
     expect(body.id).toBe(userId)
   })
 
+  it('reflects a non-bot users.bot value on GET /users/@me (regression for #120)', async () => {
+    // getBotUser() previously hardcoded `bot: true` regardless of the
+    // underlying users.bot column. Force that column to 0 directly (this
+    // combination doesn't occur naturally today, since every bots-table
+    // user is created with bot=1) to lock in the correct derivation.
+    db.prepare('UPDATE users SET bot = 0 WHERE id = ?').run(userId)
+
+    const res = await app.request('/api/v10/users/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { bot: boolean }
+    expect(body.bot).toBe(false)
+  })
+
   it('GET /users/@me returns 401 for an unregistered token', async () => {
     const res = await app.request('/api/v10/users/@me', {
       headers: { Authorization: 'Bot unregistered' },
