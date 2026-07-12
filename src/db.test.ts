@@ -163,9 +163,9 @@ describe('application commands / interactions tables', () => {
 
   it('creates the interactions table', () => {
     const db = initializeDatabase(':memory:')
-    const columns = db
-      .prepare('PRAGMA table_info(interactions)')
-      .all() as { name: string }[]
+    const columns = db.prepare('PRAGMA table_info(interactions)').all() as {
+      name: string
+    }[]
     const names = columns.map((c) => c.name)
     expect(names).toEqual(
       expect.arrayContaining([

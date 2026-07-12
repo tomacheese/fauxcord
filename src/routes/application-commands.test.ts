@@ -73,10 +73,9 @@ describe('Application Commands routes (global)', () => {
     )
     const created = (await create.json()) as { id: string }
 
-    const list = await app.request(
-      `/applications/${applicationId}/commands`,
-      { headers: { Authorization: token } }
-    )
+    const list = await app.request(`/applications/${applicationId}/commands`, {
+      headers: { Authorization: token },
+    })
     expect(await list.json()).toHaveLength(1)
 
     const missing = await app.request(

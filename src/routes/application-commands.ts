@@ -133,8 +133,7 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
     const denied = requireOwnApplication(c, applicationId)
     if (denied) return denied
 
-    const payload =
-      await c.req.json<Partial<ApplicationCommandCreatePayload>>()
+    const payload = await c.req.json<Partial<ApplicationCommandCreatePayload>>()
     const result = updateCommand(db, applicationId, null, commandId, payload)
     if (!result.ok) {
       if (result.reason === 'not_found') {
@@ -292,9 +291,8 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
       const denied = requireOwnApplication(c, applicationId)
       if (denied) return denied
 
-      const payload = await c.req.json<
-        Partial<ApplicationCommandCreatePayload>
-      >()
+      const payload =
+        await c.req.json<Partial<ApplicationCommandCreatePayload>>()
       const result = updateCommand(
         db,
         applicationId,

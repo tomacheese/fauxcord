@@ -241,9 +241,7 @@ export function handleInteractionCallback(
       'UPDATE interactions SET responded = 1, initial_response_message_id = ? WHERE id = ?'
     ).run(messageId, row.id)
   } else {
-    db.prepare('UPDATE interactions SET responded = 1 WHERE id = ?').run(
-      row.id
-    )
+    db.prepare('UPDATE interactions SET responded = 1 WHERE id = ?').run(row.id)
   }
 
   return { ok: true }

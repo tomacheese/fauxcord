@@ -441,9 +441,7 @@ export function bulkOverwriteCommands(
 
     for (const row of existingRows) {
       if (!keepIds.has(row.id)) {
-        db.prepare('DELETE FROM application_commands WHERE id = ?').run(
-          row.id
-        )
+        db.prepare('DELETE FROM application_commands WHERE id = ?').run(row.id)
       }
     }
 

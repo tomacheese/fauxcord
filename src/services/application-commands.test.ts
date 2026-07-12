@@ -140,8 +140,14 @@ describe('application-commands service (guild scope + bulk overwrite)', () => {
   })
 
   it('removes commands absent from the bulk overwrite payload', () => {
-    createCommand(db, applicationId, guildId, { name: 'ping', description: 'x' })
-    createCommand(db, applicationId, guildId, { name: 'pong', description: 'y' })
+    createCommand(db, applicationId, guildId, {
+      name: 'ping',
+      description: 'x',
+    })
+    createCommand(db, applicationId, guildId, {
+      name: 'pong',
+      description: 'y',
+    })
 
     bulkOverwriteCommands(db, applicationId, guildId, [
       { name: 'ping', description: 'x' },
@@ -210,8 +216,6 @@ describe('application-commands service (permissions)', () => {
     expect(permissions?.permissions).toEqual([
       { id: 'role1', type: 1, permission: true },
     ])
-    expect(getAllCommandPermissions(db, applicationId, guildId)).toHaveLength(
-      1
-    )
+    expect(getAllCommandPermissions(db, applicationId, guildId)).toHaveLength(1)
   })
 })
