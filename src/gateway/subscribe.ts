@@ -1,6 +1,6 @@
 import { GatewayIntentBits } from 'discord-api-types/v10'
 import { gatewayBus } from './bus'
-import { broadcastToAll } from './dispatch'
+import { broadcastToAll, broadcastToBot } from './dispatch'
 import type { SessionManager } from './session'
 
 /**
@@ -191,6 +191,18 @@ export function registerGatewaySubscriptions(
       GatewayIntentBits.Guilds
     )
   }
+  const onInteractionCreate: Parameters<
+    typeof gatewayBus.on<'interaction.create'>
+  >[1] = (payload) => {
+    // INTERACTION_CREATE is not gated by any Gateway intent (Discord spec):
+    // requiredIntent is intentionally omitted here.
+    broadcastToBot(
+      manager,
+      payload.applicationId,
+      'INTERACTION_CREATE',
+      payload.interaction
+    )
+  }
 
   gatewayBus.on('message.create', onMessageCreate)
   gatewayBus.on('message.update', onMessageUpdate)
@@ -207,6 +219,7 @@ export function registerGatewaySubscriptions(
   gatewayBus.on('guild.role.create', onGuildRoleCreate)
   gatewayBus.on('guild.role.update', onGuildRoleUpdate)
   gatewayBus.on('guild.role.delete', onGuildRoleDelete)
+  gatewayBus.on('interaction.create', onInteractionCreate)
 
   return () => {
     gatewayBus.off('message.create', onMessageCreate)
@@ -224,5 +237,6 @@ export function registerGatewaySubscriptions(
     gatewayBus.off('guild.role.create', onGuildRoleCreate)
     gatewayBus.off('guild.role.update', onGuildRoleUpdate)
     gatewayBus.off('guild.role.delete', onGuildRoleDelete)
+    gatewayBus.off('interaction.create', onInteractionCreate)
   }
 }

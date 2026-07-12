@@ -75,4 +75,35 @@ describe('registerGatewaySubscriptions', () => {
 
     unsubscribe()
   })
+
+  it('dispatches INTERACTION_CREATE only to the matching bot, regardless of intents', () => {
+    const manager = new SessionManager()
+    const wsA = { send: vi.fn(), close: vi.fn() }
+    const wsB = { send: vi.fn(), close: vi.fn() }
+    manager.create({
+      botId: 'bot-a',
+      token: 'Bot tokenA',
+      intents: 0,
+      ws: wsA as never,
+    })
+    manager.create({
+      botId: 'bot-b',
+      token: 'Bot tokenB',
+      intents: 0,
+      ws: wsB as never,
+    })
+    const unsubscribe = registerGatewaySubscriptions(manager)
+
+    gatewayBus.emit('interaction.create', {
+      applicationId: 'bot-a',
+      interaction: { id: 'int1', type: 2 },
+    })
+
+    expect(wsA.send).toHaveBeenCalledWith(
+      expect.stringContaining('"t":"INTERACTION_CREATE"')
+    )
+    expect(wsB.send).not.toHaveBeenCalled()
+
+    unsubscribe()
+  })
 })
