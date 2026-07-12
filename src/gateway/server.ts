@@ -96,7 +96,7 @@ function resolveBotForIdentify(
  * @returns true if valid
  */
 function isValidIntents(intents: number): boolean {
-  return Number.isInteger(intents) && intents >= 0
+  return Number.isSafeInteger(intents) && intents >= 0
 }
 
 /**

@@ -40,7 +40,7 @@ function validateOptionalIntBound(
   if (value === undefined || value === null) return
   if (
     typeof value !== 'number' ||
-    !Number.isInteger(value) ||
+    !Number.isSafeInteger(value) ||
     value < 0 ||
     value > max
   ) {

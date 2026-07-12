@@ -177,7 +177,9 @@ describe('Guild Members API', () => {
       })
       expect(res.status).toBe(200)
       const body = (await res.json()) as { roles: string[] }
-      expect(body.roles).toEqual(body.roles.toSorted())
+      expect(body.roles).toEqual(
+        body.roles.toSorted((a, b) => a.localeCompare(b))
+      )
     })
   })
 

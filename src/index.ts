@@ -56,6 +56,7 @@ if (config.seedFile) {
 const port = config.port
 const hostname = config.host
 
+// eslint-disable-next-line unicorn/no-top-level-side-effects -- this is the production entry point; starting the server is the module's whole purpose.
 console.info(`Discord Mock Server starting on ${hostname}:${port}`)
 
 const server = serveWithGateway({

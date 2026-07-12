@@ -61,7 +61,7 @@ function validateOptions(options: unknown, depth: number): FieldError[] {
       typeof raw.type !== 'number' ||
       raw.type < 1 ||
       raw.type > 11 ||
-      !Number.isInteger(raw.type)
+      !Number.isSafeInteger(raw.type)
     ) {
       errors.push(typeError('integer between 1 and 11'))
       continue

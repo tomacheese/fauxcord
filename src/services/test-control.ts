@@ -102,7 +102,8 @@ export function setupTestEnvironment(
 
     const guildsResponse: SetupResponse['guilds'] = []
 
-    for (const guildReq of request.guilds ?? []) {
+    const guildRequests = request.guilds ?? []
+    for (const guildReq of guildRequests) {
       const guildId = guildReq.id ?? generateSnowflake()
 
       // Create the guild (if the same ID still exists, overwrite its contents and reuse it = idempotent)
@@ -155,7 +156,8 @@ export function setupTestEnvironment(
 
       const channelsResponse: { id: string; name: string; type: number }[] = []
 
-      for (const channelReq of guildReq.channels ?? []) {
+      const channelRequests = guildReq.channels ?? []
+      for (const channelReq of channelRequests) {
         const channelId = channelReq.id ?? generateSnowflake()
         const channelType = channelReq.type ?? 0
 

@@ -293,7 +293,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
         : {}
       // A file-only message (no content/embeds) is not empty, so detect any
       // uploaded file entry rather than assuming there are no attachments.
-      for (const [key, value] of formData.entries()) {
+      for (const [key, value] of formData) {
         if (
           (key === 'file' || key.startsWith('files[')) &&
           value instanceof File
