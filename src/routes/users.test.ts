@@ -170,9 +170,9 @@ describe('Users GET endpoints', () => {
 
   it('reflects a non-bot users.bot value on GET /users/@me (regression for #120)', async () => {
     // getBotUser() previously hardcoded `bot: true` regardless of the
-    // underlying users.bot column. Force that column to 0 directly (this
-    // combination doesn't occur naturally today, since every bots-table
-    // user is created with bot=1) to lock in the correct derivation.
+    // underlying users.bot column. Every user-creation path in this
+    // codebase enforces bot=1 for a bots-table-linked user, so force the
+    // column to 0 directly here to lock in the correct derivation.
     db.prepare('UPDATE users SET bot = 0 WHERE id = ?').run(userId)
 
     const res = await app.request('/api/v10/users/@me', {

@@ -118,6 +118,37 @@ describe('Test Control API', () => {
       })
       expect(res.status).toBe(409)
     })
+
+    it('forces bot=1 when the user id was already registered as a non-bot user', async () => {
+      // POST /_test/users can create a non-bot user (bot=0) with an
+      // explicit id ahead of time. If a later /_test/setup call reuses that
+      // same id as the bot's own user.id, the row must end up bot=1 -- it
+      // must not silently keep the stale bot=0 value (regression for #120).
+      await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: '666666666666666666',
+          username: 'Collider',
+        }),
+      })
+
+      const res = await app.request('/_test/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: 'Bot collisiontoken',
+          user: { id: '666666666666666666', username: 'CollisionBot' },
+          guilds: [],
+        }),
+      })
+      expect(res.status).toBe(201)
+
+      const row = db
+        .prepare('SELECT bot FROM users WHERE id = ?')
+        .get('666666666666666666') as { bot: number }
+      expect(row.bot).toBe(1)
+    })
   })
 
   describe('POST /_test/users', () => {

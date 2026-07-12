@@ -83,9 +83,13 @@ export function setupTestEnvironment(
   // Run inside a transaction so that a partial setup state
   // (e.g. only the Bot registered) is not left behind if an error occurs midway
   const setup = db.transaction((): SetupResponse => {
-    // Create the user
+    // Create the user. ON CONFLICT forces bot=1 rather than leaving the
+    // existing row untouched -- POST /_test/users can register this same id
+    // beforehand as a non-bot user (bot=0), and this row is now the bot's
+    // own account, so it must win regardless of what existed before.
     db.prepare(
-      'INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 1)'
+      `INSERT INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 1)
+       ON CONFLICT(id) DO UPDATE SET bot = 1`
     ).run(userId, username, discriminator)
 
     // Create the bot
@@ -320,10 +324,9 @@ export interface InjectTestMessageRequest {
 
 /**
  * Injects a message into a channel, authored by a pre-registered user
- * (typically a non-bot user created via createTestUser). This is the only
- * way in fauxcord to produce a message whose author.bot is false, since
- * every other message-creation path (POST /channels/:id/messages, webhook
- * execution) always resolves the author to a bot/webhook account.
+ * (typically a non-bot user created via createTestUser), letting a caller
+ * pick an arbitrary non-bot author -- unlike the bot/webhook message paths,
+ * which always resolve the author to a bot/webhook account.
  *
  * If the channel belongs to a guild, the author is also registered as a
  * guild member (INSERT OR IGNORE), matching how a real Discord member
@@ -361,9 +364,8 @@ export function injectTestMessage(
     {
       channelId,
       authorId: request.author.id,
-      // Not a real bot token and not the 'webhook' sentinel -- toMessageObject
-      // only special-cases 'webhook' (adds webhook_id), so an empty string
-      // here produces a plain, non-bot, non-webhook authored message.
+      // Neither a real bot token nor the webhook sentinel value, so this
+      // message resolves to a plain, non-bot, non-webhook author.
       authorToken: '',
       messageId: generateSnowflake(),
       content: request.content,
