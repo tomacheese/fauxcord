@@ -289,8 +289,7 @@ export function createInvite(
  */
 export function getInvite(db: Database, code: string): InviteObject | null {
   const row = db.prepare('SELECT * FROM invites WHERE code = ?').get(code) as
-    | InviteRow
-    | undefined
+    InviteRow | undefined
   return row ? toInviteObject(db, row) : null
 }
 
@@ -302,8 +301,7 @@ export function getInvite(db: Database, code: string): InviteObject | null {
  */
 export function deleteInvite(db: Database, code: string): InviteObject | null {
   const row = db.prepare('SELECT * FROM invites WHERE code = ?').get(code) as
-    | InviteRow
-    | undefined
+    InviteRow | undefined
   if (!row) return null
   const invite = toInviteObject(db, row)
   db.prepare('DELETE FROM invites WHERE code = ?').run(code)

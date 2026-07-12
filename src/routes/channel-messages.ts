@@ -172,8 +172,7 @@ export function createChannelMessageRoutes(
         tts: payload.tts as boolean | undefined,
         embeds: payload.embeds as unknown[] | undefined,
         messageReference: payload.message_reference as
-          | { message_id?: string }
-          | undefined,
+          { message_id?: string } | undefined,
         flags: payload.flags as number | undefined,
       },
       baseUrl

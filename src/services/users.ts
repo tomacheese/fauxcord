@@ -70,8 +70,7 @@ export interface UserObject {
  */
 export function getBotUser(db: Database, botToken: string): UserObject | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
-    | BotRow
-    | undefined
+    BotRow | undefined
   if (!bot) return null
 
   const user = db
@@ -122,8 +121,7 @@ export function updateBotUser(
   payload: CurrentUserUpdatePayload
 ): UserObject | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
-    | BotRow
-    | undefined
+    BotRow | undefined
   if (!bot) return null
 
   // Wrap the users/bots updates in a single transaction so the two tables
@@ -222,8 +220,7 @@ export function getApplication(
   team: null
 } | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
-    | BotRow
-    | undefined
+    BotRow | undefined
   if (!bot) return null
 
   const user = getUser(db, bot.user_id)

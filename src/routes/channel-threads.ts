@@ -44,8 +44,7 @@ function resolveUserId(c: Context<AppEnv>, db: Database): string {
     const authHeader = c.req.header('Authorization')
     if (authHeader) {
       bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(authHeader) as
-        | BotRecord
-        | undefined
+        BotRecord | undefined
     }
   }
   return bot?.user_id ?? '000000000000000000'
