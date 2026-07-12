@@ -23,6 +23,7 @@ import { createSoundboardRoutes } from './routes/soundboard'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createInviteRoutes } from './routes/invites'
 import { createApplicationCommandRoutes } from './routes/application-commands'
+import { createInteractionRoutes } from './routes/interactions'
 import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
@@ -136,6 +137,7 @@ export function buildApp(
     app.route(prefix, createWebhookRoutes(db, config.baseUrl))
     app.route(prefix, createInviteRoutes(db))
     app.route(prefix, createApplicationCommandRoutes(db))
+    app.route(prefix, createInteractionRoutes(db, config.baseUrl))
   }
 
   // Global error handler

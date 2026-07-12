@@ -123,4 +123,21 @@ describe('createAuthMiddleware', () => {
     })
     expect(res.status).toBe(401)
   })
+
+  it('exempts POST /interactions/:id/:token/callback from authentication', async () => {
+    const appNoBot = new Hono()
+    appNoBot.use('*', createAuthMiddleware(db, false))
+    appNoBot.post('/interactions/:id/:token/callback', (c) =>
+      c.json({ ok: true })
+    )
+
+    const res = await appNoBot.request(
+      '/interactions/123456789012345678/sometoken/callback',
+      { method: 'POST' }
+    )
+    // No Authorization header was sent; a non-exempt path would return 401
+    // here. Reaching the route handler (200) confirms the middleware let it
+    // through.
+    expect(res.status).toBe(200)
+  })
 })
