@@ -4,8 +4,9 @@
  * End-to-end tests for the entire server.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
 import { Hono } from 'hono'
+import WebSocket from 'ws'
 import { initializeDatabase, closeDatabase } from './db'
 import { corsMiddleware } from './middleware/cors'
 import { versionMiddleware } from './middleware/version'
@@ -19,7 +20,8 @@ import { createInviteRoutes } from './routes/invites'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { createOAuth2Routes } from './routes/oauth2'
-import { seedMember } from './test-helpers'
+import { seedMember, createTestGatewayServer } from './test-helpers'
+import { GatewayOp } from './gateway/opcodes'
 import type { Database } from './db'
 
 const BASE_URL = 'http://localhost:3000'
@@ -1262,5 +1264,139 @@ describe('Integration tests', () => {
         sharedBody.messages.some((m) => m.content === 'shared bot keeps this')
       ).toBe(true)
     })
+  })
+})
+
+// A real WebSocket connection is required to confirm INTERACTION_CREATE
+// actually reaches a connected Gateway client, so this scenario uses
+// createTestGatewayServer() (a full buildApp() over a real socket) rather
+// than this file's own lightweight buildTestServer(), which has no Gateway
+// endpoint.
+describe('Slash commands and interactions end-to-end', () => {
+  let close: (() => Promise<void>) | undefined
+
+  afterEach(async () => {
+    await close?.()
+    close = undefined
+  })
+
+  it('registers a command, simulates an interaction, dispatches it over the Gateway, and completes callback + followup', async () => {
+    const { url, close: c } = await createTestGatewayServer()
+    close = c
+    const httpUrl = url.replace('ws://', 'http://')
+
+    const token = 'Bot e2e-interactions-token'
+    await fetch(`${httpUrl}/_test/setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        user: { id: '100000000000000001', username: 'E2EBot' },
+        guilds: [
+          {
+            id: '100000000000000002',
+            name: 'E2E Guild',
+            channels: [{ id: '100000000000000003', name: 'general' }],
+          },
+        ],
+      }),
+    })
+    const applicationId = '100000000000000001'
+    const guildId = '100000000000000002'
+    const channelId = '100000000000000003'
+
+    // Register a guild command
+    const createCommandRes = await fetch(
+      `${httpUrl}/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'ping', description: 'Replies pong' }),
+      }
+    )
+    expect(createCommandRes.status).toBe(201)
+
+    // Connect a Gateway client and IDENTIFY
+    const ws = new WebSocket(url)
+    await new Promise((resolve) => ws.once('message', resolve)) // Consume HELLO
+    ws.send(
+      JSON.stringify({
+        op: GatewayOp.Identify,
+        d: { token, intents: 0 },
+      })
+    )
+    await new Promise((resolve) => ws.once('message', resolve)) // Consume READY
+
+    const dispatchPromise = new Promise<Record<string, unknown>>((resolve) => {
+      ws.once('message', (raw: Buffer) => {
+        resolve(JSON.parse(raw.toString()))
+      })
+    })
+
+    // Simulate the interaction
+    const interactionRes = await fetch(`${httpUrl}/_test/interactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        application_id: applicationId,
+        command_name: 'ping',
+        guild_id: guildId,
+        channel_id: channelId,
+      }),
+    })
+    expect(interactionRes.status).toBe(201)
+    const interaction = (await interactionRes.json()) as {
+      id: string
+      token: string
+    }
+
+    // Confirm INTERACTION_CREATE was dispatched over the Gateway
+    const dispatched = await dispatchPromise
+    expect(dispatched.t).toBe('INTERACTION_CREATE')
+    const dispatchedData = dispatched.d as {
+      id: string
+      data: { name: string }
+    }
+    expect(dispatchedData.id).toBe(interaction.id)
+    expect(dispatchedData.data.name).toBe('ping')
+
+    // Respond to the interaction
+    const callbackRes = await fetch(
+      `${httpUrl}/interactions/${interaction.id}/${interaction.token}/callback`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 4, data: { content: 'pong' } }),
+      }
+    )
+    expect(callbackRes.status).toBe(204)
+
+    // Confirm the initial response is retrievable via @original
+    const originalRes = await fetch(
+      `${httpUrl}/webhooks/${applicationId}/${interaction.token}/messages/@original`
+    )
+    expect(originalRes.status).toBe(200)
+    expect(((await originalRes.json()) as { content: string }).content).toBe(
+      'pong'
+    )
+
+    // Send a followup message
+    const followupRes = await fetch(
+      `${httpUrl}/webhooks/${applicationId}/${interaction.token}?wait=true`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'a followup' }),
+      }
+    )
+    expect(followupRes.status).toBe(200)
+    expect(((await followupRes.json()) as { content: string }).content).toBe(
+      'a followup'
+    )
+
+    ws.close()
   })
 })
