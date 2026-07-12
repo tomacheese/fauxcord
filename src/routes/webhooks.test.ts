@@ -423,4 +423,67 @@ describe('Webhook routes — interaction followup fallback', () => {
     const body = (await res.json()) as { content: string }
     expect(body.content).toBe('initial response')
   })
+
+  it('404s PATCH .../messages/@original before any type-4 callback has run', async () => {
+    const res = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'edited' }),
+      }
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('edits the initial response via PATCH .../messages/@original', async () => {
+    handleInteractionCallback(
+      db,
+      'int1',
+      'itoken1',
+      { type: 4, data: { content: 'initial response' } },
+      BASE_URL
+    )
+
+    const res = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'edited' }),
+      }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string }
+    expect(body.content).toBe('edited')
+  })
+
+  it('404s DELETE .../messages/@original before any type-4 callback has run', async () => {
+    const res = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`,
+      { method: 'DELETE' }
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('deletes the initial response via DELETE .../messages/@original', async () => {
+    handleInteractionCallback(
+      db,
+      'int1',
+      'itoken1',
+      { type: 4, data: { content: 'initial response' } },
+      BASE_URL
+    )
+
+    const del = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`,
+      { method: 'DELETE' }
+    )
+    expect(del.status).toBe(204)
+
+    const get = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`
+    )
+    expect(get.status).toBe(404)
+  })
 })

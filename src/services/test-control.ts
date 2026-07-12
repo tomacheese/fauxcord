@@ -4,6 +4,7 @@
  * Handles test environment setup and reset.
  */
 
+import { randomBytes } from 'node:crypto'
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
@@ -460,7 +461,10 @@ export function createTestInteraction(
 
   const userId = request.user_id ?? generateSnowflake()
   const interactionId = generateSnowflake()
-  const interactionToken = `test_interaction_token_${generateSnowflake()}`
+  // Interaction tokens authorize the callback/followup endpoints on their
+  // own (no bot-token auth), so use a CSPRNG rather than a predictable
+  // Snowflake-derived value, matching webhook token generation.
+  const interactionToken = randomBytes(48).toString('base64url')
 
   const interaction = createInteraction(db, {
     interactionId,

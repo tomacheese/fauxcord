@@ -20,6 +20,7 @@ import {
   getAllCommandPermissions,
   getCommandPermissions,
   setCommandPermissions,
+  normalizeName,
 } from '../services/application-commands'
 import { validateApplicationCommandCreate } from '../validators/application-command'
 import type { ApplicationCommandCreatePayload } from '../validators/application-command'
@@ -61,6 +62,28 @@ function requireOwnApplication(
 }
 
 /**
+ * Checks a bulk-overwrite payload for two or more entries sharing the same
+ * `(type, name)` key -- without this check, such a payload would reach
+ * `bulkOverwriteCommands`'s `INSERT`, which enforces the same uniqueness at
+ * the DB layer and throws an unhandled error instead of a validation
+ * response.
+ * @param payloads - The full bulk-overwrite payload
+ * @returns true if any two entries collide on `(type, name)`
+ */
+function hasDuplicateNameInPayload(
+  payloads: ApplicationCommandCreatePayload[]
+): boolean {
+  const seen = new Set<string>()
+  for (const payload of payloads) {
+    const type = payload.type ?? 1
+    const key = `${type}:${normalizeName(payload.name, type)}`
+    if (seen.has(key)) return true
+    seen.add(key)
+  }
+  return false
+}
+
+/**
  * Creates the Application Commands API routes.
  * @param db - Database
  * @returns Hono router instance
@@ -88,6 +111,9 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
       if (Object.keys(errors).length > 0) {
         return c.json(validationError(errors).body, 400)
       }
+    }
+    if (hasDuplicateNameInPayload(payloads)) {
+      return c.json(DUPLICATE_NAME_ERROR, 400)
     }
     return c.json(bulkOverwriteCommands(db, applicationId, null, payloads))
   })
@@ -207,6 +233,9 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
         if (Object.keys(errors).length > 0) {
           return c.json(validationError(errors).body, 400)
         }
+      }
+      if (hasDuplicateNameInPayload(payloads)) {
+        return c.json(DUPLICATE_NAME_ERROR, 400)
       }
       return c.json(bulkOverwriteCommands(db, applicationId, guildId, payloads))
     }

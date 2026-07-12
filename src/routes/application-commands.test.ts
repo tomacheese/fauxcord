@@ -102,6 +102,21 @@ describe('Application Commands routes (global)', () => {
     })
     expect(res.status).toBe(400)
   })
+
+  it('rejects a bulk-overwrite payload with a duplicate name/type with 400', async () => {
+    const res = await app.request(`/applications/${applicationId}/commands`, {
+      method: 'PUT',
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify([
+        { name: 'ping', description: 'x' },
+        { name: 'PING', description: 'y' },
+      ]),
+    })
+    expect(res.status).toBe(400)
+  })
 })
 
 describe('Application Commands routes (guild-scoped)', () => {
@@ -171,6 +186,24 @@ describe('Application Commands routes (guild-scoped)', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as unknown[]
     expect(body).toHaveLength(1)
+  })
+
+  it('rejects a bulk-overwrite payload with a duplicate name/type with 400', async () => {
+    const res = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify([
+          { name: 'ping', description: 'x' },
+          { name: 'ping', description: 'y' },
+        ]),
+      }
+    )
+    expect(res.status).toBe(400)
   })
 })
 

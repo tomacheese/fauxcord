@@ -51,7 +51,7 @@ interface ApplicationCommandRow {
  * @returns Object for API responses
  */
 function toApplicationCommandObject(
-  row: ApplicationCommandRow
+  row: Omit<ApplicationCommandRow, 'created_at'>
 ): ApplicationCommandObject {
   const base: ApplicationCommandObject = {
     id: row.id,
@@ -82,7 +82,7 @@ function toApplicationCommandObject(
  * @param type - Command type
  * @returns Normalized name
  */
-function normalizeName(name: string, type: number): string {
+export function normalizeName(name: string, type: number): string {
   return type === 1 ? name.toLowerCase() : name
 }
 
@@ -383,6 +383,17 @@ export function bulkOverwriteCommands(
       const description = type === 1 ? (payload.description ?? '') : ''
       const existing = existingByKey.get(`${type}:${name}`)
 
+      const defaultMemberPermissions =
+        payload.default_member_permissions ?? null
+      const dmPermission =
+        payload.dm_permission === undefined || payload.dm_permission === null
+          ? null
+          : payload.dm_permission
+            ? 1
+            : 0
+      const nsfw = payload.nsfw ? 1 : 0
+      const options = JSON.stringify(payload.options ?? [])
+
       if (existing) {
         keepIds.add(existing.id)
         db.prepare(
@@ -392,20 +403,30 @@ export function bulkOverwriteCommands(
            WHERE id = ?`
         ).run(
           description,
-          JSON.stringify(payload.options ?? []),
-          payload.default_member_permissions ?? null,
-          payload.dm_permission === undefined || payload.dm_permission === null
-            ? null
-            : payload.dm_permission
-              ? 1
-              : 0,
-          payload.nsfw ? 1 : 0,
+          options,
+          defaultMemberPermissions,
+          dmPermission,
+          nsfw,
           existing.id
         )
-        const row = db
-          .prepare('SELECT * FROM application_commands WHERE id = ?')
-          .get(existing.id) as ApplicationCommandRow
-        results.push(toApplicationCommandObject(row))
+        // Built from already-known values instead of re-querying the row we
+        // just wrote — only `version`/`guild_id` are unchanged by the UPDATE
+        // above, so they're carried over from `existing`.
+        results.push(
+          toApplicationCommandObject({
+            id: existing.id,
+            application_id: applicationId,
+            guild_id: existing.guild_id,
+            type,
+            name,
+            description,
+            options,
+            default_member_permissions: defaultMemberPermissions,
+            dm_permission: dmPermission,
+            nsfw,
+            version: existing.version,
+          })
+        )
       } else {
         const id = generateSnowflake()
         const version = generateSnowflake()
@@ -421,21 +442,28 @@ export function bulkOverwriteCommands(
           type,
           name,
           description,
-          JSON.stringify(payload.options ?? []),
-          payload.default_member_permissions ?? null,
-          payload.dm_permission === undefined || payload.dm_permission === null
-            ? null
-            : payload.dm_permission
-              ? 1
-              : 0,
-          payload.nsfw ? 1 : 0,
+          options,
+          defaultMemberPermissions,
+          dmPermission,
+          nsfw,
           version
         )
         keepIds.add(id)
-        const row = db
-          .prepare('SELECT * FROM application_commands WHERE id = ?')
-          .get(id) as ApplicationCommandRow
-        results.push(toApplicationCommandObject(row))
+        results.push(
+          toApplicationCommandObject({
+            id,
+            application_id: applicationId,
+            guild_id: guildId,
+            type,
+            name,
+            description,
+            options,
+            default_member_permissions: defaultMemberPermissions,
+            dm_permission: dmPermission,
+            nsfw,
+            version,
+          })
+        )
       }
     }
 
