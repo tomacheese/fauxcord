@@ -4,6 +4,10 @@ import { createWebhookRoutes } from './webhooks'
 import { initializeDatabase, closeDatabase } from '../db'
 import { createChannelWebhookRoutes } from './channel-webhooks'
 import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import {
+  createInteraction,
+  handleInteractionCallback,
+} from '../services/interactions'
 import type { Database } from '../db'
 
 const BASE_URL = 'http://localhost:3000'
@@ -310,5 +314,113 @@ describe('Channel Webhooks API', () => {
     // A CSPRNG base64url token is not a pure digit string like a Snowflake.
     expect(/^\d+$/.test(body.token)).toBe(false)
     expect(body.token.length).toBeGreaterThan(40)
+  })
+})
+
+describe('Webhook routes — interaction followup fallback', () => {
+  let db: Database
+  let app: Hono
+  const applicationId = '999999999999999999'
+  const channelId = '888888888888888888'
+  const userId = '777777777777777777'
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono()
+    app.route('/', createWebhookRoutes(db, BASE_URL))
+
+    db.prepare(
+      "INSERT INTO users (id, username, discriminator, bot) VALUES (?, 'App', '0', 1)"
+    ).run(applicationId)
+    db.prepare(
+      "INSERT INTO channels (id, guild_id, type, name) VALUES (?, NULL, 0, 'general')"
+    ).run(channelId)
+    db.prepare(
+      "INSERT INTO users (id, username, discriminator, bot) VALUES (?, 'Caller', '0', 0)"
+    ).run(userId)
+
+    createInteraction(db, {
+      interactionId: 'int1',
+      applicationId,
+      token: 'itoken1',
+      type: 2,
+      channelId,
+      userId,
+    })
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('sends a followup message via POST /webhooks/:applicationId/:interactionToken', async () => {
+    const res = await app.request(
+      `/webhooks/${applicationId}/itoken1?wait=true`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'followup!' }),
+      }
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string }
+    expect(body.content).toBe('followup!')
+  })
+
+  it('GET/PATCH/DELETE .../messages/:messageId work against a followup message', async () => {
+    const create = await app.request(
+      `/webhooks/${applicationId}/itoken1?wait=true`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'followup!' }),
+      }
+    )
+    const message = (await create.json()) as { id: string }
+
+    const get = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/${message.id}`
+    )
+    expect(get.status).toBe(200)
+
+    const patch = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/${message.id}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'edited' }),
+      }
+    )
+    expect(patch.status).toBe(200)
+
+    const del = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/${message.id}`,
+      { method: 'DELETE' }
+    )
+    expect(del.status).toBe(204)
+  })
+
+  it('404s .../messages/@original before any type-4 callback has run', async () => {
+    const res = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`
+    )
+    expect(res.status).toBe(404)
+  })
+
+  it('resolves .../messages/@original after a type-4 callback', async () => {
+    handleInteractionCallback(
+      db,
+      'int1',
+      'itoken1',
+      { type: 4, data: { content: 'initial response' } },
+      BASE_URL
+    )
+
+    const res = await app.request(
+      `/webhooks/${applicationId}/itoken1/messages/@original`
+    )
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { content: string }
+    expect(body.content).toBe('initial response')
   })
 })
