@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
 import { getChannel } from '../services/channels'
@@ -14,7 +14,7 @@ import {
   getMessages,
   createMessage,
   updateMessage,
-  deleteMessage,
+  didDeleteMessage,
   isTooOldForBulkDelete,
 } from '../services/messages'
 import {
@@ -22,7 +22,7 @@ import {
   isEmptyMessage,
   type MessageCreatePayload,
 } from '../validators/message'
-import type { AppEnv, BotRecord } from '../middleware/auth'
+import type { AppEnvironment, BotRecord } from '../middleware/auth'
 import {
   requireEntity,
   parseLimitQuery,
@@ -31,24 +31,24 @@ import {
 
 /**
  * Creates the channel messages API routes.
- * @param db - Database
+ * @param database - Database
  * @param baseUrl - Base URL
  * @param uploadPath - Directory attachments are saved to
  * @returns Hono router instance
  */
 export function createChannelMessageRoutes(
-  db: Database,
+  database: Database,
   baseUrl: string,
   uploadPath = '/data/uploads'
-): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /channels/:channelId/messages — List messages
   app.get('/channels/:channelId/messages', (c) => {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -60,7 +60,7 @@ export function createChannelMessageRoutes(
     const around = c.req.query('around')
 
     const messages = getMessages(
-      db,
+      database,
       channelId,
       { limit, before, after, around },
       baseUrl
@@ -71,14 +71,14 @@ export function createChannelMessageRoutes(
   // GET /channels/:channelId/messages/:messageId — Retrieve a specific message
   app.get('/channels/:channelId/messages/:messageId', (c) => {
     const { messageId } = c.req.param()
-    const msg = requireEntity(
+    const message = requireEntity(
       c,
-      getMessage(db, messageId, baseUrl),
+      getMessage(database, messageId, baseUrl),
       DiscordErrorCode.UNKNOWN_MESSAGE,
       'Unknown Message'
     )
-    if (msg instanceof Response) return msg
-    return c.json(msg)
+    if (message instanceof Response) return message
+    return c.json(message)
   })
 
   // POST /channels/:channelId/messages — Send a message
@@ -87,7 +87,7 @@ export function createChannelMessageRoutes(
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -99,7 +99,7 @@ export function createChannelMessageRoutes(
     if (!bot) {
       const authHeader = c.req.header('Authorization')
       if (authHeader) {
-        bot = db
+        bot = database
           .prepare('SELECT * FROM bots WHERE token = ?')
           .get(authHeader) as BotRecord | undefined
       }
@@ -122,16 +122,16 @@ export function createChannelMessageRoutes(
         ? (JSON.parse(payloadJson as string) as Record<string, unknown>)
         : {}
 
-      for (let i = 0; i < 10; i++) {
-        const file = formData.get(`files[${i}]`) as File | null
+      for (let index = 0; index < 10; index++) {
+        const file = formData.get(`files[${index}]`) as File | null
         if (!file) break
         if (file.size > 25 * 1024 * 1024) {
-          const err = discordError(
+          const error = discordError(
             DiscordErrorCode.FILE_TOO_LARGE,
             'File uploaded exceeds the maximum size',
             400
           )
-          return c.json(err.body, 400)
+          return c.json(error.body, 400)
         }
         attachmentFiles.push({
           name: file.name,
@@ -146,12 +146,12 @@ export function createChannelMessageRoutes(
     const hasAttachments = attachmentFiles.length > 0
 
     if (isEmptyMessage(payload, hasAttachments)) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.EMPTY_MESSAGE,
         'Cannot send an empty message',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
     const errors = validateMessageCreate(payload, hasAttachments)
@@ -161,8 +161,8 @@ export function createChannelMessageRoutes(
 
     const messageId = generateSnowflake()
 
-    const msg = createMessage(
-      db,
+    const message = createMessage(
+      database,
       {
         messageId,
         channelId,
@@ -186,7 +186,7 @@ export function createChannelMessageRoutes(
           // Each attachment gets its own Snowflake so concurrent uploads to
           // the same message don't collide on a shared PRIMARY KEY.
           await saveAttachment(
-            db,
+            database,
             uploadPath,
             baseUrl,
             channelId,
@@ -197,16 +197,16 @@ export function createChannelMessageRoutes(
             f.data
           )
         }
-      } catch (err) {
+      } catch (error) {
         // Ignore a missing upload directory (e.g. in-memory test env), but
         // surface any other failure instead of silently discarding it.
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw err
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
         }
       }
     }
 
-    return c.json(msg)
+    return c.json(message)
   })
 
   // PATCH /channels/:channelId/messages/:messageId — Edit a message
@@ -216,19 +216,19 @@ export function createChannelMessageRoutes(
 
     const existing = requireEntity(
       c,
-      getMessage(db, messageId, baseUrl),
+      getMessage(database, messageId, baseUrl),
       DiscordErrorCode.UNKNOWN_MESSAGE,
       'Unknown Message'
     )
     if (existing instanceof Response) return existing
 
     if (bot && existing.author.id !== bot.user_id) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.CANNOT_EDIT_OTHER,
         'Cannot edit a message authored by another user',
         403
       )
-      return c.json(err.body, 403)
+      return c.json(error.body, 403)
     }
 
     const payload = (await parseJsonBody(c)) as Pick<
@@ -241,7 +241,7 @@ export function createChannelMessageRoutes(
       return c.json(validationError(errors).body, 400)
     }
 
-    const updated = updateMessage(db, messageId, payload, baseUrl)
+    const updated = updateMessage(database, messageId, payload, baseUrl)
     return c.json(updated)
   })
 
@@ -251,14 +251,14 @@ export function createChannelMessageRoutes(
   // Discord permits deleting other users' messages with that permission.
   app.delete('/channels/:channelId/messages/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
-    const deleted = deleteMessage(db, messageId, channelId)
-    if (!deleted) {
-      const err = discordError(
+    const isDeleted = didDeleteMessage(database, messageId, channelId)
+    if (!isDeleted) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,
         'Unknown Message',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })
@@ -277,29 +277,29 @@ export function createChannelMessageRoutes(
       : []
 
     if (messages.length < 2 || messages.length > 100) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.INVALID_BULK_DELETE,
         'Provided too many messages to delete',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
-    for (const msgId of messages) {
-      if (isTooOldForBulkDelete(db, msgId)) {
-        const err = discordError(
+    for (const messageId of messages) {
+      if (isTooOldForBulkDelete(database, messageId)) {
+        const error = discordError(
           DiscordErrorCode.MESSAGE_TOO_OLD,
           'A message provided was too old to bulk delete',
           400
         )
-        return c.json(err.body, 400)
+        return c.json(error.body, 400)
       }
     }
 
-    for (const msgId of messages) {
+    for (const messageId of messages) {
       // Scope deletion to this channel so IDs belonging to other channels are
       // not removed by a bulk-delete targeting a different channel.
-      deleteMessage(db, msgId, channelId)
+      didDeleteMessage(database, messageId, channelId)
     }
 
     return c.body(null, 204)

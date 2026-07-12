@@ -6,17 +6,17 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode } from '../errors'
 import { getChannel } from '../services/channels'
 import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the channel typing indicator API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createChannelTypingRoutes(db: Database): Hono {
+export function createChannelTypingRoutes(database: Database): Hono {
   const app = new Hono()
 
   // POST /channels/:channelId/typing — Trigger the typing indicator.
@@ -25,7 +25,7 @@ export function createChannelTypingRoutes(db: Database): Hono {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )

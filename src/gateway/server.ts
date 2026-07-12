@@ -9,7 +9,7 @@ import { GatewayIntentBits } from 'discord-api-types/v10'
 // Used for compile-time type drift detection.
 import type { GatewayReadyDispatchData } from 'discord-api-types/v10'
 import type { WSContext, WSEvents } from 'hono/ws'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { buildGuildCreatePayload } from '../services/guilds'
 import { SessionManager, type Session } from './session'
 import { GatewayOp, GatewayCloseCode } from './opcodes'
@@ -44,18 +44,18 @@ interface IdentifiedBot {
  * documented `"Bot <token>"` format). The lookup normalizes the IDENTIFY
  * token by adding the prefix when missing, so both the real-protocol
  * unprefixed form and an already-prefixed form resolve to the same row.
- * @param db - Database
- * @param disableAuth - Auth-bypass flag
+ * @param database - Database
+ * @param shouldDisableAuth - Auth-bypass flag
  * @param token - The `token` field from IDENTIFY
  * @returns The resolved Bot info, or undefined on authentication failure
  */
 function resolveBotForIdentify(
-  db: Database,
-  disableAuth: boolean,
+  database: Database,
+  shouldDisableAuth: boolean,
   token: string
 ): IdentifiedBot | undefined {
   const lookupToken = token.startsWith('Bot ') ? token : `Bot ${token}`
-  const row = db
+  const row = database
     .prepare(
       'SELECT user_id, username, discriminator, avatar FROM bots WHERE token = ?'
     )
@@ -76,7 +76,7 @@ function resolveBotForIdentify(
       token: lookupToken,
     }
   }
-  if (disableAuth) {
+  if (shouldDisableAuth) {
     return {
       userId: '0',
       username: 'MockBot',
@@ -96,7 +96,7 @@ function resolveBotForIdentify(
  * @returns true if valid
  */
 function isValidIntents(intents: number): boolean {
-  return Number.isInteger(intents) && intents >= 0
+  return Number.isSafeInteger(intents) && intents >= 0
 }
 
 /**
@@ -226,22 +226,26 @@ type _ReadyPayloadCompatGuard =
 
 /**
  * Handles IDENTIFY (op2) and sends READY (op0) on successful authentication.
- * @param db - Database
- * @param options - baseUrl and disableAuth
+ * @param database - Database
+ * @param options - baseUrl and shouldDisableAuth
  * @param sessionManager - Session manager
  * @param sessionIdByWs - Map of WSContext to sessionId
  * @param ws - The connected WebSocket context
  * @param data - The IDENTIFY payload
  */
 function handleIdentify(
-  db: Database,
-  options: { baseUrl: string; disableAuth: boolean },
+  database: Database,
+  options: { baseUrl: string; shouldDisableAuth: boolean },
   sessionManager: SessionManager,
   sessionIdByWs: WeakMap<WSContext, string>,
   ws: WSContext,
   data: IdentifyData
 ): void {
-  const bot = resolveBotForIdentify(db, options.disableAuth, data.token)
+  const bot = resolveBotForIdentify(
+    database,
+    options.shouldDisableAuth,
+    data.token
+  )
   if (!bot) {
     ws.close(GatewayCloseCode.AuthenticationFailed, 'Authentication failed')
     return
@@ -269,7 +273,7 @@ function handleIdentify(
   // an empty list here makes such clients think there is nothing to wait
   // for, so they report ready before the actual GUILD_CREATE dispatches
   // (sent below) have been processed.
-  const existingGuildIds = db
+  const existingGuildIds = database
     .prepare('SELECT id FROM guilds WHERE bot_token = ?')
     .all(bot.token) as { id: string }[]
 
@@ -344,9 +348,9 @@ function handleIdentify(
     // transaction (a read-only transaction in WAL mode) to avoid per-statement
     // transaction overhead, then perform the WebSocket sends outside it so no
     // I/O happens while the transaction is open.
-    const payloads = db.transaction(() =>
+    const payloads = database.transaction(() =>
       existingGuildIds
-        .map(({ id: guildId }) => buildGuildCreatePayload(db, guildId))
+        .map(({ id: guildId }) => buildGuildCreatePayload(database, guildId))
         .filter((guild) => guild !== null)
     )()
     for (const guild of payloads) {
@@ -417,15 +421,15 @@ function handleHeartbeat(
 
 /**
  * Builds the Gateway WebSocket handler.
- * @param db - Database (used for IDENTIFY token validation and MockBot
+ * @param database - Database (used for IDENTIFY token validation and MockBot
  * creation)
- * @param options - baseUrl and disableAuth
+ * @param options - baseUrl and shouldDisableAuth
  * @returns The WSEvents to pass to Hono's upgradeWebSocket, plus the
  * SessionManager used for Dispatch delivery
  */
 export function createGatewayWebSocketHandler(
-  db: Database,
-  options: { baseUrl: string; disableAuth: boolean }
+  database: Database,
+  options: { baseUrl: string; shouldDisableAuth: boolean }
 ): { upgrade: WSEvents; sessionManager: SessionManager } {
   const sessionManager = new SessionManager()
   // Maps ws (WSContext) to sessionId; referenced from onClose/onMessage.
@@ -458,7 +462,7 @@ export function createGatewayWebSocketHandler(
             break
           }
           handleIdentify(
-            db,
+            database,
             options,
             sessionManager,
             sessionIdByWs,

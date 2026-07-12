@@ -5,7 +5,7 @@
  * members.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 // Used for compile-time type drift detection.
 import type { APIGuildMember, APIUser } from 'discord-api-types/v10'
 import { gatewayBus } from '../gateway/bus'
@@ -97,17 +97,17 @@ export interface GuildMemberObject {
 
 /**
  * Retrieves the list of role IDs assigned to a member.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID
  * @returns Array of role IDs
  */
 function getMemberRoleIds(
-  db: Database,
+  database: Database,
   guildId: string,
   userId: string
 ): string[] {
-  const rows = db
+  const rows = database
     .prepare(
       `SELECT role_id FROM member_roles
        WHERE guild_id = ? AND user_id = ?
@@ -119,22 +119,24 @@ function getMemberRoleIds(
 
 /**
  * Retrieves a guild member.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID
  * @returns Guild member object, or null
  */
 export function getGuildMember(
-  db: Database,
+  database: Database,
   guildId: string,
   userId: string
 ): GuildMemberObject | null {
-  const memberRow = db
+  const memberRow = database
     .prepare('SELECT * FROM guild_members WHERE guild_id = ? AND user_id = ?')
     .get(guildId, userId) as MemberRow | undefined
   if (!memberRow) return null
 
-  const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as
+  const userRow = database
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .get(userId) as
     | {
         id: string
         username: string
@@ -154,7 +156,7 @@ export function getGuildMember(
     nick: memberRow.nick,
     pending: false,
     premium_since: null,
-    roles: getMemberRoleIds(db, guildId, userId),
+    roles: getMemberRoleIds(database, guildId, userId),
     user: {
       id: userRow.id,
       username: userRow.username,
@@ -173,20 +175,20 @@ export function getGuildMember(
 
 /**
  * Retrieves the list of members for a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param limit - Number of items to retrieve (clamped to 1000, default 1)
  * @param after - Pagination cursor (user ID, default '0')
  * @returns Array of guild member objects
  */
 export function getGuildMembers(
-  db: Database,
+  database: Database,
   guildId: string,
   limit = 1,
   after = '0'
 ): GuildMemberObject[] {
   const clampedLimit = Math.min(limit, 1000)
-  const memberRows = db
+  const memberRows = database
     .prepare(
       `SELECT * FROM guild_members
        WHERE guild_id = ? AND user_id > ?
@@ -201,7 +203,7 @@ export function getGuildMembers(
   const userIds = memberRows.map((m) => m.user_id)
   const placeholders = userIds.map(() => '?').join(', ')
 
-  const userRows = db
+  const userRows = database
     .prepare(`SELECT * FROM users WHERE id IN (${placeholders})`)
     .all(...userIds) as {
     id: string
@@ -212,7 +214,7 @@ export function getGuildMembers(
   }[]
   const usersById = new Map(userRows.map((u) => [u.id, u]))
 
-  const roleRows = db
+  const roleRows = database
     .prepare(
       `SELECT user_id, role_id FROM member_roles
        WHERE guild_id = ? AND user_id IN (${placeholders})
@@ -263,43 +265,45 @@ export function getGuildMembers(
 }
 
 /** Guild member update parameters */
-export interface GuildMemberUpdateParams {
+export interface GuildMemberUpdateParameters {
   nick?: string | null
   roles?: string[]
 }
 
 /**
  * Updates a guild member's information (nickname and/or role list).
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID
  * @param payload - Update payload
  * @returns Updated guild member object, or null
  */
 export function updateGuildMember(
-  db: Database,
+  database: Database,
   guildId: string,
   userId: string,
-  payload: GuildMemberUpdateParams
+  payload: GuildMemberUpdateParameters
 ): GuildMemberObject | null {
-  const current = db
+  const current = database
     .prepare('SELECT * FROM guild_members WHERE guild_id = ? AND user_id = ?')
     .get(guildId, userId) as MemberRow | undefined
   if (!current) return null
 
   if (payload.nick !== undefined) {
-    db.prepare(
-      'UPDATE guild_members SET nick = ? WHERE guild_id = ? AND user_id = ?'
-    ).run(payload.nick, guildId, userId)
+    database
+      .prepare(
+        'UPDATE guild_members SET nick = ? WHERE guild_id = ? AND user_id = ?'
+      )
+      .run(payload.nick, guildId, userId)
   }
 
   if (payload.roles !== undefined) {
     const roles = payload.roles
-    const replaceRoles = db.transaction(() => {
-      db.prepare(
-        'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?'
-      ).run(guildId, userId)
-      const insert = db.prepare(
+    const replaceRoles = database.transaction(() => {
+      database
+        .prepare('DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?')
+        .run(guildId, userId)
+      const insert = database.prepare(
         'INSERT OR IGNORE INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
       )
       for (const roleId of roles) {
@@ -309,7 +313,7 @@ export function updateGuildMember(
     replaceRoles()
   }
 
-  const updated = getGuildMember(db, guildId, userId)
+  const updated = getGuildMember(database, guildId, userId)
   if (updated) {
     gatewayBus.emit('guild.member.update', {
       guildId,
@@ -321,31 +325,32 @@ export function updateGuildMember(
 
 /**
  * Removes a member from a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID
  * @returns true on successful removal
  */
-export function removeGuildMember(
-  db: Database,
+export function didRemoveGuildMember(
+  database: Database,
   guildId: string,
   userId: string
 ): boolean {
-  const result = db
+  const result = database
     .prepare('DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?')
     .run(guildId, userId)
   if (result.changes === 0) return false
 
   // Also delete the role assignments the member had (member_roles has no
   // FK to guild_members, so these would otherwise become orphaned rows).
-  db.prepare('DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?').run(
-    guildId,
-    userId
-  )
+  database
+    .prepare('DELETE FROM member_roles WHERE guild_id = ? AND user_id = ?')
+    .run(guildId, userId)
 
   // Deleting guild_members/member_roles does not delete the users row, so the
   // user info is still available here for the dispatch payload.
-  const userRow = db.prepare('SELECT * FROM users WHERE id = ?').get(userId)
+  const userRow = database
+    .prepare('SELECT * FROM users WHERE id = ?')
+    .get(userId)
   gatewayBus.emit('guild.member.remove', {
     guildId,
     userId,
@@ -357,37 +362,39 @@ export function removeGuildMember(
 
 /**
  * Adds a role to a member.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID
  * @param roleId - Role ID
  * @returns true on success; false if the member or role does not exist
  */
-export function addMemberRole(
-  db: Database,
+export function didAddMemberRole(
+  database: Database,
   guildId: string,
   userId: string,
   roleId: string
 ): boolean {
-  const member = db
+  const member = database
     .prepare('SELECT 1 FROM guild_members WHERE guild_id = ? AND user_id = ?')
     .get(guildId, userId)
   if (!member) return false
 
   // A foreign key constraint on member_roles.role_id requires the role to
   // exist, so check explicitly to avoid throwing on a missing role.
-  const role = db
+  const role = database
     .prepare('SELECT 1 FROM roles WHERE id = ? AND guild_id = ?')
     .get(roleId, guildId)
   if (!role) return false
 
-  db.prepare(
-    'INSERT OR IGNORE INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
-  ).run(guildId, userId, roleId)
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+    )
+    .run(guildId, userId, roleId)
 
   // getGuildMember can return null on inconsistent DB state; skip the Dispatch
   // emit in that case so subscribers never spread a null member payload.
-  const memberObject = getGuildMember(db, guildId, userId)
+  const memberObject = getGuildMember(database, guildId, userId)
   if (memberObject) {
     gatewayBus.emit('guild.member.update', {
       guildId,
@@ -399,30 +406,32 @@ export function addMemberRole(
 
 /**
  * Removes a role from a member.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID
  * @param roleId - Role ID
  * @returns true on success; false if the member does not exist
  */
-export function removeMemberRole(
-  db: Database,
+export function didRemoveMemberRole(
+  database: Database,
   guildId: string,
   userId: string,
   roleId: string
 ): boolean {
-  const member = db
+  const member = database
     .prepare('SELECT 1 FROM guild_members WHERE guild_id = ? AND user_id = ?')
     .get(guildId, userId)
   if (!member) return false
 
-  db.prepare(
-    'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
-  ).run(guildId, userId, roleId)
+  database
+    .prepare(
+      'DELETE FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
+    )
+    .run(guildId, userId, roleId)
 
   // getGuildMember can return null on inconsistent DB state; skip the Dispatch
   // emit in that case so subscribers never spread a null member payload.
-  const memberObject = getGuildMember(db, guildId, userId)
+  const memberObject = getGuildMember(database, guildId, userId)
   if (memberObject) {
     gatewayBus.emit('guild.member.update', {
       guildId,

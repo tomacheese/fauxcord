@@ -6,9 +6,9 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
-import { getGuild, updateGuild, deleteGuild } from '../services/guilds'
+import { getGuild, updateGuild, didDeleteGuild } from '../services/guilds'
 import { getGuildChannels, createGuildChannel } from '../services/channels'
 import { getGuildWebhooks } from '../services/webhooks'
 import {
@@ -25,20 +25,20 @@ import { createGuildBanRoutes } from './guild-bans'
 
 /**
  * Creates the guilds API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createGuildRoutes(db: Database): Hono {
+export function createGuildRoutes(database: Database): Hono {
   const app = new Hono()
 
   // GET /guilds/:guildId — Retrieve guild information
   app.get('/guilds/:guildId', (c) => {
     const { guildId } = c.req.param()
-    const withCounts = c.req.query('with_counts') === 'true'
+    const isWithCounts = c.req.query('with_counts') === 'true'
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId, withCounts),
+      getGuild(database, guildId, isWithCounts),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -54,7 +54,12 @@ export function createGuildRoutes(db: Database): Hono {
     // `null` or an array, both of which parse without error): treat it as an
     // empty (no-op) payload rather than crashing on JSON.parse of an empty
     // body (same idiom as PATCH /users/@me and POST .../bans).
-    const parsed: unknown = await c.req.json().catch(() => ({}))
+    let parsed: unknown
+    try {
+      parsed = await c.req.json()
+    } catch {
+      parsed = {}
+    }
     const payload: { name?: string } =
       typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
         ? parsed
@@ -69,7 +74,7 @@ export function createGuildRoutes(db: Database): Hono {
 
     const updated = requireEntity(
       c,
-      updateGuild(db, guildId, { name: payload.name }),
+      updateGuild(database, guildId, { name: payload.name }),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -81,14 +86,14 @@ export function createGuildRoutes(db: Database): Hono {
   app.delete('/guilds/:guildId', (c) => {
     const { guildId } = c.req.param()
 
-    const deleted = deleteGuild(db, guildId)
-    if (!deleted) {
-      const err = discordError(
+    const isDeleted = didDeleteGuild(database, guildId)
+    if (!isDeleted) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_GUILD,
         'Unknown Guild',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })
@@ -99,13 +104,13 @@ export function createGuildRoutes(db: Database): Hono {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
-    const channels = getGuildChannels(db, guildId)
+    const channels = getGuildChannels(database, guildId)
     return c.json(channels)
   })
 
@@ -115,20 +120,20 @@ export function createGuildRoutes(db: Database): Hono {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
-    const channels = getGuildChannels(db, guildId)
+    const channels = getGuildChannels(database, guildId)
     if (channels.length >= GUILD_LIMITS.CHANNELS_MAX) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.MAX_CHANNELS_REACHED,
         'Maximum number of guild channels reached (500)',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
     const payload = (await parseJsonBody(c)) as unknown as ChannelCreatePayload
@@ -138,7 +143,7 @@ export function createGuildRoutes(db: Database): Hono {
       return c.json(validationError(errors).body, 400)
     }
 
-    const newChannel = createGuildChannel(db, {
+    const newChannel = createGuildChannel(database, {
       guildId,
       name: payload.name,
       type: payload.type,
@@ -157,20 +162,20 @@ export function createGuildRoutes(db: Database): Hono {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
-    const webhooks = getGuildWebhooks(db, guildId)
+    const webhooks = getGuildWebhooks(database, guildId)
     return c.json(webhooks)
   })
 
-  app.route('/', createGuildRoleRoutes(db))
-  app.route('/', createGuildMemberRoutes(db))
-  app.route('/', createGuildEmojiRoutes(db))
-  app.route('/', createGuildBanRoutes(db))
+  app.route('/', createGuildRoleRoutes(database))
+  app.route('/', createGuildMemberRoutes(database))
+  app.route('/', createGuildEmojiRoutes(database))
+  app.route('/', createGuildBanRoutes(database))
 
   return app
 }

@@ -4,7 +4,7 @@
  * Provides CRUD operations for guild custom emojis.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { getUser, type UserObject } from './users'
 // Used for compile-time type drift detection.
 import type { APIEmoji } from 'discord-api-types/v10'
@@ -49,11 +49,11 @@ export interface EmojiObject {
 
 /**
  * Converts a DB emoji record into the API response format.
- * @param db - Database
+ * @param database - Database
  * @param row - DB record
  * @returns Object for API responses
  */
-function toEmojiObject(db: Database, row: EmojiRow): EmojiObject {
+function toEmojiObject(database: Database, row: EmojiRow): EmojiObject {
   const roles = JSON.parse(row.roles) as string[]
   const emoji: EmojiObject = {
     id: row.id,
@@ -65,7 +65,7 @@ function toEmojiObject(db: Database, row: EmojiRow): EmojiObject {
     available: true,
   }
   if (row.user_id) {
-    const user = getUser(db, row.user_id)
+    const user = getUser(database, row.user_id)
     if (user) emoji.user = user
   }
   return emoji
@@ -73,37 +73,40 @@ function toEmojiObject(db: Database, row: EmojiRow): EmojiObject {
 
 /**
  * Retrieves the list of emojis for a guild, ordered by creation time.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @returns Array of emoji objects
  */
-export function getGuildEmojis(db: Database, guildId: string): EmojiObject[] {
-  const rows = db
+export function getGuildEmojis(
+  database: Database,
+  guildId: string
+): EmojiObject[] {
+  const rows = database
     .prepare('SELECT * FROM emojis WHERE guild_id = ? ORDER BY created_at, id')
     .all(guildId) as EmojiRow[]
-  return rows.map((row) => toEmojiObject(db, row))
+  return rows.map((row) => toEmojiObject(database, row))
 }
 
 /**
  * Retrieves an emoji by ID within a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param emojiId - Emoji ID
  * @returns Emoji object, or null
  */
 export function getEmoji(
-  db: Database,
+  database: Database,
   guildId: string,
   emojiId: string
 ): EmojiObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM emojis WHERE id = ? AND guild_id = ?')
     .get(emojiId, guildId) as EmojiRow | undefined
-  return row ? toEmojiObject(db, row) : null
+  return row ? toEmojiObject(database, row) : null
 }
 
 /** Emoji creation parameters */
-export interface EmojiCreateParams {
+export interface EmojiCreateParameters {
   emojiId: string
   guildId: string
   name: string
@@ -113,50 +116,52 @@ export interface EmojiCreateParams {
 
 /**
  * Creates an emoji in a guild.
- * @param db - Database
- * @param params - Emoji creation parameters
+ * @param database - Database
+ * @param parameters - Emoji creation parameters
  * @returns Created emoji object
  */
 export function createEmoji(
-  db: Database,
-  params: EmojiCreateParams
+  database: Database,
+  parameters: EmojiCreateParameters
 ): EmojiObject {
-  db.prepare(
-    'INSERT INTO emojis (id, guild_id, name, user_id, roles) VALUES (?, ?, ?, ?, ?)'
-  ).run(
-    params.emojiId,
-    params.guildId,
-    params.name,
-    params.userId,
-    JSON.stringify(params.roles ?? [])
-  )
-  const row = db
+  database
+    .prepare(
+      'INSERT INTO emojis (id, guild_id, name, user_id, roles) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(
+      parameters.emojiId,
+      parameters.guildId,
+      parameters.name,
+      parameters.userId,
+      JSON.stringify(parameters.roles ?? [])
+    )
+  const row = database
     .prepare('SELECT * FROM emojis WHERE id = ?')
-    .get(params.emojiId) as EmojiRow
-  return toEmojiObject(db, row)
+    .get(parameters.emojiId) as EmojiRow
+  return toEmojiObject(database, row)
 }
 
 /** Emoji update parameters */
-export interface EmojiUpdateParams {
+export interface EmojiUpdateParameters {
   name?: string
   roles?: string[]
 }
 
 /**
  * Updates an emoji's information.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param emojiId - Emoji ID
  * @param payload - Update payload
  * @returns Updated emoji object, or null
  */
 export function updateEmoji(
-  db: Database,
+  database: Database,
   guildId: string,
   emojiId: string,
-  payload: EmojiUpdateParams
+  payload: EmojiUpdateParameters
 ): EmojiObject | null {
-  const current = db
+  const current = database
     .prepare('SELECT * FROM emojis WHERE id = ? AND guild_id = ?')
     .get(emojiId, guildId) as EmojiRow | undefined
   if (!current) return null
@@ -168,34 +173,33 @@ export function updateEmoji(
   }
 
   if (Object.keys(updates).length > 0) {
-    const setClauses = Object.keys(updates)
+    const assignmentClauses = Object.keys(updates)
       .map((k) => `${k} = ?`)
       .join(', ')
-    db.prepare(`UPDATE emojis SET ${setClauses} WHERE id = ?`).run(
-      ...Object.values(updates),
-      emojiId
-    )
+    database
+      .prepare(`UPDATE emojis SET ${assignmentClauses} WHERE id = ?`)
+      .run(...Object.values(updates), emojiId)
   }
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM emojis WHERE id = ?')
     .get(emojiId) as EmojiRow
-  return toEmojiObject(db, row)
+  return toEmojiObject(database, row)
 }
 
 /**
  * Deletes an emoji.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param emojiId - Emoji ID
  * @returns true on successful deletion
  */
-export function deleteEmoji(
-  db: Database,
+export function didDeleteEmoji(
+  database: Database,
   guildId: string,
   emojiId: string
 ): boolean {
-  const result = db
+  const result = database
     .prepare('DELETE FROM emojis WHERE id = ? AND guild_id = ?')
     .run(emojiId, guildId)
   return result.changes > 0

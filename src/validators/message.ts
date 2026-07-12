@@ -87,10 +87,10 @@ export function validateMessageCreate(
 
   // Validate each embed field (Array.isArray safely skips null/undefined)
   if (Array.isArray(payload.embeds)) {
-    for (let i = 0; i < payload.embeds.length; i++) {
-      const embed = payload.embeds[i]
+    for (let index = 0; index < payload.embeds.length; index++) {
+      const embed = payload.embeds[index]
       if (embed.title && embed.title.length > MESSAGE_LIMITS.EMBED_TITLE_MAX) {
-        errors[`embeds.${i}.title`] = {
+        errors[`embeds.${index}.title`] = {
           _errors: [maxLengthError(MESSAGE_LIMITS.EMBED_TITLE_MAX)],
         }
       }
@@ -98,7 +98,7 @@ export function validateMessageCreate(
         embed.description &&
         embed.description.length > MESSAGE_LIMITS.EMBED_DESCRIPTION_MAX
       ) {
-        errors[`embeds.${i}.description`] = {
+        errors[`embeds.${index}.description`] = {
           _errors: [maxLengthError(MESSAGE_LIMITS.EMBED_DESCRIPTION_MAX)],
         }
       }
@@ -106,7 +106,7 @@ export function validateMessageCreate(
         embed.fields &&
         embed.fields.length > MESSAGE_LIMITS.EMBED_FIELDS_MAX
       ) {
-        errors[`embeds.${i}.fields`] = {
+        errors[`embeds.${index}.fields`] = {
           _errors: [maxLengthError(MESSAGE_LIMITS.EMBED_FIELDS_MAX)],
         }
       }
@@ -114,7 +114,7 @@ export function validateMessageCreate(
         embed.footer &&
         embed.footer.text.length > MESSAGE_LIMITS.EMBED_FOOTER_TEXT_MAX
       ) {
-        errors[`embeds.${i}.footer.text`] = {
+        errors[`embeds.${index}.footer.text`] = {
           _errors: [maxLengthError(MESSAGE_LIMITS.EMBED_FOOTER_TEXT_MAX)],
         }
       }
@@ -122,7 +122,7 @@ export function validateMessageCreate(
         embed.author &&
         embed.author.name.length > MESSAGE_LIMITS.EMBED_AUTHOR_NAME_MAX
       ) {
-        errors[`embeds.${i}.author.name`] = {
+        errors[`embeds.${index}.author.name`] = {
           _errors: [maxLengthError(MESSAGE_LIMITS.EMBED_AUTHOR_NAME_MAX)],
         }
       }
@@ -142,7 +142,7 @@ export function isEmptyMessage(
   payload: MessageCreatePayload,
   hasAttachments: boolean
 ): boolean {
-  const hasContent = payload.content && payload.content.length > 0
+  const hasContent = Boolean(payload.content && payload.content.length > 0)
   const hasEmbeds = Array.isArray(payload.embeds) && payload.embeds.length > 0
   return !hasContent && !hasEmbeds && !hasAttachments
 }

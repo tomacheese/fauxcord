@@ -17,8 +17,8 @@ describe('DiscordErrorCode', () => {
 
 describe('discordError', () => {
   it('returns an object with message, code, and status', () => {
-    const err = discordError(10_003, 'Unknown Channel', 404)
-    expect(err).toEqual({
+    const error = discordError(10_003, 'Unknown Channel', 404)
+    expect(error).toEqual({
       body: { message: 'Unknown Channel', code: 10_003 },
       status: 404,
     })
@@ -37,8 +37,8 @@ describe('validationError', () => {
         ],
       },
     }
-    const err = validationError(errors)
-    expect(err).toEqual({
+    const error = validationError(errors)
+    expect(error).toEqual({
       body: {
         message: 'Invalid Form Body',
         code: 50_035,

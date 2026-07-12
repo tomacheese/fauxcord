@@ -4,7 +4,7 @@
  * Provides CRUD operations for channel (guild) invites.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { getUser, type UserObject } from './users'
 import { toDiscordTimestamp } from '../timestamp'
 // Used for compile-time type drift detection.
@@ -111,17 +111,20 @@ function computeExpiresAt(createdAt: string, maxAge: number): string | null {
 
 /**
  * Converts a DB invite record into the API response format.
- * @param db - Database
+ * @param database - Database
  * @param row - DB record
  * @returns Invite object, or null when the referenced guild/channel is missing
  */
-function toInviteObject(db: Database, row: InviteRow): InviteObject | null {
-  const guildRow = db
+function toInviteObject(
+  database: Database,
+  row: InviteRow
+): InviteObject | null {
+  const guildRow = database
     .prepare(
       'SELECT id, name, icon, verification_level FROM guilds WHERE id = ?'
     )
     .get(row.guild_id) as InviteGuildRow | undefined
-  const channelRow = db
+  const channelRow = database
     .prepare('SELECT id, type, name FROM channels WHERE id = ?')
     .get(row.channel_id) as InviteChannelRow | undefined
   if (!guildRow || !channelRow) return null
@@ -163,7 +166,7 @@ function toInviteObject(db: Database, row: InviteRow): InviteObject | null {
   }
 
   if (row.inviter_id) {
-    const inviter = getUser(db, row.inviter_id)
+    const inviter = getUser(database, row.inviter_id)
     if (inviter) invite.inviter = inviter
   }
 
@@ -201,42 +204,42 @@ function randomInviteCodeChar(): string {
 
 /**
  * Generates a unique 8-character base62 invite code.
- * @param db - Database
+ * @param database - Database
  * @returns A code not currently present in the invites table
  */
-function generateInviteCode(db: Database): string {
-  const stmt = db.prepare('SELECT 1 FROM invites WHERE code = ?')
+function generateInviteCode(database: Database): string {
+  const statement = database.prepare('SELECT 1 FROM invites WHERE code = ?')
   for (;;) {
     // Invite codes act as credentials, so Math.random (predictable) is not
     // used; crypto.getRandomValues provides cryptographically strong bytes.
     let code = ''
-    for (let i = 0; i < INVITE_CODE_LENGTH; i++) {
+    for (let index = 0; index < INVITE_CODE_LENGTH; index++) {
       code += randomInviteCodeChar()
     }
-    if (!stmt.get(code)) return code
+    if (!statement.get(code)) return code
   }
 }
 
 /**
  * Retrieves the list of invites for a channel.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @returns Array of invite objects
  */
 export function getChannelInvites(
-  db: Database,
+  database: Database,
   channelId: string
 ): InviteObject[] {
-  const rows = db
+  const rows = database
     .prepare('SELECT * FROM invites WHERE channel_id = ? ORDER BY created_at')
     .all(channelId) as InviteRow[]
   return rows
-    .map((row) => toInviteObject(db, row))
+    .map((row) => toInviteObject(database, row))
     .filter((invite): invite is InviteObject => invite !== null)
 }
 
 /** Invite creation parameters */
-export interface InviteCreateParams {
+export interface InviteCreateParameters {
   channelId: string
   guildId: string | null
   inviterId: string | null
@@ -247,32 +250,34 @@ export interface InviteCreateParams {
 
 /**
  * Creates an invite for a channel.
- * @param db - Database
- * @param params - Invite creation parameters
+ * @param database - Database
+ * @param parameters - Invite creation parameters
  * @returns Created invite object
  */
 export function createInvite(
-  db: Database,
-  params: InviteCreateParams
+  database: Database,
+  parameters: InviteCreateParameters
 ): InviteObject {
-  const code = generateInviteCode(db)
-  db.prepare(
-    `INSERT INTO invites (code, channel_id, guild_id, inviter_id, max_age, max_uses, temporary)
+  const code = generateInviteCode(database)
+  database
+    .prepare(
+      `INSERT INTO invites (code, channel_id, guild_id, inviter_id, max_age, max_uses, temporary)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    code,
-    params.channelId,
-    params.guildId,
-    params.inviterId,
-    params.maxAge ?? 86_400,
-    params.maxUses ?? 0,
-    params.temporary ? 1 : 0
-  )
+    )
+    .run(
+      code,
+      parameters.channelId,
+      parameters.guildId,
+      parameters.inviterId,
+      parameters.maxAge ?? 86_400,
+      parameters.maxUses ?? 0,
+      parameters.temporary ? 1 : 0
+    )
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM invites WHERE code = ?')
     .get(code) as InviteRow
-  const invite = toInviteObject(db, row)
+  const invite = toInviteObject(database, row)
   // The caller validated the channel (and thus its guild) exists before
   // invoking createInvite, so toInviteObject cannot return null here.
   if (!invite) {
@@ -283,29 +288,35 @@ export function createInvite(
 
 /**
  * Retrieves an invite by its code.
- * @param db - Database
+ * @param database - Database
  * @param code - Invite code
  * @returns Invite object, or null
  */
-export function getInvite(db: Database, code: string): InviteObject | null {
-  const row = db.prepare('SELECT * FROM invites WHERE code = ?').get(code) as
-    | InviteRow
-    | undefined
-  return row ? toInviteObject(db, row) : null
+export function getInvite(
+  database: Database,
+  code: string
+): InviteObject | null {
+  const row = database
+    .prepare('SELECT * FROM invites WHERE code = ?')
+    .get(code) as InviteRow | undefined
+  return row ? toInviteObject(database, row) : null
 }
 
 /**
  * Deletes an invite by its code.
- * @param db - Database
+ * @param database - Database
  * @param code - Invite code
  * @returns The deleted invite object, or null if it did not exist
  */
-export function deleteInvite(db: Database, code: string): InviteObject | null {
-  const row = db.prepare('SELECT * FROM invites WHERE code = ?').get(code) as
-    | InviteRow
-    | undefined
+export function deleteInvite(
+  database: Database,
+  code: string
+): InviteObject | null {
+  const row = database
+    .prepare('SELECT * FROM invites WHERE code = ?')
+    .get(code) as InviteRow | undefined
   if (!row) return null
-  const invite = toInviteObject(db, row)
-  db.prepare('DELETE FROM invites WHERE code = ?').run(code)
+  const invite = toInviteObject(database, row)
+  database.prepare('DELETE FROM invites WHERE code = ?').run(code)
   return invite
 }

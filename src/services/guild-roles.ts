@@ -4,7 +4,7 @@
  * Provides CRUD operations for guild roles.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 // Used for compile-time type drift detection.
 import type { APIRole } from 'discord-api-types/v10'
 import { gatewayBus } from '../gateway/bus'
@@ -106,19 +106,22 @@ function toRoleObject(row: RoleRow): RoleObject {
 
 /**
  * Retrieves the list of roles for a guild, ordered by position.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @returns Array of role objects
  */
-export function getGuildRoles(db: Database, guildId: string): RoleObject[] {
-  const rows = db
+export function getGuildRoles(
+  database: Database,
+  guildId: string
+): RoleObject[] {
+  const rows = database
     .prepare('SELECT * FROM roles WHERE guild_id = ? ORDER BY position')
     .all(guildId) as RoleRow[]
   return rows.map((row) => toRoleObject(row))
 }
 
 /** Role creation parameters */
-export interface RoleCreateParams {
+export interface RoleCreateParameters {
   roleId: string
   guildId: string
   name?: string
@@ -156,40 +159,45 @@ function normalizePermissions(value: string | number | undefined): string {
 
 /**
  * Creates a role in a guild.
- * @param db - Database
- * @param params - Role creation parameters
+ * @param database - Database
+ * @param parameters - Role creation parameters
  * @returns Created role object
  */
-export function createRole(db: Database, params: RoleCreateParams): RoleObject {
+export function createRole(
+  database: Database,
+  parameters: RoleCreateParameters
+): RoleObject {
   const maxPosition = (
-    db
+    database
       .prepare(
         'SELECT COALESCE(MAX(position), 0) as maxPos FROM roles WHERE guild_id = ?'
       )
-      .get(params.guildId) as { maxPos: number }
+      .get(parameters.guildId) as { maxPos: number }
   ).maxPos
 
-  db.prepare(
-    `INSERT INTO roles (id, guild_id, name, color, hoist, position, permissions, managed, mentionable)
+  database
+    .prepare(
+      `INSERT INTO roles (id, guild_id, name, color, hoist, position, permissions, managed, mentionable)
      VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
-  ).run(
-    params.roleId,
-    params.guildId,
-    params.name ?? 'new role',
-    params.color ?? 0,
-    params.hoist ? 1 : 0,
-    maxPosition + 1,
-    normalizePermissions(params.permissions),
-    params.mentionable ? 1 : 0
-  )
+    )
+    .run(
+      parameters.roleId,
+      parameters.guildId,
+      parameters.name ?? 'new role',
+      parameters.color ?? 0,
+      parameters.hoist ? 1 : 0,
+      maxPosition + 1,
+      normalizePermissions(parameters.permissions),
+      parameters.mentionable ? 1 : 0
+    )
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM roles WHERE id = ?')
-    .get(params.roleId) as RoleRow
+    .get(parameters.roleId) as RoleRow
   const role = toRoleObject(row)
 
   gatewayBus.emit('guild.role.create', {
-    guildId: params.guildId,
+    guildId: parameters.guildId,
     role: role as unknown as Record<string, unknown>,
   })
 
@@ -198,24 +206,24 @@ export function createRole(db: Database, params: RoleCreateParams): RoleObject {
 
 /**
  * Retrieves a role by ID within a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param roleId - Role ID
  * @returns Role object, or null
  */
 export function getRole(
-  db: Database,
+  database: Database,
   guildId: string,
   roleId: string
 ): RoleObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM roles WHERE id = ? AND guild_id = ?')
     .get(roleId, guildId) as RoleRow | undefined
   return row ? toRoleObject(row) : null
 }
 
 /** Role update parameters */
-export interface RoleUpdateParams {
+export interface RoleUpdateParameters {
   name?: string
   permissions?: string
   color?: number
@@ -226,19 +234,19 @@ export interface RoleUpdateParams {
 
 /**
  * Updates a role's information.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param roleId - Role ID
  * @param payload - Update payload
  * @returns Updated role object, or null
  */
 export function updateRole(
-  db: Database,
+  database: Database,
   guildId: string,
   roleId: string,
-  payload: RoleUpdateParams
+  payload: RoleUpdateParameters
 ): RoleObject | null {
-  const current = db
+  const current = database
     .prepare('SELECT * FROM roles WHERE id = ? AND guild_id = ?')
     .get(roleId, guildId) as RoleRow | undefined
   if (!current) return null
@@ -256,16 +264,15 @@ export function updateRole(
   if (payload.position !== undefined) updates.position = payload.position
 
   if (Object.keys(updates).length > 0) {
-    const setClauses = Object.keys(updates)
+    const assignmentClauses = Object.keys(updates)
       .map((k) => `${k} = ?`)
       .join(', ')
-    db.prepare(`UPDATE roles SET ${setClauses} WHERE id = ?`).run(
-      ...Object.values(updates),
-      roleId
-    )
+    database
+      .prepare(`UPDATE roles SET ${assignmentClauses} WHERE id = ?`)
+      .run(...Object.values(updates), roleId)
   }
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM roles WHERE id = ?')
     .get(roleId) as RoleRow
   const role = toRoleObject(row)
@@ -280,24 +287,24 @@ export function updateRole(
 
 /**
  * Deletes a role.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param roleId - Role ID
  * @returns true on successful deletion
  */
-export function deleteRole(
-  db: Database,
+export function didDeleteRole(
+  database: Database,
   guildId: string,
   roleId: string
 ): boolean {
-  const result = db
+  const result = database
     .prepare('DELETE FROM roles WHERE id = ? AND guild_id = ?')
     .run(roleId, guildId)
-  const deleted = result.changes > 0
+  const isDeleted = result.changes > 0
 
-  if (deleted) {
+  if (isDeleted) {
     gatewayBus.emit('guild.role.delete', { guildId, roleId })
   }
 
-  return deleted
+  return isDeleted
 }

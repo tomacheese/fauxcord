@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { getChannel } from '../services/channels'
 import { getChannelInvites, createInvite } from '../services/invites'
@@ -13,28 +13,30 @@ import {
   validateInviteCreate,
   type InviteCreatePayload,
 } from '../validators/channel'
-import type { AppEnv, BotRecord } from '../middleware/auth'
+import type { AppEnvironment, BotRecord } from '../middleware/auth'
 import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the channel invites API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createChannelInviteRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+export function createChannelInviteRoutes(
+  database: Database
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /channels/:channelId/invites — List a channel's invites
   app.get('/channels/:channelId/invites', (c) => {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
-    return c.json(getChannelInvites(db, channelId))
+    return c.json(getChannelInvites(database, channelId))
   })
 
   // POST /channels/:channelId/invites — Create an invite
@@ -43,7 +45,7 @@ export function createChannelInviteRoutes(db: Database): Hono<AppEnv> {
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -94,13 +96,13 @@ export function createChannelInviteRoutes(db: Database): Hono<AppEnv> {
     if (!bot) {
       const authHeader = c.req.header('Authorization')
       if (authHeader) {
-        bot = db
+        bot = database
           .prepare('SELECT * FROM bots WHERE token = ?')
           .get(authHeader) as BotRecord | undefined
       }
     }
 
-    const invite = createInvite(db, {
+    const invite = createInvite(database, {
       channelId,
       guildId: channel.guild_id,
       inviterId: bot?.user_id ?? null,

@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import {
   getChannel,
@@ -16,7 +16,7 @@ import {
 } from '../services/channels'
 import { getThread } from '../services/threads'
 import { validateChannelUpdate } from '../validators/channel'
-import type { AppEnv } from '../middleware/auth'
+import type { AppEnvironment } from '../middleware/auth'
 import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 import { createChannelPinRoutes } from './channel-pins'
 import { createChannelMessageRoutes } from './channel-messages'
@@ -29,17 +29,17 @@ import { createChannelThreadRoutes } from './channel-threads'
 
 /**
  * Creates the channels API routes.
- * @param db - Database
+ * @param database - Database
  * @param baseUrl - Base URL
  * @param uploadPath - Directory attachments are saved to
  * @returns Hono router instance
  */
 export function createChannelRoutes(
-  db: Database,
+  database: Database,
   baseUrl: string,
   uploadPath = '/data/uploads'
-): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /channels/:channelId — Retrieve channel information
   app.get('/channels/:channelId', (c) => {
@@ -50,7 +50,7 @@ export function createChannelRoutes(
     // to decide whether to construct a thread-shaped model.
     const channel = requireEntity(
       c,
-      getThread(db, channelId) ?? getChannel(db, channelId),
+      getThread(database, channelId) ?? getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -70,7 +70,7 @@ export function createChannelRoutes(
 
     const updated = requireEntity(
       c,
-      updateChannel(db, channelId, payload),
+      updateChannel(database, channelId, payload),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -81,14 +81,14 @@ export function createChannelRoutes(
   // DELETE /channels/:channelId — Delete a channel
   app.delete('/channels/:channelId', (c) => {
     const { channelId } = c.req.param()
-    const deleted = deleteChannel(db, channelId)
+    const deleted = deleteChannel(database, channelId)
     if (!deleted) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_CHANNEL,
         'Unknown Channel',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.json(deleted)
   })
@@ -97,18 +97,18 @@ export function createChannelRoutes(
   // 4-segment "/messages/:messageId/threads") do not overlap the message/pin
   // routes, so mount order is not load-bearing here; they are grouped with the
   // other channel sub-routers for readability.
-  app.route('/', createChannelThreadRoutes(db))
+  app.route('/', createChannelThreadRoutes(database))
 
   // channel-pins MUST be mounted before channel-messages: its literal
   // "/messages/pins" route must win over channel-messages' parameterized
   // "/messages/:messageId" route (Hono is first-match-wins).
-  app.route('/', createChannelPinRoutes(db, baseUrl))
-  app.route('/', createChannelMessageRoutes(db, baseUrl, uploadPath))
-  app.route('/', createChannelReactionRoutes(db, baseUrl))
-  app.route('/', createChannelWebhookRoutes(db))
-  app.route('/', createChannelTypingRoutes(db))
-  app.route('/', createChannelInviteRoutes(db))
-  app.route('/', createChannelPermissionRoutes(db))
+  app.route('/', createChannelPinRoutes(database, baseUrl))
+  app.route('/', createChannelMessageRoutes(database, baseUrl, uploadPath))
+  app.route('/', createChannelReactionRoutes(database, baseUrl))
+  app.route('/', createChannelWebhookRoutes(database))
+  app.route('/', createChannelTypingRoutes(database))
+  app.route('/', createChannelInviteRoutes(database))
+  app.route('/', createChannelPermissionRoutes(database))
 
   return app
 }

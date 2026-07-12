@@ -4,7 +4,7 @@
  * Implements the Authorization Code Flow and the Client Credentials Flow.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { toDiscordTimestamp } from '../timestamp'
 
 /** OAuth2 token response type */
@@ -52,7 +52,7 @@ function generateToken(prefix: string): string {
 
 /**
  * Generates an authorization code (Authorization Code Flow).
- * @param db - Database
+ * @param database - Database
  * @param clientId - Client ID
  * @param userId - User ID
  * @param scope - Scope
@@ -60,7 +60,7 @@ function generateToken(prefix: string): string {
  * @returns Generated authorization code
  */
 export function createAuthCode(
-  db: Database,
+  database: Database,
   clientId: string,
   userId: string,
   scope: string,
@@ -69,27 +69,29 @@ export function createAuthCode(
   const code = generateToken('code')
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000) // 10 minutes later
 
-  db.prepare(
-    `INSERT INTO oauth2_auth_codes (code, client_id, user_id, scope, redirect_uri, expires_at)
+  database
+    .prepare(
+      `INSERT INTO oauth2_auth_codes (code, client_id, user_id, scope, redirect_uri, expires_at)
      VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(code, clientId, userId, scope, redirectUri, expiresAt.toISOString())
+    )
+    .run(code, clientId, userId, scope, redirectUri, expiresAt.toISOString())
 
   return code
 }
 
 /**
  * Exchanges an authorization code for an access token.
- * @param db - Database
+ * @param database - Database
  * @param code - Authorization code
  * @param redirectUri - Redirect URI
  * @returns Token response, or null on failure
  */
 export function exchangeAuthCode(
-  db: Database,
+  database: Database,
   code: string,
   redirectUri: string
 ): TokenResponse | null {
-  const authCode = db
+  const authCode = database
     .prepare(
       `SELECT * FROM oauth2_auth_codes
        WHERE code = ? AND redirect_uri = ?
@@ -107,23 +109,27 @@ export function exchangeAuthCode(
 
   if (!authCode) return null
 
-  db.prepare('UPDATE oauth2_auth_codes SET used = 1 WHERE code = ?').run(code)
+  database
+    .prepare('UPDATE oauth2_auth_codes SET used = 1 WHERE code = ?')
+    .run(code)
 
   const accessToken = generateToken('mock_access_token')
   const refreshToken = generateToken('mock_refresh_token')
   const expiresAt = new Date(Date.now() + TOKEN_EXPIRES_IN * 1000)
 
-  db.prepare(
-    `INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at, refresh_token)
+  database
+    .prepare(
+      `INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at, refresh_token)
      VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(
-    accessToken,
-    authCode.client_id,
-    authCode.user_id,
-    authCode.scope,
-    expiresAt.toISOString(),
-    refreshToken
-  )
+    )
+    .run(
+      accessToken,
+      authCode.client_id,
+      authCode.user_id,
+      authCode.scope,
+      expiresAt.toISOString(),
+      refreshToken
+    )
 
   return {
     access_token: accessToken,
@@ -136,23 +142,25 @@ export function exchangeAuthCode(
 
 /**
  * Generates an access token using the Client Credentials Flow.
- * @param db - Database
+ * @param database - Database
  * @param clientId - Client ID
  * @param scope - Scope
  * @returns Token response
  */
 export function createClientCredentialsToken(
-  db: Database,
+  database: Database,
   clientId: string,
   scope: string
 ): TokenResponse {
   const accessToken = generateToken('mock_access_token')
   const expiresAt = new Date(Date.now() + TOKEN_EXPIRES_IN * 1000)
 
-  db.prepare(
-    `INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at)
+  database
+    .prepare(
+      `INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at)
      VALUES (?, ?, NULL, ?, ?)`
-  ).run(accessToken, clientId, scope, expiresAt.toISOString())
+    )
+    .run(accessToken, clientId, scope, expiresAt.toISOString())
 
   return {
     access_token: accessToken,
@@ -164,27 +172,29 @@ export function createClientCredentialsToken(
 
 /**
  * Revokes a token.
- * @param db - Database
+ * @param database - Database
  * @param token - Token to revoke
  */
-export function revokeToken(db: Database, token: string): void {
-  db.prepare('DELETE FROM oauth2_access_tokens WHERE token = ?').run(token)
-  db.prepare('DELETE FROM oauth2_access_tokens WHERE refresh_token = ?').run(
-    token
-  )
+export function revokeToken(database: Database, token: string): void {
+  database
+    .prepare('DELETE FROM oauth2_access_tokens WHERE token = ?')
+    .run(token)
+  database
+    .prepare('DELETE FROM oauth2_access_tokens WHERE refresh_token = ?')
+    .run(token)
 }
 
 /**
  * Retrieves access token information (/oauth2/@me).
- * @param db - Database
+ * @param database - Database
  * @param token - Access token
  * @returns OAuth2 information, or null
  */
 export function getOAuth2Me(
-  db: Database,
+  database: Database,
   token: string
 ): OAuth2MeResponse | null {
-  const accessToken = db
+  const accessToken = database
     .prepare(
       "SELECT * FROM oauth2_access_tokens WHERE token = ? AND datetime(expires_at) > datetime('now')"
     )
@@ -200,7 +210,7 @@ export function getOAuth2Me(
 
   if (!accessToken) return null
 
-  const client = db
+  const client = database
     .prepare('SELECT * FROM oauth2_clients WHERE client_id = ?')
     .get(accessToken.client_id) as
     | {
@@ -211,13 +221,13 @@ export function getOAuth2Me(
 
   const botToken = client?.bot_token
   const bot = botToken
-    ? (db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
+    ? (database.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
         | { user_id: string; username: string }
         | undefined)
     : undefined
 
   const user = accessToken.user_id
-    ? (db
+    ? (database
         .prepare('SELECT * FROM users WHERE id = ?')
         .get(accessToken.user_id) as
         | {

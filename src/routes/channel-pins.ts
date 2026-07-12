@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError } from '../errors'
 import {
   getPinnedMessages,
@@ -26,28 +26,28 @@ import {
 function respondToPinResult(c: Context, result: 0 | 10_008 | 30_003 | 50_019) {
   switch (result) {
     case 10_008: {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,
         'Unknown Message',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     case 30_003: {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.MAX_PINS_REACHED,
         'Maximum number of pins reached for the channel (50)',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
     case 50_019: {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.WRONG_PIN_CHANNEL,
         'A message can only be pinned to the channel it was sent in',
         403
       )
-      return c.json(err.body, 403)
+      return c.json(error.body, 403)
     }
     default: {
       return c.body(null, 204)
@@ -57,11 +57,14 @@ function respondToPinResult(c: Context, result: 0 | 10_008 | 30_003 | 50_019) {
 
 /**
  * Creates the channel pins API routes (legacy and new-format).
- * @param db - Database
+ * @param database - Database
  * @param baseUrl - Base URL
  * @returns Hono router instance
  */
-export function createChannelPinRoutes(db: Database, baseUrl: string): Hono {
+export function createChannelPinRoutes(
+  database: Database,
+  baseUrl: string
+): Hono {
   const app = new Hono()
 
   // Note: this sub-router MUST be composed BEFORE createChannelMessageRoutes
@@ -72,7 +75,7 @@ export function createChannelPinRoutes(db: Database, baseUrl: string): Hono {
   // Used by discord.py 2.7+: {"items":[{"pinned_at":...,"message":{...}}],"has_more":false}
   app.get('/channels/:channelId/messages/pins', (c) => {
     const { channelId } = c.req.param()
-    const entries = getPinnedMessageEntries(db, channelId, baseUrl)
+    const entries = getPinnedMessageEntries(database, channelId, baseUrl)
     return c.json({
       items: entries.map((entry) => ({
         pinned_at: entry.pinnedAt,
@@ -85,35 +88,35 @@ export function createChannelPinRoutes(db: Database, baseUrl: string): Hono {
   // PUT /channels/:channelId/messages/pins/:messageId — Pin a message (new API format)
   app.put('/channels/:channelId/messages/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
-    const result = pinMessage(db, channelId, messageId)
+    const result = pinMessage(database, channelId, messageId)
     return respondToPinResult(c, result)
   })
 
   // DELETE /channels/:channelId/messages/pins/:messageId — Unpin a message (new API format)
   app.delete('/channels/:channelId/messages/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
-    unpinMessage(db, channelId, messageId)
+    unpinMessage(database, channelId, messageId)
     return c.body(null, 204)
   })
 
   // GET /channels/:channelId/pins — List pinned messages (legacy API format)
   app.get('/channels/:channelId/pins', (c) => {
     const { channelId } = c.req.param()
-    const pins = getPinnedMessages(db, channelId, baseUrl)
+    const pins = getPinnedMessages(database, channelId, baseUrl)
     return c.json(pins)
   })
 
   // PUT /channels/:channelId/pins/:messageId — Pin a message (legacy API format)
   app.put('/channels/:channelId/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
-    const result = pinMessage(db, channelId, messageId)
+    const result = pinMessage(database, channelId, messageId)
     return respondToPinResult(c, result)
   })
 
   // DELETE /channels/:channelId/pins/:messageId — Unpin a message (legacy API format)
   app.delete('/channels/:channelId/pins/:messageId', (c) => {
     const { channelId, messageId } = c.req.param()
-    unpinMessage(db, channelId, messageId)
+    unpinMessage(database, channelId, messageId)
     return c.body(null, 204)
   })
 

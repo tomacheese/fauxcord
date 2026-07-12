@@ -78,7 +78,7 @@ describe('SessionManager', () => {
       intents: 0,
       ws: fakeWs(),
     })
-    for (let i = 0; i < 105; i++) {
+    for (let index = 0; index < 105; index++) {
       const seq = manager.nextSeq(session)
       manager.pushToReplayBuffer(session, {
         op: GatewayOp.Dispatch,
@@ -100,7 +100,7 @@ describe('SessionManager', () => {
       intents: 0,
       ws: fakeWs(),
     })
-    for (let i = 0; i < 3; i++) {
+    for (let index = 0; index < 3; index++) {
       const seq = manager.nextSeq(session)
       manager.pushToReplayBuffer(session, {
         op: GatewayOp.Dispatch,

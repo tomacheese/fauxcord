@@ -6,7 +6,7 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, validationError } from '../errors'
 import {
   getChannel,
@@ -19,15 +19,17 @@ import {
   type PermissionOverwritePayload,
 } from '../validators/channel'
 import { requireEntity, parseJsonBody } from '../lib/route-helpers'
-import type { AppEnv } from '../middleware/auth'
+import type { AppEnvironment } from '../middleware/auth'
 
 /**
  * Creates the channel permissions API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createChannelPermissionRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+export function createChannelPermissionRoutes(
+  database: Database
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // PUT /channels/:channelId/permissions/:overwriteId — Create or update an overwrite
   app.put('/channels/:channelId/permissions/:overwriteId', async (c) => {
@@ -35,7 +37,7 @@ export function createChannelPermissionRoutes(db: Database): Hono<AppEnv> {
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -48,7 +50,7 @@ export function createChannelPermissionRoutes(db: Database): Hono<AppEnv> {
     }
 
     putChannelOverwrite(
-      db,
+      database,
       channelId,
       overwriteId,
       normalizePermissionOverwrite(payload)
@@ -62,13 +64,13 @@ export function createChannelPermissionRoutes(db: Database): Hono<AppEnv> {
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
 
-    deleteChannelOverwrite(db, channelId, overwriteId)
+    deleteChannelOverwrite(database, channelId, overwriteId)
     return c.body(null, 204)
   })
 

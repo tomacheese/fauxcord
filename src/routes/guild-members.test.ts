@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createGuildMemberRoutes } from './guild-members'
-import { initializeDatabase, closeDatabase } from '../db'
+import { initializeDatabase, closeDatabase } from '../database'
 import { seedBot, seedGuild, createFullTestApp } from '../test-helpers'
-import type { Database } from '../db'
+import type { Database } from '../database'
 
 describe('Guild Members API', () => {
-  let db: Database
+  let database: Database
   let app: Hono
   let guildId: string
   let token: string
@@ -17,9 +17,11 @@ describe('Guild Members API', () => {
    * @param name - Role name
    */
   function seedRole(roleId: string, name = 'Test Role'): string {
-    db.prepare(
-      'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
-    ).run(roleId, guildId, name)
+    database
+      .prepare(
+        'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
+      )
+      .run(roleId, guildId, name)
     return roleId
   }
 
@@ -29,41 +31,48 @@ describe('Guild Members API', () => {
    * @param nick - Nickname
    */
   function seedMember(userId: string, nick: string | null = null): string {
-    db.prepare(
-      "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'TestUser')"
-    ).run(userId)
-    db.prepare(
-      'INSERT INTO guild_members (guild_id, user_id, nick) VALUES (?, ?, ?)'
-    ).run(guildId, userId, nick)
+    database
+      .prepare(
+        "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'TestUser')"
+      )
+      .run(userId)
+    database
+      .prepare(
+        'INSERT INTO guild_members (guild_id, user_id, nick) VALUES (?, ?, ?)'
+      )
+      .run(guildId, userId, nick)
     return userId
   }
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:')
+    database = initializeDatabase(':memory:')
     app = new Hono()
-    app.route('/', createGuildMemberRoutes(db))
+    app.route('/', createGuildMemberRoutes(database))
 
-    token = seedBot(db)
-    guildId = seedGuild(db, token)
+    token = seedBot(database)
+    guildId = seedGuild(database, token)
   })
 
   afterEach(() => {
-    closeDatabase(db)
+    closeDatabase(database)
   })
 
   describe('PATCH /guilds/:guildId/members/:userId', () => {
     it('updates the nickname', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nick: 'NewNick' }),
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as {
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ nick: 'NewNick' }),
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as {
         nick: unknown
         user: Record<string, unknown>
       }
@@ -73,52 +82,61 @@ describe('Guild Members API', () => {
 
     it('clears the nickname when nick is set to null', async () => {
       const userId = seedMember('555555555555555555', 'OldNick')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nick: null }),
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as Record<string, unknown>
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ nick: null }),
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.nick).toBeNull()
     })
 
     it('assigns roles to a member', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ roles: [roleId] }),
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as Record<string, unknown>
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roles: [roleId] }),
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.roles).toEqual([roleId])
     })
 
     it('returns 404 (10011) when a non-existent role is specified', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ roles: ['999999999999999999'] }),
-      })
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roles: ['999999999999999999'] }),
+        }
+      )
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_011)
     })
 
     it('returns 404 (10007) for a non-existent member', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/999999999999999999`,
         {
           method: 'PATCH',
@@ -129,37 +147,43 @@ describe('Guild Members API', () => {
           body: JSON.stringify({ nick: 'X' }),
         }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_007)
     })
 
     it('returns 400 when nick exceeds the 32-character limit', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nick: 'a'.repeat(33) }),
-      })
-      expect(res.status).toBe(400)
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ nick: 'a'.repeat(33) }),
+        }
+      )
+      expect(resource.status).toBe(400)
     })
 
     it('does not fail when duplicate role IDs are sent', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ roles: [roleId, roleId] }),
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as Record<string, unknown>
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roles: [roleId, roleId] }),
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.roles).toEqual([roleId])
     })
 
@@ -167,17 +191,22 @@ describe('Guild Members API', () => {
       const userId = seedMember('555555555555555555')
       const roleA = seedRole('444444444444444444')
       const roleB = seedRole('333333333333333333')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: token,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ roles: [roleA, roleB] }),
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as { roles: string[] }
-      expect(body.roles).toEqual(body.roles.toSorted())
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roles: [roleA, roleB] }),
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as { roles: string[] }
+      expect(body.roles).toEqual(
+        body.roles.toSorted((a, b) => a.localeCompare(b))
+      )
     })
   })
 
@@ -185,19 +214,19 @@ describe('Guild Members API', () => {
     it('adds a role to a member', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(204)
+      expect(resource.status).toBe(204)
 
-      const memberRes = await app.request(
+      const memberResource = await app.request(
         `/guilds/${guildId}/members/${userId}`,
         {
           headers: { Authorization: token },
         }
       )
-      const member = (await memberRes.json()) as { roles: string[] }
+      const member = (await memberResource.json()) as { roles: string[] }
       expect(member.roles).toContain(roleId)
     })
 
@@ -211,53 +240,53 @@ describe('Guild Members API', () => {
           headers: { Authorization: token },
         }
       )
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(204)
+      expect(resource.status).toBe(204)
     })
 
     it('returns 404 (10004) for a non-existent guild', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         '/guilds/999999999999999999/members/555555555555555555/roles/444444444444444444',
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_004)
     })
 
     it('returns 404 (10011) for a non-existent role', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/999999999999999999`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_011)
     })
 
     it('returns 404 (10007) for a non-existent member', async () => {
       const roleId = seedRole('444444444444444444')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/999999999999999999/roles/${roleId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_007)
     })
 
     it('returns 400 when targeting the @everyone role', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${guildId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(400)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(400)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(50_028)
     })
   })
@@ -272,72 +301,72 @@ describe('Guild Members API', () => {
         body: JSON.stringify({ roles: [roleId] }),
       })
 
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(204)
+      expect(resource.status).toBe(204)
 
-      const memberRes = await app.request(
+      const memberResource = await app.request(
         `/guilds/${guildId}/members/${userId}`,
         {
           headers: { Authorization: token },
         }
       )
-      const member = (await memberRes.json()) as { roles: string[] }
+      const member = (await memberResource.json()) as { roles: string[] }
       expect(member.roles).not.toContain(roleId)
     })
 
     it('is idempotent when the role is not assigned', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(204)
+      expect(resource.status).toBe(204)
     })
 
     it('returns 404 (10004) for a non-existent guild', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         '/guilds/999999999999999999/members/555555555555555555/roles/444444444444444444',
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_004)
     })
 
     it('returns 404 (10011) for a non-existent role', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/999999999999999999`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_011)
     })
 
     it('returns 404 (10007) for a non-existent member', async () => {
       const roleId = seedRole('444444444444444444')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/999999999999999999/roles/${roleId}`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_007)
     })
 
     it('returns 400 when targeting the @everyone role', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${guildId}`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(400)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(400)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(50_028)
     })
   })
@@ -345,46 +374,57 @@ describe('Guild Members API', () => {
   describe('DELETE /guilds/:guildId/members/:userId', () => {
     it('kicks a member', async () => {
       const userId = seedMember('555555555555555555')
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'DELETE',
-        headers: { Authorization: token },
-      })
-      expect(res.status).toBe(204)
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: token },
+        }
+      )
+      expect(resource.status).toBe(204)
 
       // The kicked member should not be retrievable
-      const getRes = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        headers: { Authorization: token },
-      })
-      expect(getRes.status).toBe(404)
+      const fetchedResponse = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          headers: { Authorization: token },
+        }
+      )
+      expect(fetchedResponse.status).toBe(404)
     })
 
     it('returns 404 (10007) for a non-existent member', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${guildId}/members/999999999999999999`,
         {
           method: 'DELETE',
           headers: { Authorization: token },
         }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as Record<string, unknown>
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body.code).toBe(10_007)
     })
 
     it('deletes the member role assignments so they do not orphan', async () => {
       const userId = seedMember('555555555555555555')
       const roleId = seedRole('444444444444444444')
-      db.prepare(
-        'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
-      ).run(guildId, userId, roleId)
+      database
+        .prepare(
+          'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+        )
+        .run(guildId, userId, roleId)
 
-      const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
-        method: 'DELETE',
-        headers: { Authorization: token },
-      })
-      expect(res.status).toBe(204)
+      const resource = await app.request(
+        `/guilds/${guildId}/members/${userId}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: token },
+        }
+      )
+      expect(resource.status).toBe(204)
 
-      const remaining = db
+      const remaining = database
         .prepare(
           'SELECT COUNT(*) as count FROM member_roles WHERE guild_id = ? AND user_id = ?'
         )
@@ -397,31 +437,31 @@ describe('Guild Members API', () => {
     const UNKNOWN_GUILD = '999999999999999999'
 
     it('GET members returns 404 Unknown Guild for a nonexistent guild', async () => {
-      const res = await app.request(`/guilds/${UNKNOWN_GUILD}/members`, {
+      const resource = await app.request(`/guilds/${UNKNOWN_GUILD}/members`, {
         headers: { Authorization: token },
       })
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as { code: number }
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as { code: number }
       expect(body.code).toBe(10_004)
     })
 
     it('GET single member returns 404 Unknown Guild for a nonexistent guild', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${UNKNOWN_GUILD}/members/111111111111111111`,
         { headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as { code: number }
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as { code: number }
       expect(body.code).toBe(10_004)
     })
 
     it('DELETE member returns 404 Unknown Guild for a nonexistent guild', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         `/guilds/${UNKNOWN_GUILD}/members/111111111111111111`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as { code: number }
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as { code: number }
       expect(body.code).toBe(10_004)
     })
   })
@@ -436,7 +476,7 @@ describe('PATCH /guilds/:guildId/members/@me', () => {
   // compat/dotnet-discordnet verifier, since Fauxcord previously had no route
   // for the literal "@me" path segment here (only /members/:userId, which
   // does not special-case "@me").
-  let db: Database
+  let database: Database
   let app: ReturnType<typeof createFullTestApp>['app']
   let cleanup: () => void
   const token = 'Bot selftoken'
@@ -444,15 +484,15 @@ describe('PATCH /guilds/:guildId/members/@me', () => {
   let guildId: string
 
   beforeEach(() => {
-    const ctx = createFullTestApp()
-    db = ctx.db
-    app = ctx.app
-    cleanup = ctx.cleanup
-    seedBot(db, token, botUserId)
-    guildId = seedGuild(db, token)
-    db.prepare(
-      'INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)'
-    ).run(guildId, botUserId)
+    const context = createFullTestApp()
+    database = context.db
+    app = context.app
+    cleanup = context.cleanup
+    seedBot(database, token, botUserId)
+    guildId = seedGuild(database, token)
+    database
+      .prepare('INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)')
+      .run(guildId, botUserId)
   })
 
   afterEach(() => {
@@ -460,16 +500,19 @@ describe('PATCH /guilds/:guildId/members/@me', () => {
   })
 
   it("updates the bot's own nickname via the @me alias", async () => {
-    const res = await app.request(`/api/v10/guilds/${guildId}/members/@me`, {
-      method: 'PATCH',
-      headers: { Authorization: token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nick: 'compat' }),
-    })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
+    const resource = await app.request(
+      `/api/v10/guilds/${guildId}/members/@me`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: 'compat' }),
+      }
+    )
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.nick).toBe('compat')
 
-    const row = db
+    const row = database
       .prepare(
         'SELECT nick FROM guild_members WHERE guild_id = ? AND user_id = ?'
       )
@@ -478,22 +521,25 @@ describe('PATCH /guilds/:guildId/members/@me', () => {
   })
 
   it('returns 404 (10007) when the bot is not a member of the guild', async () => {
-    db.prepare(
-      'DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?'
-    ).run(guildId, botUserId)
+    database
+      .prepare('DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?')
+      .run(guildId, botUserId)
 
-    const res = await app.request(`/api/v10/guilds/${guildId}/members/@me`, {
-      method: 'PATCH',
-      headers: { Authorization: token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nick: 'compat' }),
-    })
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as Record<string, unknown>
+    const resource = await app.request(
+      `/api/v10/guilds/${guildId}/members/@me`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nick: 'compat' }),
+      }
+    )
+    expect(resource.status).toBe(404)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.code).toBe(10_007)
   })
 
   it('returns 404 (10004) Unknown Guild for a nonexistent guild', async () => {
-    const res = await app.request(
+    const resource = await app.request(
       '/api/v10/guilds/999999999999999999/members/@me',
       {
         method: 'PATCH',
@@ -501,8 +547,8 @@ describe('PATCH /guilds/:guildId/members/@me', () => {
         body: JSON.stringify({ nick: 'compat' }),
       }
     )
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as Record<string, unknown>
+    expect(resource.status).toBe(404)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.code).toBe(10_004)
   })
 })

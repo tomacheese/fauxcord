@@ -4,7 +4,7 @@
  * Provides webhook CRUD operations and execution.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import type { MessageObject } from './messages'
 import { createMessage } from './messages'
 // Used for compile-time type drift detection.
@@ -71,15 +71,15 @@ function toWebhookObject(row: WebhookRow): WebhookObject {
 
 /**
  * Retrieves a webhook by ID.
- * @param db - Database
+ * @param database - Database
  * @param webhookId - Webhook ID
  * @returns Webhook object, or null
  */
 export function getWebhook(
-  db: Database,
+  database: Database,
   webhookId: string
 ): WebhookObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM webhooks WHERE id = ?')
     .get(webhookId) as WebhookRow | undefined
   return row ? toWebhookObject(row) : null
@@ -87,17 +87,17 @@ export function getWebhook(
 
 /**
  * Retrieves a webhook by ID and token.
- * @param db - Database
+ * @param database - Database
  * @param webhookId - Webhook ID
  * @param token - Webhook token
  * @returns Webhook object, or null
  */
 export function getWebhookByToken(
-  db: Database,
+  database: Database,
   webhookId: string,
   token: string
 ): WebhookObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM webhooks WHERE id = ? AND token = ?')
     .get(webhookId, token) as WebhookRow | undefined
   return row ? toWebhookObject(row) : null
@@ -105,15 +105,15 @@ export function getWebhookByToken(
 
 /**
  * Retrieves the list of webhooks for a channel.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @returns Array of webhook objects
  */
 export function getChannelWebhooks(
-  db: Database,
+  database: Database,
   channelId: string
 ): WebhookObject[] {
-  const rows = db
+  const rows = database
     .prepare('SELECT * FROM webhooks WHERE channel_id = ?')
     .all(channelId) as WebhookRow[]
   return rows.map((row) => toWebhookObject(row))
@@ -121,22 +121,22 @@ export function getChannelWebhooks(
 
 /**
  * Retrieves the list of webhooks for a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @returns Array of webhook objects
  */
 export function getGuildWebhooks(
-  db: Database,
+  database: Database,
   guildId: string
 ): WebhookObject[] {
-  const rows = db
+  const rows = database
     .prepare('SELECT * FROM webhooks WHERE guild_id = ?')
     .all(guildId) as WebhookRow[]
   return rows.map((row) => toWebhookObject(row))
 }
 
 /** Webhook creation parameters */
-export interface WebhookCreateParams {
+export interface WebhookCreateParameters {
   webhookId: string
   channelId: string
   guildId: string | null
@@ -147,44 +147,46 @@ export interface WebhookCreateParams {
 
 /**
  * Creates a webhook.
- * @param db - Database
- * @param params - Webhook creation parameters
+ * @param database - Database
+ * @param parameters - Webhook creation parameters
  * @returns Created webhook object
  */
 export function createWebhook(
-  db: Database,
-  params: WebhookCreateParams
+  database: Database,
+  parameters: WebhookCreateParameters
 ): WebhookObject {
-  db.prepare(
-    'INSERT INTO webhooks (id, guild_id, channel_id, name, avatar, token) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(
-    params.webhookId,
-    params.guildId,
-    params.channelId,
-    params.name,
-    params.avatar ?? null,
-    params.token
-  )
+  database
+    .prepare(
+      'INSERT INTO webhooks (id, guild_id, channel_id, name, avatar, token) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+    .run(
+      parameters.webhookId,
+      parameters.guildId,
+      parameters.channelId,
+      parameters.name,
+      parameters.avatar ?? null,
+      parameters.token
+    )
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM webhooks WHERE id = ?')
-    .get(params.webhookId) as WebhookRow
+    .get(parameters.webhookId) as WebhookRow
   return toWebhookObject(row)
 }
 
 /**
  * Updates a webhook.
- * @param db - Database
+ * @param database - Database
  * @param webhookId - Webhook ID
  * @param payload - Update payload (avatar is cleared with null)
  * @returns Updated webhook object, or null
  */
 export function updateWebhook(
-  db: Database,
+  database: Database,
   webhookId: string,
   payload: { name?: string; avatar?: string | null; channel_id?: string }
 ): WebhookObject | null {
-  const current = db
+  const current = database
     .prepare('SELECT * FROM webhooks WHERE id = ?')
     .get(webhookId) as WebhookRow | undefined
   if (!current) return null
@@ -198,7 +200,7 @@ export function updateWebhook(
     // and surface as an HTTP 500; callers are expected to validate the
     // channel first (see the PATCH /webhooks/:id route), and this guard keeps
     // the constraint from ever being hit regardless of the entry point.
-    const channel = db
+    const channel = database
       .prepare('SELECT guild_id FROM channels WHERE id = ?')
       .get(payload.channel_id) as { guild_id: string | null } | undefined
     if (channel) {
@@ -208,16 +210,15 @@ export function updateWebhook(
   }
 
   if (Object.keys(updates).length > 0) {
-    const setClauses = Object.keys(updates)
+    const assignmentClauses = Object.keys(updates)
       .map((k) => `${k} = ?`)
       .join(', ')
-    db.prepare(`UPDATE webhooks SET ${setClauses} WHERE id = ?`).run(
-      ...Object.values(updates),
-      webhookId
-    )
+    database
+      .prepare(`UPDATE webhooks SET ${assignmentClauses} WHERE id = ?`)
+      .run(...Object.values(updates), webhookId)
   }
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM webhooks WHERE id = ?')
     .get(webhookId) as WebhookRow
   return toWebhookObject(row)
@@ -225,17 +226,22 @@ export function updateWebhook(
 
 /**
  * Deletes a webhook.
- * @param db - Database
+ * @param database - Database
  * @param webhookId - Webhook ID
  * @returns true on successful deletion
  */
-export function deleteWebhook(db: Database, webhookId: string): boolean {
-  const result = db.prepare('DELETE FROM webhooks WHERE id = ?').run(webhookId)
+export function didDeleteWebhook(
+  database: Database,
+  webhookId: string
+): boolean {
+  const result = database
+    .prepare('DELETE FROM webhooks WHERE id = ?')
+    .run(webhookId)
   return result.changes > 0
 }
 
 /** Webhook execution parameters */
-export interface WebhookExecuteParams {
+export interface WebhookExecuteParameters {
   messageId: string
   channelId: string
   /** Webhook ID (used as the message's author.id / webhook_id) */
@@ -250,45 +256,46 @@ export interface WebhookExecuteParams {
 
 /**
  * Executes a webhook and sends a message.
- * @param db - Database
- * @param params - Webhook execution parameters
+ * @param database - Database
+ * @param parameters - Webhook execution parameters
  * @param baseUrl - Base URL
  * @returns Created message object
  */
 export function executeWebhook(
-  db: Database,
-  params: WebhookExecuteParams,
+  database: Database,
+  parameters: WebhookExecuteParameters,
   baseUrl: string
 ): MessageObject {
   // Like real Discord, use the webhook ID as author.id
-  const webhookUserId = params.webhookId
-  const username = params.username ?? params.webhookName ?? 'Webhook'
+  const webhookUserId = parameters.webhookId
+  const username = parameters.username ?? parameters.webhookName ?? 'Webhook'
 
   // Create the user if it does not exist (webhook users have a discriminator of '0000')
-  const existingUser = db
+  const existingUser = database
     .prepare('SELECT id FROM users WHERE id = ?')
     .get(webhookUserId)
   if (existingUser) {
-    db.prepare('UPDATE users SET username = ? WHERE id = ?').run(
-      username,
-      webhookUserId
-    )
+    database
+      .prepare('UPDATE users SET username = ? WHERE id = ?')
+      .run(username, webhookUserId)
   } else {
-    db.prepare(
-      "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, '0000', 1)"
-    ).run(webhookUserId, username)
+    database
+      .prepare(
+        "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, ?, '0000', 1)"
+      )
+      .run(webhookUserId, username)
   }
 
   return createMessage(
-    db,
+    database,
     {
-      messageId: params.messageId,
-      channelId: params.channelId,
+      messageId: parameters.messageId,
+      channelId: parameters.channelId,
       authorId: webhookUserId,
       authorToken: 'webhook',
-      content: params.content,
-      tts: params.tts,
-      embeds: params.embeds,
+      content: parameters.content,
+      tts: parameters.tts,
+      embeds: parameters.embeds,
     },
     baseUrl
   )

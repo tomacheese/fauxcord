@@ -5,7 +5,7 @@
  * additional thread-specific columns, plus a `thread_members` join table.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { generateSnowflake } from '../snowflake'
 import { toDiscordTimestamp } from '../timestamp'
 import { THREAD_AUTO_ARCHIVE_DURATIONS } from '../validators/thread'
@@ -100,18 +100,21 @@ export function normalizeAutoArchiveDuration(value: unknown): number {
 /**
  * Converts a thread DB row into the API response format, computing message and
  * member counts from related tables.
- * @param db - Database
+ * @param database - Database
  * @param row - Thread DB record
  * @returns Thread object for API responses
  */
-export function toThreadObject(db: Database, row: ThreadRow): ThreadObject {
+export function toThreadObject(
+  database: Database,
+  row: ThreadRow
+): ThreadObject {
   const messageCount = (
-    db
+    database
       .prepare('SELECT COUNT(*) AS c FROM messages WHERE channel_id = ?')
       .get(row.id) as { c: number }
   ).c
   const memberCount = (
-    db
+    database
       .prepare('SELECT COUNT(*) AS c FROM thread_members WHERE thread_id = ?')
       .get(row.id) as { c: number }
   ).c
@@ -166,7 +169,7 @@ export function toThreadMemberObject(
 }
 
 /** Parameters for creating a thread. */
-export interface ThreadCreateParams {
+export interface ThreadCreateParameters {
   /** Parent channel ID */
   parentId: string
   /** Thread name */
@@ -187,74 +190,79 @@ export interface ThreadCreateParams {
 
 /**
  * Retrieves a thread (channel row restricted to thread types) by ID.
- * @param db - Database
+ * @param database - Database
  * @param threadId - Thread ID
  * @returns Thread object, or null if it is not a thread
  */
-export function getThread(db: Database, threadId: string): ThreadObject | null {
-  const row = db
+export function getThread(
+  database: Database,
+  threadId: string
+): ThreadObject | null {
+  const row = database
     .prepare('SELECT * FROM channels WHERE id = ? AND type IN (10, 11, 12)')
     .get(threadId) as ThreadRow | undefined
-  return row ? toThreadObject(db, row) : null
+  return row ? toThreadObject(database, row) : null
 }
 
 /**
  * Adds a user to a thread's member list (idempotent).
- * @param db - Database
+ * @param database - Database
  * @param threadId - Thread ID
  * @param userId - User ID
  */
 export function addThreadMember(
-  db: Database,
+  database: Database,
   threadId: string,
   userId: string
 ): void {
-  db.prepare(
-    'INSERT OR IGNORE INTO thread_members (thread_id, user_id) VALUES (?, ?)'
-  ).run(threadId, userId)
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO thread_members (thread_id, user_id) VALUES (?, ?)'
+    )
+    .run(threadId, userId)
 }
 
 /**
  * Removes a user from a thread's member list.
- * @param db - Database
+ * @param database - Database
  * @param threadId - Thread ID
  * @param userId - User ID
  */
 export function removeThreadMember(
-  db: Database,
+  database: Database,
   threadId: string,
   userId: string
 ): void {
-  db.prepare(
-    'DELETE FROM thread_members WHERE thread_id = ? AND user_id = ?'
-  ).run(threadId, userId)
+  database
+    .prepare('DELETE FROM thread_members WHERE thread_id = ? AND user_id = ?')
+    .run(threadId, userId)
 }
 
 /**
  * Retrieves a single thread member.
- * @param db - Database
+ * @param database - Database
  * @param threadId - Thread ID
  * @param userId - User ID
  * @param guildId - Guild ID the thread belongs to; when provided together
- * with `withMember`, the response embeds the guild member object (matches
+ * with `shouldIncludeMember`, the response embeds the guild member object (matches
  * real Discord's `?with_member=true` query parameter)
- * @param withMember - Whether to embed the guild member object
+ * @param shouldIncludeMember - Whether to embed the guild member object
  * @returns Thread member object, or null if not a member
  */
 export function getThreadMember(
-  db: Database,
+  database: Database,
   threadId: string,
   userId: string,
   guildId?: string | null,
-  withMember = false
+  shouldIncludeMember = false
 ): ThreadMemberObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM thread_members WHERE thread_id = ? AND user_id = ?')
     .get(threadId, userId) as ThreadMemberRow | undefined
   if (!row) return null
   const member =
-    withMember && guildId
-      ? (getGuildMember(db, guildId, userId) ?? undefined)
+    shouldIncludeMember && guildId
+      ? (getGuildMember(database, guildId, userId) ?? undefined)
       : undefined
   return toThreadMemberObject(row, member)
 }
@@ -270,23 +278,23 @@ export function getThreadMember(
  * `after`) until it receives an empty page, so an implementation that ignored
  * `after` and always returned the full list would make such a paginator loop
  * forever instead of terminating. Mirrors `getGuildMembers`'s cursor pattern.
- * @param db - Database
+ * @param database - Database
  * @param threadId - Thread ID
  * @param limit - Maximum number of members to return
  * @param after - User-ID cursor; only members with a greater user ID are returned
  * @param guildId - Guild ID the thread belongs to; when provided together
- * with `withMember`, each entry embeds the guild member object (matches
+ * with `shouldIncludeMember`, each entry embeds the guild member object (matches
  * real Discord's `?with_member=true` query parameter)
- * @param withMember - Whether to embed the guild member object
+ * @param shouldIncludeMember - Whether to embed the guild member object
  * @returns Array of thread member objects
  */
 export function getThreadMembers(
-  db: Database,
+  database: Database,
   threadId: string,
   limit = 100,
   after = '0',
   guildId?: string | null,
-  withMember = false
+  shouldIncludeMember = false
 ): ThreadMemberObject[] {
   // `limit` can arrive as NaN (e.g. `?limit=abc`) or negative; both must be
   // rejected here rather than passed to SQLite's LIMIT, which would either
@@ -295,7 +303,7 @@ export function getThreadMembers(
   const clampedLimit = Number.isFinite(limit)
     ? Math.min(Math.max(limit, 0), 100)
     : 100
-  const rows = db
+  const rows = database
     .prepare(
       `SELECT * FROM thread_members
        WHERE thread_id = ? AND user_id > ?
@@ -305,8 +313,8 @@ export function getThreadMembers(
   return rows.map((r) =>
     toThreadMemberObject(
       r,
-      withMember && guildId
-        ? (getGuildMember(db, guildId, r.user_id) ?? undefined)
+      shouldIncludeMember && guildId
+        ? (getGuildMember(database, guildId, r.user_id) ?? undefined)
         : undefined
     )
   )
@@ -314,50 +322,54 @@ export function getThreadMembers(
 
 /**
  * Creates a thread as a channel row and adds the owner as the first member.
- * @param db - Database
- * @param params - Thread creation parameters
+ * @param database - Database
+ * @param parameters - Thread creation parameters
  * @returns Created thread object
  */
 export function createThread(
-  db: Database,
-  params: ThreadCreateParams
+  database: Database,
+  parameters: ThreadCreateParameters
 ): ThreadObject {
-  const parent = db
+  const parent = database
     .prepare('SELECT guild_id FROM channels WHERE id = ?')
-    .get(params.parentId) as { guild_id: string | null } | undefined
+    .get(parameters.parentId) as { guild_id: string | null } | undefined
 
-  const threadId = params.threadId ?? generateSnowflake()
-  const type = params.type ?? DEFAULT_THREAD_TYPE
-  const autoArchive = normalizeAutoArchiveDuration(params.autoArchiveDuration)
+  const threadId = parameters.threadId ?? generateSnowflake()
+  const type = parameters.type ?? DEFAULT_THREAD_TYPE
+  const autoArchive = normalizeAutoArchiveDuration(
+    parameters.autoArchiveDuration
+  )
 
   // Wrap the channel insert and owner membership insert in a transaction so a
   // failure mid-way cannot leave a thread row without its owner member.
-  const insertThread = db.transaction(() => {
-    db.prepare(
-      `INSERT INTO channels
+  const insertThread = database.transaction(() => {
+    database
+      .prepare(
+        `INSERT INTO channels
          (id, guild_id, type, name, parent_id, owner_id, rate_limit_per_user,
           archived, auto_archive_duration, locked, invitable)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)`
-    ).run(
-      threadId,
-      parent?.guild_id ?? null,
-      type,
-      params.name,
-      params.parentId,
-      params.ownerId,
-      params.rateLimitPerUser ?? 0,
-      autoArchive,
-      params.invitable === false ? 0 : 1
-    )
+      )
+      .run(
+        threadId,
+        parent?.guild_id ?? null,
+        type,
+        parameters.name,
+        parameters.parentId,
+        parameters.ownerId,
+        parameters.rateLimitPerUser ?? 0,
+        autoArchive,
+        parameters.invitable === false ? 0 : 1
+      )
 
-    addThreadMember(db, threadId, params.ownerId)
+    addThreadMember(database, threadId, parameters.ownerId)
   })
   insertThread()
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(threadId) as ThreadRow
-  return toThreadObject(db, row)
+  return toThreadObject(database, row)
 }
 
 /** Options for listing archived threads. */
@@ -382,25 +394,25 @@ export interface ThreadsListResponse {
 
 /**
  * Lists archived threads under a parent channel.
- * @param db - Database
+ * @param database - Database
  * @param parentId - Parent channel ID
  * @param options - Filtering options
  * @returns ThreadsResponse-shaped object (has_more always false in the mock)
  */
 export function getArchivedThreads(
-  db: Database,
+  database: Database,
   parentId: string,
   options: ArchivedThreadOptions
 ): ThreadsListResponse {
   const typeClause = options.private ? 'type = 12' : 'type IN (10, 11)'
   let sql = `SELECT * FROM channels WHERE parent_id = ? AND archived = 1 AND ${typeClause}`
-  const sqlParams: unknown[] = [parentId]
+  const sqlParameters: unknown[] = [parentId]
   if (options.joinedUserId) {
     sql += ' AND id IN (SELECT thread_id FROM thread_members WHERE user_id = ?)'
-    sqlParams.push(options.joinedUserId)
+    sqlParameters.push(options.joinedUserId)
   }
-  const rows = db.prepare(sql).all(...sqlParams) as ThreadRow[]
-  const threads = rows.map((r) => toThreadObject(db, r))
+  const rows = database.prepare(sql).all(...sqlParameters) as ThreadRow[]
+  const threads = rows.map((r) => toThreadObject(database, r))
 
   // "members" holds the calling user's ThreadMember for each returned thread
   // (Discord returns the requester's membership records). The listing itself is
@@ -409,7 +421,7 @@ export function getArchivedThreads(
   const memberUserId = options.memberUserId ?? options.joinedUserId
   if (memberUserId) {
     for (const t of threads) {
-      const m = getThreadMember(db, t.id, memberUserId)
+      const m = getThreadMember(database, t.id, memberUserId)
       if (m) members.push(m)
     }
   }
@@ -428,20 +440,20 @@ export interface ThreadSearchResult {
 /**
  * Searches threads under a parent channel. The mock has no search index, so it
  * returns all threads whose `parent_id` matches.
- * @param db - Database
+ * @param database - Database
  * @param parentId - Parent channel ID
  * @returns ThreadSearchResponse-shaped object
  */
 export function searchThreads(
-  db: Database,
+  database: Database,
   parentId: string
 ): ThreadSearchResult {
-  const rows = db
+  const rows = database
     .prepare(
       'SELECT * FROM channels WHERE parent_id = ? AND type IN (10, 11, 12)'
     )
     .all(parentId) as ThreadRow[]
-  const threads = rows.map((r) => toThreadObject(db, r))
+  const threads = rows.map((r) => toThreadObject(database, r))
   return {
     threads,
     members: [],

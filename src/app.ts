@@ -9,10 +9,10 @@
 import { Hono } from 'hono'
 import { upgradeWebSocket } from '@hono/node-server'
 import { WebSocketServer } from 'ws'
-import type { Database } from './db'
+import type { Database } from './database'
 import { corsMiddleware } from './middleware/cors'
 import { versionMiddleware } from './middleware/version'
-import { createAuthMiddleware, type AppEnv } from './middleware/auth'
+import { createAuthMiddleware, type AppEnvironment } from './middleware/auth'
 import { rateLimitMiddleware } from './middleware/rate-limit'
 import { createLatencyMiddleware } from './middleware/latency'
 import { createChannelRoutes } from './routes/channels'
@@ -45,23 +45,23 @@ export interface BuildAppConfig {
  * Builds the Hono app (does not start it).
  * Shared by both the production entry point (index.ts) and the test harness
  * (test-helpers.ts).
- * @param db - Database
+ * @param database - Database
  * @param config - baseUrl, uploadPath, disableAuth, latencyMs
  * @returns The assembled app, the `WebSocketServer` to pass to `serve()`'s
  * `websocket` option, the `SessionManager` used for Gateway dispatch, and a
  * function that unsubscribes from `gatewayBus`
  */
 export function buildApp(
-  db: Database,
+  database: Database,
   config: BuildAppConfig
 ): {
-  app: Hono<AppEnv>
+  app: Hono<AppEnvironment>
   wss: WebSocketServer
   sessionManager: SessionManager
   /** Function that unsubscribes the listeners registered by registerGatewaySubscriptions */
   unsubscribeGateway: () => void
 } {
-  const app = new Hono<AppEnv>()
+  const app = new Hono<AppEnvironment>()
   // `noServer: true` is required because `@hono/node-server`'s
   // `serve({ websocket: { server: wss } })` takes over handling the
   // upgrade event.
@@ -72,10 +72,13 @@ export function buildApp(
   app.use('*', versionMiddleware)
 
   // Infrastructure APIs require no authentication (registered first)
-  app.route('/', createMockRoutes(db, config.uploadPath ?? '/data/uploads'))
+  app.route(
+    '/',
+    createMockRoutes(database, config.uploadPath ?? '/data/uploads')
+  )
 
   // Test control APIs require no authentication
-  app.route('/', createTestRoutes(db))
+  app.route('/', createTestRoutes(database))
 
   // OAuth2 is partially exempt from authentication (its endpoints validate
   // their own Bearer/client-credential auth internally), so it is mounted
@@ -84,7 +87,7 @@ export function buildApp(
   // bare path. Real clients (discord.js, Oceanic.js, etc.) always call
   // through the versioned base URL (e.g. `/api/v10/oauth2/token`).
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
-    app.route(oauth2Prefix, createOAuth2Routes(db))
+    app.route(oauth2Prefix, createOAuth2Routes(database))
   }
 
   // The Gateway WebSocket is mounted at "/" (matching real Discord's Gateway
@@ -93,9 +96,9 @@ export function buildApp(
   // happens inside the IDENTIFY message after the WebSocket connection is
   // established (as with real Discord), so this is mounted before the
   // HTTP-level Bot token auth middleware and requires no authentication.
-  const gatewayHandler = createGatewayWebSocketHandler(db, {
+  const gatewayHandler = createGatewayWebSocketHandler(database, {
     baseUrl: config.baseUrl,
-    disableAuth: config.disableAuth,
+    shouldDisableAuth: config.disableAuth,
   })
   // Forward resource-change events from gatewayBus to connected Gateway sessions
   const unsubscribeGateway = registerGatewaySubscriptions(
@@ -109,7 +112,7 @@ export function buildApp(
   // Routes below require authentication checks
   // Token-based webhook operations (/webhooks/{id}/{token}...) are exempted in auth.ts
   // CRUD operations requiring a Bot token go through authentication
-  const authMiddleware = createAuthMiddleware(db, config.disableAuth)
+  const authMiddleware = createAuthMiddleware(database, config.disableAuth)
   const latencyMiddleware = createLatencyMiddleware(config.latencyMs ?? 0)
 
   app.use('*', authMiddleware)
@@ -125,20 +128,20 @@ export function buildApp(
   for (const prefix of routePrefix) {
     app.route(
       prefix,
-      createChannelRoutes(db, config.baseUrl, config.uploadPath)
+      createChannelRoutes(database, config.baseUrl, config.uploadPath)
     )
-    app.route(prefix, createGuildRoutes(db))
-    app.route(prefix, createUserRoutes(db))
-    app.route(prefix, createGatewayRoutes(db, config.baseUrl))
+    app.route(prefix, createGuildRoutes(database))
+    app.route(prefix, createUserRoutes(database))
+    app.route(prefix, createGatewayRoutes(database, config.baseUrl))
     app.route(prefix, createSoundboardRoutes())
     // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
-    app.route(prefix, createWebhookRoutes(db, config.baseUrl))
-    app.route(prefix, createInviteRoutes(db))
+    app.route(prefix, createWebhookRoutes(database, config.baseUrl))
+    app.route(prefix, createInviteRoutes(database))
   }
 
   // Global error handler
-  app.onError((err, c) => {
-    console.error(err)
+  app.onError((error, c) => {
+    console.error(error)
     return c.json({ message: '500: Internal Server Error', code: 0 }, 500)
   })
 

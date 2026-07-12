@@ -25,8 +25,8 @@ export function requireEntity<T>(
   message: string
 ): T | Response {
   if (entity === undefined || entity === null) {
-    const err = discordError(errorCode, message, 404)
-    return c.json(err.body, 404)
+    const error = discordError(errorCode, message, 404)
+    return c.json(error.body, 404)
   }
   return entity
 }
@@ -47,7 +47,7 @@ export function parseLimitQuery(
   max: number
 ): number {
   const raw = c.req.query('limit') ?? String(defaultValue)
-  return Math.min(Number.parseInt(raw, 10), max)
+  return Math.min(Number(raw), max)
 }
 
 /**
@@ -63,7 +63,12 @@ export function parseLimitQuery(
 export async function parseJsonBody(
   c: Context
 ): Promise<Record<string, unknown>> {
-  const parsed: unknown = await c.req.json().catch(() => ({}))
+  let parsed: unknown
+  try {
+    parsed = await c.req.json()
+  } catch {
+    parsed = {}
+  }
   return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
     ? (parsed as Record<string, unknown>)
     : {}

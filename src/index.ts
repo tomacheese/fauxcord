@@ -5,7 +5,7 @@
  */
 
 import { loadConfig } from './config'
-import { initializeDatabase } from './db'
+import { initializeDatabase } from './database'
 import { buildApp } from './app'
 import { sendReconnect } from './gateway/server'
 import { serveWithGateway } from './http-server'
@@ -14,9 +14,9 @@ import { setupTestEnvironment } from './services/test-control'
 
 const config = loadConfig()
 
-const db = initializeDatabase(config.dbPath)
+const database = initializeDatabase(config.dbPath)
 
-const { app, wss, sessionManager } = buildApp(db, config)
+const { app, wss, sessionManager } = buildApp(database, config)
 
 // Load SEED_FILE
 if (config.seedFile) {
@@ -35,20 +35,20 @@ if (config.seedFile) {
 
     for (const bot of seedData.bots) {
       try {
-        setupTestEnvironment(db, bot)
+        setupTestEnvironment(database, bot)
         console.info(`Seeded bot: ${bot.token}`)
-      } catch (err) {
-        if (err instanceof Error && err.message === 'CONFLICT') {
+      } catch (error) {
+        if (error instanceof Error && error.message === 'CONFLICT') {
           console.info(`Bot already exists: ${bot.token}, skipping`)
         } else {
           // Log the specific bot that failed and continue seeding the rest,
           // so a single bad entry does not silently skip subsequent bots.
-          console.error(`Failed to seed bot: ${bot.token}`, err)
+          console.error(`Failed to seed bot: ${bot.token}`, error)
         }
       }
     }
-  } catch (err) {
-    console.error('Failed to load or parse seed file:', err)
+  } catch (error) {
+    console.error('Failed to load or parse seed file:', error)
   }
 }
 
@@ -56,6 +56,7 @@ if (config.seedFile) {
 const port = config.port
 const hostname = config.host
 
+// eslint-disable-next-line unicorn/no-top-level-side-effects -- this file is the process entry point (never imported elsewhere), so its top-level statements are the intended startup sequence, not side effects on a reusable module.
 console.info(`Discord Mock Server starting on ${hostname}:${port}`)
 
 const server = serveWithGateway({

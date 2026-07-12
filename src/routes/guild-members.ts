@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { getGuild } from '../services/guilds'
 import { getRole } from '../services/guild-roles'
@@ -13,9 +13,9 @@ import {
   getGuildMember,
   getGuildMembers,
   updateGuildMember,
-  removeGuildMember,
-  addMemberRole,
-  removeMemberRole,
+  didRemoveGuildMember,
+  didAddMemberRole,
+  didRemoveMemberRole,
 } from '../services/guild-members'
 import {
   validateGuildMemberUpdate,
@@ -26,15 +26,17 @@ import {
   parseLimitQuery,
   parseJsonBody,
 } from '../lib/route-helpers'
-import type { AppEnv } from '../middleware/auth'
+import type { AppEnvironment } from '../middleware/auth'
 
 /**
  * Creates the guild members API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+export function createGuildMemberRoutes(
+  database: Database
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /guilds/:guildId/members — List a guild's members
   app.get('/guilds/:guildId/members', (c) => {
@@ -42,7 +44,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -51,7 +53,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
     const limit = parseLimitQuery(c, 1, 1000)
     const after = c.req.query('after') ?? '0'
 
-    const members = getGuildMembers(db, guildId, limit, after)
+    const members = getGuildMembers(database, guildId, limit, after)
     return c.json(members)
   })
 
@@ -69,7 +71,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -81,7 +83,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       return c.json(validationError(errors).body, 400)
     }
 
-    const updated = updateGuildMember(db, guildId, bot.user_id, payload)
+    const updated = updateGuildMember(database, guildId, bot.user_id, payload)
     const result = requireEntity(
       c,
       updated,
@@ -98,7 +100,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -106,7 +108,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const member = requireEntity(
       c,
-      getGuildMember(db, guildId, userId),
+      getGuildMember(database, guildId, userId),
       DiscordErrorCode.UNKNOWN_MEMBER,
       'Unknown Member'
     )
@@ -120,7 +122,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -135,18 +137,18 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     if (payload.roles !== undefined) {
       for (const roleId of payload.roles) {
-        if (!getRole(db, guildId, roleId)) {
-          const err = discordError(
+        if (!getRole(database, guildId, roleId)) {
+          const error = discordError(
             DiscordErrorCode.UNKNOWN_ROLE,
             'Unknown Role',
             404
           )
-          return c.json(err.body, 404)
+          return c.json(error.body, 404)
         }
       }
     }
 
-    const updated = updateGuildMember(db, guildId, userId, payload)
+    const updated = updateGuildMember(database, guildId, userId, payload)
     const result = requireEntity(
       c,
       updated,
@@ -163,38 +165,38 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
     if (roleId === guildId) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.INVALID_ROLE,
         'Invalid role',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
-    if (!getRole(db, guildId, roleId)) {
-      const err = discordError(
+    if (!getRole(database, guildId, roleId)) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_ROLE,
         'Unknown Role',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
-    const ok = addMemberRole(db, guildId, userId, roleId)
-    if (!ok) {
-      const err = discordError(
+    const isOk = didAddMemberRole(database, guildId, userId, roleId)
+    if (!isOk) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MEMBER,
         'Unknown Member',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })
@@ -205,38 +207,38 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
     if (roleId === guildId) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.INVALID_ROLE,
         'Invalid role',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
-    if (!getRole(db, guildId, roleId)) {
-      const err = discordError(
+    if (!getRole(database, guildId, roleId)) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_ROLE,
         'Unknown Role',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
-    const ok = removeMemberRole(db, guildId, userId, roleId)
-    if (!ok) {
-      const err = discordError(
+    const isOk = didRemoveMemberRole(database, guildId, userId, roleId)
+    if (!isOk) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MEMBER,
         'Unknown Member',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })
@@ -247,20 +249,20 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
-    const removed = removeGuildMember(db, guildId, userId)
-    if (!removed) {
-      const err = discordError(
+    const isRemoved = didRemoveGuildMember(database, guildId, userId)
+    if (!isRemoved) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MEMBER,
         'Unknown Member',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })

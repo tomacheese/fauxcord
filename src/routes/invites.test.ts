@@ -1,48 +1,48 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createInviteRoutes } from './invites'
-import { initializeDatabase, closeDatabase } from '../db'
+import { initializeDatabase, closeDatabase } from '../database'
 import { seedBot, seedGuild, seedChannel, seedInvite } from '../test-helpers'
-import type { Database } from '../db'
+import type { Database } from '../database'
 
 describe('Invites API', () => {
-  let db: Database
+  let database: Database
   let app: Hono
   let code: string
   let token: string
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:')
+    database = initializeDatabase(':memory:')
     app = new Hono()
-    app.route('/', createInviteRoutes(db))
+    app.route('/', createInviteRoutes(database))
 
-    token = seedBot(db)
-    const guildId = seedGuild(db, token)
-    const channelId = seedChannel(db, guildId)
-    code = seedInvite(db, channelId, guildId, '111111111111111111')
+    token = seedBot(database)
+    const guildId = seedGuild(database, token)
+    const channelId = seedChannel(database, guildId)
+    code = seedInvite(database, channelId, guildId, '111111111111111111')
   })
 
   afterEach(() => {
-    closeDatabase(db)
+    closeDatabase(database)
   })
 
   describe('GET /invites/:code', () => {
     it('retrieves an invite by code', async () => {
-      const res = await app.request(`/invites/${code}`, {
+      const resource = await app.request(`/invites/${code}`, {
         headers: { Authorization: token },
       })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as { code: string; type: number }
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as { code: string; type: number }
       expect(body.code).toBe(code)
       expect(body.type).toBe(0)
     })
 
     it('returns 404 for an unknown code', async () => {
-      const res = await app.request('/invites/nonexistent', {
+      const resource = await app.request('/invites/nonexistent', {
         headers: { Authorization: token },
       })
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as { code: number }
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as { code: number }
       expect(body.code).toBe(10_006)
     })
   })
@@ -57,19 +57,19 @@ describe('Invites API', () => {
       const body = (await del.json()) as { code: string }
       expect(body.code).toBe(code)
 
-      const res = await app.request(`/invites/${code}`, {
+      const resource = await app.request(`/invites/${code}`, {
         headers: { Authorization: token },
       })
-      expect(res.status).toBe(404)
+      expect(resource.status).toBe(404)
     })
 
     it('returns 404 when deleting an unknown code', async () => {
-      const res = await app.request('/invites/nonexistent', {
+      const resource = await app.request('/invites/nonexistent', {
         method: 'DELETE',
         headers: { Authorization: token },
       })
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as { code: number }
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as { code: number }
       expect(body.code).toBe(10_006)
     })
   })

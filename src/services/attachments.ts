@@ -7,7 +7,7 @@
 import { mkdir, writeFile, readFile, access } from 'node:fs/promises'
 import path from 'node:path'
 import { constants } from 'node:fs'
-import type { Database } from '../db'
+import type { Database } from '../database'
 
 /** Maximum attachment size (25MB) */
 export const MAX_FILE_SIZE = 25 * 1024 * 1024
@@ -24,7 +24,7 @@ export interface AttachmentInfo {
 
 /**
  * Saves a file and records the attachment information in the DB.
- * @param db - Database
+ * @param database - Database
  * @param uploadPath - Upload base directory
  * @param baseUrl - Base URL
  * @param channelId - Channel ID
@@ -36,7 +36,7 @@ export interface AttachmentInfo {
  * @returns Attachment information
  */
 export async function saveAttachment(
-  db: Database,
+  database: Database,
   uploadPath: string,
   baseUrl: string,
   channelId: string,
@@ -46,8 +46,8 @@ export async function saveAttachment(
   contentType: string,
   data: ArrayBuffer | Uint8Array
 ): Promise<AttachmentInfo> {
-  const dir = path.join(uploadPath, channelId, messageId)
-  await mkdir(dir, { recursive: true })
+  const direction = path.join(uploadPath, channelId, messageId)
+  await mkdir(direction, { recursive: true })
 
   // Normalize to Buffer so both ArrayBuffer and Uint8Array are accepted
   const buffer =
@@ -55,16 +55,18 @@ export async function saveAttachment(
       ? Buffer.from(data)
       : Buffer.from(new Uint8Array(data))
 
-  const filePath = path.join(dir, filename)
+  const filePath = path.join(direction, filename)
   await writeFile(filePath, buffer)
 
   const size = buffer.byteLength
 
   const relativePath = path.join(channelId, messageId, filename)
-  db.prepare(
-    `INSERT INTO attachments (id, message_id, filename, size, content_type, file_path)
+  database
+    .prepare(
+      `INSERT INTO attachments (id, message_id, filename, size, content_type, file_path)
      VALUES (?, ?, ?, ?, ?, ?)`
-  ).run(attachmentId, messageId, filename, size, contentType, relativePath)
+    )
+    .run(attachmentId, messageId, filename, size, contentType, relativePath)
 
   const url = `${baseUrl}/_mock/attachments/${channelId}/${messageId}/${filename}`
 
@@ -107,7 +109,7 @@ export async function getAttachment(
  * @returns Content-Type string
  */
 export function guessContentType(filename: string): string {
-  const ext = filename.split('.').pop()?.toLowerCase()
+  const extension = filename.split('.').pop()?.toLowerCase()
   const types: Record<string, string> = {
     png: 'image/png',
     jpg: 'image/jpeg',
@@ -123,5 +125,5 @@ export function guessContentType(filename: string): string {
     json: 'application/json',
     zip: 'application/zip',
   }
-  return types[ext ?? ''] ?? 'application/octet-stream'
+  return types[extension ?? ''] ?? 'application/octet-stream'
 }

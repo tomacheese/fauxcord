@@ -5,7 +5,7 @@
  * operations live in `guild-roles.ts` and `guild-members.ts`.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { getGuildRoles, type RoleObject } from './guild-roles'
 import { getGuildChannels } from './channels'
 import { getGuildMembers } from './guild-members'
@@ -126,26 +126,26 @@ function toGuildObject(row: GuildRow, roles: RoleObject[]): GuildObject {
 
 /**
  * Retrieves a guild by ID.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
- * @param withCounts - Whether to include approximate_member_count
+ * @param shouldIncludeCounts - Whether to include approximate_member_count
  * @returns Guild object, or null
  */
 export function getGuild(
-  db: Database,
+  database: Database,
   guildId: string,
-  withCounts = false
+  shouldIncludeCounts = false
 ): GuildObject | null {
-  const row = db.prepare('SELECT * FROM guilds WHERE id = ?').get(guildId) as
-    | GuildRow
-    | undefined
+  const row = database
+    .prepare('SELECT * FROM guilds WHERE id = ?')
+    .get(guildId) as GuildRow | undefined
   if (!row) return null
 
-  const guild = toGuildObject(row, getGuildRoles(db, guildId))
+  const guild = toGuildObject(row, getGuildRoles(database, guildId))
 
-  if (withCounts) {
+  if (shouldIncludeCounts) {
     const memberCount = (
-      db
+      database
         .prepare('SELECT COUNT(*) as cnt FROM guild_members WHERE guild_id = ?')
         .get(guildId) as { cnt: number }
     ).cnt
@@ -156,57 +156,58 @@ export function getGuild(
 }
 
 /** Guild update parameters */
-export interface GuildUpdateParams {
+export interface GuildUpdateParameters {
   name?: string
 }
 
 /**
  * Updates a guild's information.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param payload - Update payload
  * @returns Updated guild object, or null
  */
 export function updateGuild(
-  db: Database,
+  database: Database,
   guildId: string,
-  payload: GuildUpdateParams
+  payload: GuildUpdateParameters
 ): GuildObject | null {
-  const current = db
+  const current = database
     .prepare('SELECT * FROM guilds WHERE id = ?')
     .get(guildId) as GuildRow | undefined
   if (!current) return null
 
   if (payload.name !== undefined) {
-    db.prepare('UPDATE guilds SET name = ? WHERE id = ?').run(
-      payload.name,
-      guildId
-    )
+    database
+      .prepare('UPDATE guilds SET name = ? WHERE id = ?')
+      .run(payload.name, guildId)
   }
 
-  return getGuild(db, guildId)
+  return getGuild(database, guildId)
 }
 
 /**
  * Deletes a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @returns true on successful deletion
  */
-export function deleteGuild(db: Database, guildId: string): boolean {
-  const result = db.prepare('DELETE FROM guilds WHERE id = ?').run(guildId)
+export function didDeleteGuild(database: Database, guildId: string): boolean {
+  const result = database
+    .prepare('DELETE FROM guilds WHERE id = ?')
+    .run(guildId)
   return result.changes > 0
 }
 
 /**
  * Retrieves the list of guilds a Bot belongs to.
- * @param db - Database
+ * @param database - Database
  * @param botToken - Bot token
  * @returns Array of simplified guild objects (as returned by
  * `GET /users/@me/guilds`)
  */
 export function getBotGuilds(
-  db: Database,
+  database: Database,
   botToken: string
 ): {
   id: string
@@ -218,7 +219,7 @@ export function getBotGuilds(
   permissions: string
   features: string[]
 }[] {
-  const rows = db
+  const rows = database
     .prepare('SELECT * FROM guilds WHERE bot_token = ?')
     .all(botToken) as GuildRow[]
 
@@ -296,19 +297,19 @@ interface GuildCreateExtraFields {
  * event at all. See `GuildCreateExtraFields` above for the exact field list,
  * and https://discord.com/developers/docs/topics/gateway-events#guild-create-guild-create-extra-fields
  * for their spec definitions.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @returns The GUILD_CREATE payload, or null if the guild does not exist
  */
 export function buildGuildCreatePayload(
-  db: Database,
+  database: Database,
   guildId: string
 ): (GuildObject & GuildCreateExtraFields) | null {
-  const guild = getGuild(db, guildId)
+  const guild = getGuild(database, guildId)
   if (!guild) return null
 
   const memberCount = (
-    db
+    database
       .prepare('SELECT COUNT(*) as cnt FROM guild_members WHERE guild_id = ?')
       .get(guildId) as { cnt: number }
   ).cnt
@@ -332,8 +333,8 @@ export function buildGuildCreatePayload(
     unavailable: false,
     member_count: memberCount,
     voice_states: [],
-    members: getGuildMembers(db, guildId, 1000),
-    channels: getGuildChannels(db, guildId),
+    members: getGuildMembers(database, guildId, 1000),
+    channels: getGuildChannels(database, guildId),
     threads: [],
     presences: [],
     stage_instances: [],

@@ -6,7 +6,7 @@
 
 import { Hono } from 'hono'
 import { randomBytes } from 'node:crypto'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
 import { getChannel } from '../services/channels'
@@ -20,10 +20,10 @@ import { requireEntity, parseJsonBody } from '../lib/route-helpers'
 
 /**
  * Creates the channel webhooks API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createChannelWebhookRoutes(db: Database): Hono {
+export function createChannelWebhookRoutes(database: Database): Hono {
   const app = new Hono()
 
   // GET /channels/:channelId/webhooks — List webhooks for a channel
@@ -31,12 +31,12 @@ export function createChannelWebhookRoutes(db: Database): Hono {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
-    const webhooks = getChannelWebhooks(db, channelId)
+    const webhooks = getChannelWebhooks(database, channelId)
     return c.json(webhooks)
   })
 
@@ -46,20 +46,20 @@ export function createChannelWebhookRoutes(db: Database): Hono {
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
 
-    const existingWebhooks = getChannelWebhooks(db, channelId)
+    const existingWebhooks = getChannelWebhooks(database, channelId)
     if (isChannelWebhookLimitReached(existingWebhooks.length)) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.MAX_WEBHOOKS_REACHED,
         'Maximum number of webhooks reached (15)',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
     const payload = (await parseJsonBody(c)) as unknown as WebhookCreatePayload
@@ -74,7 +74,7 @@ export function createChannelWebhookRoutes(db: Database): Hono {
     // endpoints, so use a CSPRNG rather than predictable sequential Snowflakes.
     const webhookToken = randomBytes(48).toString('base64url')
 
-    const webhook = createWebhook(db, {
+    const webhook = createWebhook(database, {
       webhookId,
       channelId,
       guildId: channel.guild_id,

@@ -10,10 +10,16 @@ const DISCORD_EPOCH = 1_420_070_400_000n
 const WORKER_ID = 1n
 const PROCESS_ID = 1n
 
-/** Increment counter (to keep uniqueness within the same millisecond) */
-let increment = 0n
-/** Timestamp of the last generated Snowflake */
-let lastTimestamp = -1n
+/**
+ * Mutable generator state, held in a single object so `generateSnowflake`
+ * mutates its properties rather than reassigning top-level bindings.
+ */
+const state = {
+  /** Increment counter (to keep uniqueness within the same millisecond) */
+  increment: 0n,
+  /** Timestamp of the last generated Snowflake */
+  lastTimestamp: -1n,
+}
 
 /**
  * Generates a Discord-compatible Snowflake ID.
@@ -24,11 +30,11 @@ let lastTimestamp = -1n
 export function generateSnowflake(): string {
   let timestamp = BigInt(Date.now()) - DISCORD_EPOCH
 
-  if (timestamp === lastTimestamp) {
-    increment = (increment + 1n) & 0xf_ffn
+  if (timestamp === state.lastTimestamp) {
+    state.increment = (state.increment + 1n) & 0xf_ffn
     // If the counter overflows within the same millisecond, wait until the next millisecond
-    if (increment === 0n) {
-      while (BigInt(Date.now()) - DISCORD_EPOCH <= lastTimestamp) {
+    if (state.increment === 0n) {
+      while (BigInt(Date.now()) - DISCORD_EPOCH <= state.lastTimestamp) {
         // Busy-wait until the clock advances to the next millisecond.
         // Blocks for up to ~1ms in the worst case (see the jsdoc above for
         // when this triggers).
@@ -36,13 +42,16 @@ export function generateSnowflake(): string {
       timestamp = BigInt(Date.now()) - DISCORD_EPOCH
     }
   } else {
-    increment = 0n
+    state.increment = 0n
   }
 
-  lastTimestamp = timestamp
+  state.lastTimestamp = timestamp
 
   const id =
-    (timestamp << 22n) | (WORKER_ID << 17n) | (PROCESS_ID << 12n) | increment
+    (timestamp << 22n) |
+    (WORKER_ID << 17n) |
+    (PROCESS_ID << 12n) |
+    state.increment
 
   return id.toString()
 }

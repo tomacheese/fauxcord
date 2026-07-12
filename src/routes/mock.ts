@@ -5,7 +5,7 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { getAttachment, guessContentType } from '../services/attachments'
 
 /** Server start time */
@@ -13,23 +13,23 @@ const START_TIME = Date.now()
 
 /**
  * Creates the infrastructure API routes.
- * @param db - Database
+ * @param database - Database
  * @param uploadPath - Attachment storage directory
  * @returns Hono router instance
  */
-export function createMockRoutes(db: Database, uploadPath: string): Hono {
+export function createMockRoutes(database: Database, uploadPath: string): Hono {
   const app = new Hono()
 
   // GET /_mock/health — Health check
   app.get('/_mock/health', (c) => {
-    let dbStatus = 'ok'
+    let databaseStatus = 'ok'
     try {
-      db.prepare('SELECT 1').get()
+      database.prepare('SELECT 1').get()
     } catch {
-      dbStatus = 'error'
+      databaseStatus = 'error'
     }
 
-    if (dbStatus === 'error') {
+    if (databaseStatus === 'error') {
       return c.json(
         {
           status: 'error',

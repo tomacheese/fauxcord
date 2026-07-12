@@ -68,30 +68,33 @@ export function serveWithGateway(
     listeningListener
   )
 
-  server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-    if (req.headers.upgrade?.toLowerCase() === 'websocket') {
-      return // @hono/node-server's own listener handles this
-    }
-
-    const statusLine = `${req.method ?? 'GET'} ${req.url ?? '/'} HTTP/${req.httpVersion}\r\n`
-    const headerLines: string[] = []
-    for (let i = 0; i < req.rawHeaders.length; i += 2) {
-      const name = req.rawHeaders[i]
-      if (UPGRADE_RELATED_HEADER_NAMES.has(name.toLowerCase())) {
-        continue // Strip these so re-parsing is not treated as an upgrade again, avoiding an infinite loop
+  server.on(
+    'upgrade',
+    (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+      if (request.headers.upgrade?.toLowerCase() === 'websocket') {
+        return // @hono/node-server's own listener handles this
       }
-      headerLines.push(`${name}: ${req.rawHeaders[i + 1]}`)
+
+      const statusLine = `${request.method ?? 'GET'} ${request.url ?? '/'} HTTP/${request.httpVersion}\r\n`
+      const headerLines: string[] = []
+      for (let index = 0; index < request.rawHeaders.length; index += 2) {
+        const name = request.rawHeaders[index]
+        if (UPGRADE_RELATED_HEADER_NAMES.has(name.toLowerCase())) {
+          continue // Strip these so re-parsing is not treated as an upgrade again, avoiding an infinite loop
+        }
+        headerLines.push(`${name}: ${request.rawHeaders[index + 1]}`)
+      }
+      const replayedHeader = Buffer.from(
+        statusLine + headerLines.join('\r\n') + '\r\n\r\n',
+        'latin1'
+      )
+      // Unshift what the parser had already consumed (the reconstructed headers
+      // plus the leading part of the body) back to the front of the socket, so it
+      // is parsed from scratch as a new connection
+      socket.unshift(Buffer.concat([replayedHeader, head]))
+      server.emit('connection', socket)
     }
-    const replayedHeader = Buffer.from(
-      statusLine + headerLines.join('\r\n') + '\r\n\r\n',
-      'latin1'
-    )
-    // Unshift what the parser had already consumed (the reconstructed headers
-    // plus the leading part of the body) back to the front of the socket, so it
-    // is parsed from scratch as a new connection
-    socket.unshift(Buffer.concat([replayedHeader, head]))
-    server.emit('connection', socket)
-  })
+  )
 
   return server
 }

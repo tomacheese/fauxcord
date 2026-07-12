@@ -5,8 +5,8 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
-import type { AppEnv } from '../middleware/auth'
+import type { Database } from '../database'
+import type { AppEnvironment } from '../middleware/auth'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
 import { getGuild } from '../services/guilds'
@@ -15,7 +15,7 @@ import {
   getEmoji,
   createEmoji,
   updateEmoji,
-  deleteEmoji,
+  didDeleteEmoji,
 } from '../services/guild-emojis'
 import {
   validateEmojiCreate,
@@ -33,23 +33,25 @@ interface BotRow {
 
 /**
  * Creates the guild emojis API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+export function createGuildEmojiRoutes(
+  database: Database
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /guilds/:guildId/emojis — List a guild's emojis
   app.get('/guilds/:guildId/emojis', (c) => {
     const { guildId } = c.req.param()
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
-    return c.json(getGuildEmojis(db, guildId))
+    return c.json(getGuildEmojis(database, guildId))
   })
 
   // GET /guilds/:guildId/emojis/:emojiId — Retrieve a single emoji
@@ -57,14 +59,14 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     const { guildId, emojiId } = c.req.param()
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
     const emoji = requireEntity(
       c,
-      getEmoji(db, guildId, emojiId),
+      getEmoji(database, guildId, emojiId),
       DiscordErrorCode.UNKNOWN_EMOJI,
       'Unknown Emoji'
     )
@@ -77,7 +79,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     const { guildId } = c.req.param()
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -97,7 +99,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     if (!bot) {
       const authHeader = c.req.header('Authorization')
       if (authHeader) {
-        bot = db
+        bot = database
           .prepare('SELECT * FROM bots WHERE token = ?')
           .get(authHeader) as BotRow | undefined
       }
@@ -107,7 +109,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     // requires it and would have returned a 400 otherwise. Widen to a
     // required-name shape rather than using a non-null assertion.
     const validatedPayload = payload as EmojiCreatePayload & { name: string }
-    const emoji = createEmoji(db, {
+    const emoji = createEmoji(database, {
       emojiId: generateSnowflake(),
       guildId,
       name: validatedPayload.name,
@@ -122,7 +124,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     const { guildId, emojiId } = c.req.param()
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -139,7 +141,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     // not reach the service layer as an explicit roles-clearing update.
     const updated = requireEntity(
       c,
-      updateEmoji(db, guildId, emojiId, {
+      updateEmoji(database, guildId, emojiId, {
         name: payload.name,
         roles: payload.roles ?? undefined,
       }),
@@ -155,19 +157,19 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
     const { guildId, emojiId } = c.req.param()
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
-    const deleted = deleteEmoji(db, guildId, emojiId)
-    if (!deleted) {
-      const err = discordError(
+    const isDeleted = didDeleteEmoji(database, guildId, emojiId)
+    if (!isDeleted) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_EMOJI,
         'Unknown Emoji',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })

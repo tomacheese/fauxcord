@@ -30,7 +30,7 @@ describe('toMessageObject', () => {
     // count_details/me_burst/burst_colors — omitting them causes a real
     // NullReferenceException in Discord.Net.Rest's RestReaction.Create,
     // confirmed via the compat/dotnet-discordnet verifier.
-    const obj = toMessageObject(
+    const object = toMessageObject(
       row,
       author,
       [],
@@ -38,8 +38,8 @@ describe('toMessageObject', () => {
       [{ emoji: '👍', count: 2 }],
       'http://localhost:3000'
     )
-    expect(obj.reactions).toHaveLength(1)
-    const reaction = obj.reactions?.[0]
+    expect(object.reactions).toHaveLength(1)
+    const reaction = object.reactions?.[0]
     expect(reaction?.count).toBe(2)
     expect(reaction?.me).toBe(false)
     expect(reaction?.me_burst).toBe(false)
@@ -49,7 +49,7 @@ describe('toMessageObject', () => {
   })
 
   it('omits the reactions field entirely when there are no reactions', () => {
-    const obj = toMessageObject(
+    const object = toMessageObject(
       row,
       author,
       [],
@@ -57,6 +57,6 @@ describe('toMessageObject', () => {
       [],
       'http://localhost:3000'
     )
-    expect(obj.reactions).toBeUndefined()
+    expect(object.reactions).toBeUndefined()
   })
 })

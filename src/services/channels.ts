@@ -4,7 +4,7 @@
  * Provides CRUD operations for channels.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 // Used for compile-time type drift detection.
 import type { APIGuildTextChannel, APIOverwrite } from 'discord-api-types/v10'
 import type { ChannelType } from 'discord-api-types/v10'
@@ -98,15 +98,15 @@ interface ChannelOverwriteRow {
 
 /**
  * Retrieves all permission overwrites for a channel.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @returns Array of overwrite objects (empty if none)
  */
 export function getChannelOverwrites(
-  db: Database,
+  database: Database,
   channelId: string
 ): ChannelOverwriteObject[] {
-  const rows = db
+  const rows = database
     .prepare(
       'SELECT id, type, allow, deny FROM channel_overwrites WHERE channel_id = ? ORDER BY id'
     )
@@ -123,20 +123,20 @@ export function getChannelOverwrites(
  * Retrieves permission overwrites for multiple channels in a single query,
  * grouped by channel ID. Used to avoid an N+1 query pattern when building a
  * channel list.
- * @param db - Database
+ * @param database - Database
  * @param channelIds - Channel IDs to load overwrites for
  * @returns Map from channel ID to its overwrite objects (channels with no
  * overwrites are absent from the map)
  */
 export function getChannelOverwritesForChannels(
-  db: Database,
+  database: Database,
   channelIds: string[]
 ): Map<string, ChannelOverwriteObject[]> {
   const result = new Map<string, ChannelOverwriteObject[]>()
   if (channelIds.length === 0) return result
 
   const placeholders = channelIds.map(() => '?').join(', ')
-  const rows = db
+  const rows = database
     .prepare(
       `SELECT channel_id, id, type, allow, deny FROM channel_overwrites
        WHERE channel_id IN (${placeholders}) ORDER BY id`
@@ -153,41 +153,49 @@ export function getChannelOverwritesForChannels(
 
 /**
  * Creates or updates a permission overwrite for a channel (upsert).
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param overwriteId - Role or user ID
- * @param params - Overwrite type and permission bitfields
+ * @param parameters - Overwrite type and permission bitfields
  */
 export function putChannelOverwrite(
-  db: Database,
+  database: Database,
   channelId: string,
   overwriteId: string,
-  params: { type: number; allow: string; deny: string }
+  parameters: { type: number; allow: string; deny: string }
 ): void {
-  db.prepare(
-    `INSERT INTO channel_overwrites (channel_id, id, type, allow, deny)
+  database
+    .prepare(
+      `INSERT INTO channel_overwrites (channel_id, id, type, allow, deny)
      VALUES (?, ?, ?, ?, ?)
      ON CONFLICT(channel_id, id) DO UPDATE SET
        type = excluded.type,
        allow = excluded.allow,
        deny = excluded.deny`
-  ).run(channelId, overwriteId, params.type, params.allow, params.deny)
+    )
+    .run(
+      channelId,
+      overwriteId,
+      parameters.type,
+      parameters.allow,
+      parameters.deny
+    )
 }
 
 /**
  * Deletes a permission overwrite from a channel. No-op if it does not exist.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param overwriteId - Role or user ID
  */
 export function deleteChannelOverwrite(
-  db: Database,
+  database: Database,
   channelId: string,
   overwriteId: string
 ): void {
-  db.prepare(
-    'DELETE FROM channel_overwrites WHERE channel_id = ? AND id = ?'
-  ).run(channelId, overwriteId)
+  database
+    .prepare('DELETE FROM channel_overwrites WHERE channel_id = ? AND id = ?')
+    .run(channelId, overwriteId)
 }
 
 /**
@@ -218,18 +226,20 @@ function toChannelObject(
 
 /**
  * Retrieves a channel by ID.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @returns Channel object, or null if it does not exist
  */
 export function getChannel(
-  db: Database,
+  database: Database,
   channelId: string
 ): ChannelObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
-  return row ? toChannelObject(row, getChannelOverwrites(db, row.id)) : null
+  return row
+    ? toChannelObject(row, getChannelOverwrites(database, row.id))
+    : null
 }
 
 /** Channel update request type */
@@ -243,17 +253,17 @@ export interface ChannelUpdatePayload {
 
 /**
  * Updates channel information.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param payload - Update payload
  * @returns Updated channel object, or null if it does not exist
  */
 export function updateChannel(
-  db: Database,
+  database: Database,
   channelId: string,
   payload: ChannelUpdatePayload
 ): ChannelObject | null {
-  const current = db
+  const current = database
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
   if (!current) return null
@@ -267,19 +277,21 @@ export function updateChannel(
   if (payload.position !== undefined) updates.position = payload.position
 
   if (Object.keys(updates).length > 0) {
-    const setClauses = Object.keys(updates)
+    const assignmentClauses = Object.keys(updates)
       .map((k) => `${k} = ?`)
       .join(', ')
-    db.prepare(`UPDATE channels SET ${setClauses} WHERE id = ?`).run(
-      ...Object.values(updates),
-      channelId
-    )
+    database
+      .prepare(`UPDATE channels SET ${assignmentClauses} WHERE id = ?`)
+      .run(...Object.values(updates), channelId)
   }
 
-  const updated = db
+  const updated = database
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
-  const result = toChannelObject(updated, getChannelOverwrites(db, updated.id))
+  const result = toChannelObject(
+    updated,
+    getChannelOverwrites(database, updated.id)
+  )
 
   gatewayBus.emit('channel.update', {
     channel: result as unknown as Record<string, unknown>,
@@ -290,23 +302,23 @@ export function updateChannel(
 
 /**
  * Deletes a channel.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @returns Deleted channel object, or null if it does not exist
  */
 export function deleteChannel(
-  db: Database,
+  database: Database,
   channelId: string
 ): ChannelObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
   if (!row) return null
 
   // Build the response before deleting: the DELETE cascades to
   // channel_overwrites, so overwrites must be read first.
-  const result = toChannelObject(row, getChannelOverwrites(db, row.id))
-  db.prepare('DELETE FROM channels WHERE id = ?').run(channelId)
+  const result = toChannelObject(row, getChannelOverwrites(database, row.id))
+  database.prepare('DELETE FROM channels WHERE id = ?').run(channelId)
 
   gatewayBus.emit('channel.delete', {
     channel: result as unknown as Record<string, unknown>,
@@ -317,24 +329,24 @@ export function deleteChannel(
 
 /**
  * Retrieves the list of channels in a guild.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @returns Array of channel objects
  */
 export function getGuildChannels(
-  db: Database,
+  database: Database,
   guildId: string
 ): ChannelObject[] {
   // Exclude thread types (10/11/12): like the real Discord API, threads are
   // not returned by GET /guilds/{guild_id}/channels.
-  const rows = db
+  const rows = database
     .prepare(
       'SELECT * FROM channels WHERE guild_id = ? AND type NOT IN (10, 11, 12) ORDER BY position, id'
     )
     .all(guildId) as ChannelRow[]
   // Bulk-load overwrites for all channels in one query to avoid N+1.
   const overwritesByChannel = getChannelOverwritesForChannels(
-    db,
+    database,
     rows.map((row) => row.id)
   )
   return rows.map((row) =>
@@ -343,7 +355,7 @@ export function getGuildChannels(
 }
 
 /** Guild channel creation parameters */
-export interface GuildChannelCreateParams {
+export interface GuildChannelCreateParameters {
   guildId: string
   name: string
   type?: number
@@ -355,30 +367,32 @@ export interface GuildChannelCreateParams {
 
 /**
  * Creates a channel within a guild.
- * @param db - Database
- * @param params - Channel creation parameters
+ * @param database - Database
+ * @param parameters - Channel creation parameters
  * @returns Created channel object
  */
 export function createGuildChannel(
-  db: Database,
-  params: GuildChannelCreateParams
+  database: Database,
+  parameters: GuildChannelCreateParameters
 ): ChannelObject {
   const channelId = generateSnowflake()
-  db.prepare(
-    `INSERT INTO channels (id, guild_id, name, type, topic, nsfw, position, parent_id)
+  database
+    .prepare(
+      `INSERT INTO channels (id, guild_id, name, type, topic, nsfw, position, parent_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    channelId,
-    params.guildId,
-    params.name,
-    params.type ?? 0,
-    params.topic ?? null,
-    params.nsfw ? 1 : 0,
-    params.position,
-    params.parentId ?? null
-  )
+    )
+    .run(
+      channelId,
+      parameters.guildId,
+      parameters.name,
+      parameters.type ?? 0,
+      parameters.topic ?? null,
+      parameters.nsfw ? 1 : 0,
+      parameters.position,
+      parameters.parentId ?? null
+    )
 
-  const row = db
+  const row = database
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow
   // A newly created channel never has permission overwrites yet.

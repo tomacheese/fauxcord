@@ -6,21 +6,21 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
-import type { AppEnv, BotRecord } from '../middleware/auth'
+import type { Database } from '../database'
+import type { AppEnvironment, BotRecord } from '../middleware/auth'
 import { getGatewayInfo, getGatewayBotInfo } from '../services/gateway'
 
 /**
  * Creates the Gateway API routes.
- * @param db - Database
+ * @param database - Database
  * @param baseUrl - Base URL used to derive the gateway URL
  * @returns Hono router instance
  */
 export function createGatewayRoutes(
-  db: Database,
+  database: Database,
   baseUrl: string
-): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /gateway — Public endpoint (no authentication, matching real Discord)
   app.get('/gateway', (c) => {
@@ -37,7 +37,7 @@ export function createGatewayRoutes(
       // Only treat "Bot <token>" as a Bot credential, matching the auth
       // middleware's behavior, so other schemes never authorize here.
       if (authHeader?.startsWith('Bot ')) {
-        bot = db
+        bot = database
           .prepare('SELECT * FROM bots WHERE token = ?')
           .get(authHeader) as BotRecord | undefined
       }

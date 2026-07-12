@@ -40,8 +40,8 @@ function isValidLogLevel(level: string): level is Config['logLevel'] {
  * @returns Configuration object
  */
 export function loadConfig(): Config {
-  const port = Number.parseInt(process.env.PORT ?? '3000', 10)
-  const latencyMs = Number.parseInt(process.env.LATENCY_MS ?? '0', 10)
+  const port = Number(process.env.PORT ?? '3000')
+  const latencyMs = Number(process.env.LATENCY_MS ?? '0')
   const logLevel = process.env.LOG_LEVEL ?? 'info'
 
   return {

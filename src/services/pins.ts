@@ -4,7 +4,7 @@
  * Provides pin/unpin/list operations for channel message pins.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import {
   hydrateMessageRow,
   type MessageRow,
@@ -14,17 +14,17 @@ import { toDiscordTimestamp } from '../timestamp'
 
 /**
  * Retrieves the list of pinned messages.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param baseUrl - Base URL
  * @returns Array of message objects
  */
 export function getPinnedMessages(
-  db: Database,
+  database: Database,
   channelId: string,
   baseUrl: string
 ): MessageObject[] {
-  const rows = db
+  const rows = database
     .prepare(
       `SELECT m.* FROM messages m
        JOIN pins p ON p.message_id = m.id
@@ -34,7 +34,7 @@ export function getPinnedMessages(
     .all(channelId) as MessageRow[]
 
   return rows
-    .map((r) => hydrateMessageRow(db, r, baseUrl))
+    .map((r) => hydrateMessageRow(database, r, baseUrl))
     .filter((m): m is MessageObject => m !== null)
 }
 
@@ -60,17 +60,17 @@ function sqliteUtcToIso(value: string): string {
 /**
  * Retrieves pinned messages together with their pin timestamps using a single
  * joined query (avoiding a separate lookup of the `pins` table).
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param baseUrl - Base URL
  * @returns Array of pinned message entries ordered by pin time (ascending)
  */
 export function getPinnedMessageEntries(
-  db: Database,
+  database: Database,
   channelId: string,
   baseUrl: string
 ): PinnedMessageEntry[] {
-  const rows = db
+  const rows = database
     .prepare(
       `SELECT m.*, p.pinned_at AS pinned_at FROM messages m
        JOIN pins p ON p.message_id = m.id
@@ -81,7 +81,7 @@ export function getPinnedMessageEntries(
 
   const entries: PinnedMessageEntry[] = []
   for (const row of rows) {
-    const message = hydrateMessageRow(db, row, baseUrl)
+    const message = hydrateMessageRow(database, row, baseUrl)
     if (message === null) continue
     entries.push({ message, pinnedAt: sqliteUtcToIso(row.pinned_at) })
   }
@@ -90,70 +90,70 @@ export function getPinnedMessageEntries(
 
 /**
  * Pins a message.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param messageId - Message ID
  * @returns Error code (0 = success, 10008 = message not found, 30003 = limit reached, 50019 = different channel)
  */
 export function pinMessage(
-  db: Database,
+  database: Database,
   channelId: string,
   messageId: string
 ): 0 | 10_008 | 30_003 | 50_019 {
   // Verify the message is in the same channel
-  const msg = db
+  const message = database
     .prepare('SELECT channel_id FROM messages WHERE id = ?')
     .get(messageId) as { channel_id: string } | undefined
 
   // Like real Discord, a nonexistent message returns 404 Unknown Message
-  if (!msg) return 10_008
-  if (msg.channel_id !== channelId) return 50_019
+  if (!message) return 10_008
+  if (message.channel_id !== channelId) return 50_019
 
   // Pinning an already-pinned message is a no-op success, matching real
   // Discord's idempotent pin endpoint (relied on by discord.js/discord.py and
   // other client implementations). spec/openapi.json does not document this
   // case, but the spec's silence here is not evidence to the contrary.
-  const existing = db
+  const existing = database
     .prepare('SELECT 1 FROM pins WHERE channel_id = ? AND message_id = ?')
     .get(channelId, messageId)
   if (existing) return 0
 
   // Limit check
   const count = (
-    db
+    database
       .prepare('SELECT COUNT(*) as cnt FROM pins WHERE channel_id = ?')
       .get(channelId) as { cnt: number }
   ).cnt
   if (count >= 50) return 30_003
 
-  db.prepare('INSERT INTO pins (channel_id, message_id) VALUES (?, ?)').run(
-    channelId,
-    messageId
-  )
-  db.prepare('UPDATE messages SET pinned = 1 WHERE id = ?').run(messageId)
+  database
+    .prepare('INSERT INTO pins (channel_id, message_id) VALUES (?, ?)')
+    .run(channelId, messageId)
+  database.prepare('UPDATE messages SET pinned = 1 WHERE id = ?').run(messageId)
   return 0
 }
 
 /**
  * Unpins a message.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param messageId - Message ID
  */
 export function unpinMessage(
-  db: Database,
+  database: Database,
   channelId: string,
   messageId: string
 ): void {
-  db.prepare('DELETE FROM pins WHERE channel_id = ? AND message_id = ?').run(
-    channelId,
-    messageId
-  )
+  database
+    .prepare('DELETE FROM pins WHERE channel_id = ? AND message_id = ?')
+    .run(channelId, messageId)
   // Set pinned=0 unless still pinned in another channel
-  const stillPinned = db
+  const stillPinned = database
     .prepare('SELECT 1 FROM pins WHERE message_id = ?')
     .get(messageId)
   if (!stillPinned) {
-    db.prepare('UPDATE messages SET pinned = 0 WHERE id = ?').run(messageId)
+    database
+      .prepare('UPDATE messages SET pinned = 0 WHERE id = ?')
+      .run(messageId)
   }
 }

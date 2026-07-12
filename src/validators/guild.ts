@@ -124,7 +124,7 @@ export function validateRoleCreate(
 
   if (
     payload.color !== undefined &&
-    (!Number.isInteger(payload.color) ||
+    (!Number.isSafeInteger(payload.color) ||
       payload.color < 0 ||
       payload.color > 0xff_ff_ff)
   ) {
@@ -215,12 +215,12 @@ export interface EmojiUpdatePayload {
 /**
  * Validates an emoji name: presence and length (2-32).
  * @param name - Emoji name
- * @param required - Whether the name is required (true for creation)
+ * @param isRequired - Whether the name is required (true for creation)
  * @returns Field error array (empty when valid)
  */
-function validateEmojiName(name: unknown, required: boolean): FieldError[] {
+function validateEmojiName(name: unknown, isRequired: boolean): FieldError[] {
   if (name === undefined) {
-    return required ? [requiredError()] : []
+    return isRequired ? [requiredError()] : []
   }
   if (typeof name !== 'string') {
     return [typeError('string')]
@@ -321,7 +321,7 @@ export function validateBanCreate(payload: BanCreatePayload): ValidationErrors {
   if (
     seconds !== undefined &&
     seconds !== null &&
-    (!Number.isInteger(seconds) ||
+    (!Number.isSafeInteger(seconds) ||
       seconds < 0 ||
       seconds > DELETE_MESSAGE_SECONDS_MAX)
   ) {
@@ -339,7 +339,7 @@ export function validateBanCreate(payload: BanCreatePayload): ValidationErrors {
   if (
     days !== undefined &&
     days !== null &&
-    (!Number.isInteger(days) || days < 0 || days > DELETE_MESSAGE_DAYS_MAX)
+    (!Number.isSafeInteger(days) || days < 0 || days > DELETE_MESSAGE_DAYS_MAX)
   ) {
     errors.delete_message_days = {
       _errors: [

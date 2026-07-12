@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { getChannel } from '../services/channels'
 import {
@@ -24,7 +24,7 @@ import {
   validateThreadCreate,
   THREAD_CHANNEL_TYPES,
 } from '../validators/thread'
-import type { AppEnv, BotRecord } from '../middleware/auth'
+import type { AppEnvironment, BotRecord } from '../middleware/auth'
 import {
   requireEntity,
   parseJsonBody,
@@ -35,17 +35,17 @@ import {
  * Resolves the authenticated bot's user ID, falling back to a direct token
  * lookup when the auth middleware was not applied (e.g. in unit tests).
  * @param c - Hono context
- * @param db - Database
+ * @param database - Database
  * @returns The resolved user ID (a placeholder when unauthenticated)
  */
-function resolveUserId(c: Context<AppEnv>, db: Database): string {
+function resolveUserId(c: Context<AppEnvironment>, database: Database): string {
   let bot = c.get('bot')
   if (!bot) {
     const authHeader = c.req.header('Authorization')
     if (authHeader) {
-      bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(authHeader) as
-        | BotRecord
-        | undefined
+      bot = database
+        .prepare('SELECT * FROM bots WHERE token = ?')
+        .get(authHeader) as BotRecord | undefined
     }
   }
   return bot?.user_id ?? '000000000000000000'
@@ -53,11 +53,13 @@ function resolveUserId(c: Context<AppEnv>, db: Database): string {
 
 /**
  * Creates the channel threads API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+export function createChannelThreadRoutes(
+  database: Database
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // POST /channels/:channelId/messages/:messageId/threads — Create from a message
   app.post('/channels/:channelId/messages/:messageId/threads', async (c) => {
@@ -65,7 +67,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -73,7 +75,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
 
     // Scope the message lookup to the parent channel so a message from another
     // channel cannot be used to create a thread here (matches Discord's 404).
-    const message = db
+    const message = database
       .prepare('SELECT id FROM messages WHERE id = ? AND channel_id = ?')
       .get(messageId, channelId) as { id: string } | undefined
     if (!message) {
@@ -86,7 +88,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
 
     // A message can only have one thread. The thread ID equals the message ID,
     // so an existing channel row with that ID means a thread already exists.
-    if (getThread(db, messageId)) {
+    if (getThread(database, messageId)) {
       return c.json(
         discordError(
           DiscordErrorCode.THREAD_ALREADY_CREATED,
@@ -103,11 +105,11 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       return c.json(validationError(errors).body, 400)
     }
 
-    const thread = createThread(db, {
+    const thread = createThread(database, {
       parentId: channelId,
       threadId: messageId,
       name: payload.name as string,
-      ownerId: resolveUserId(c, db),
+      ownerId: resolveUserId(c, database),
       type: 11,
       autoArchiveDuration: payload.auto_archive_duration,
       rateLimitPerUser:
@@ -124,7 +126,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
 
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
@@ -144,10 +146,10 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
         ? requestedType
         : 11
 
-    const thread = createThread(db, {
+    const thread = createThread(database, {
       parentId: channelId,
       name: payload.name as string,
-      ownerId: resolveUserId(c, db),
+      ownerId: resolveUserId(c, database),
       type,
       autoArchiveDuration: payload.auto_archive_duration,
       rateLimitPerUser:
@@ -165,15 +167,15 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
     return c.json(
-      getArchivedThreads(db, channelId, {
+      getArchivedThreads(database, channelId, {
         private: false,
-        memberUserId: resolveUserId(c, db),
+        memberUserId: resolveUserId(c, database),
       })
     )
   })
@@ -183,15 +185,15 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
     return c.json(
-      getArchivedThreads(db, channelId, {
+      getArchivedThreads(database, channelId, {
         private: true,
-        memberUserId: resolveUserId(c, db),
+        memberUserId: resolveUserId(c, database),
       })
     )
   })
@@ -201,15 +203,15 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
     return c.json(
-      getArchivedThreads(db, channelId, {
+      getArchivedThreads(database, channelId, {
         private: true,
-        joinedUserId: resolveUserId(c, db),
+        joinedUserId: resolveUserId(c, database),
       })
     )
   })
@@ -219,12 +221,12 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const channel = requireEntity(
       c,
-      getChannel(db, channelId),
+      getChannel(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
-    return c.json(searchThreads(db, channelId))
+    return c.json(searchThreads(database, channelId))
   })
 
   // GET /channels/:channelId/thread-members — List members
@@ -232,16 +234,25 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const limit = parseLimitQuery(c, 100, 100)
     const after = c.req.query('after') ?? '0'
-    const withMember = ['true', '1'].includes(c.req.query('with_member') ?? '')
+    const isWithMember = ['true', '1'].includes(
+      c.req.query('with_member') ?? ''
+    )
     const thread = requireEntity(
       c,
-      getThread(db, channelId),
+      getThread(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
     return c.json(
-      getThreadMembers(db, channelId, limit, after, thread.guild_id, withMember)
+      getThreadMembers(
+        database,
+        channelId,
+        limit,
+        after,
+        thread.guild_id,
+        isWithMember
+      )
     )
   })
 
@@ -250,12 +261,12 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const thread = requireEntity(
       c,
-      getThread(db, channelId),
+      getThread(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
-    addThreadMember(db, channelId, resolveUserId(c, db))
+    addThreadMember(database, channelId, resolveUserId(c, database))
     return c.body(null, 204)
   })
 
@@ -264,31 +275,39 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId } = c.req.param()
     const thread = requireEntity(
       c,
-      getThread(db, channelId),
+      getThread(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
-    removeThreadMember(db, channelId, resolveUserId(c, db))
+    removeThreadMember(database, channelId, resolveUserId(c, database))
     return c.body(null, 204)
   })
 
   // GET /channels/:channelId/thread-members/:userId — Get one member
   app.get('/channels/:channelId/thread-members/:userId', (c) => {
     const { channelId, userId } = c.req.param()
-    const withMember = ['true', '1'].includes(c.req.query('with_member') ?? '')
+    const isWithMember = ['true', '1'].includes(
+      c.req.query('with_member') ?? ''
+    )
     const thread = requireEntity(
       c,
-      getThread(db, channelId),
+      getThread(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
 
-    const resolvedId = userId === '@me' ? resolveUserId(c, db) : userId
+    const resolvedId = userId === '@me' ? resolveUserId(c, database) : userId
     const member = requireEntity(
       c,
-      getThreadMember(db, channelId, resolvedId, thread.guild_id, withMember),
+      getThreadMember(
+        database,
+        channelId,
+        resolvedId,
+        thread.guild_id,
+        isWithMember
+      ),
       DiscordErrorCode.UNKNOWN_MEMBER,
       'Unknown Member'
     )
@@ -301,13 +320,13 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId, userId } = c.req.param()
     const thread = requireEntity(
       c,
-      getThread(db, channelId),
+      getThread(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
-    const resolvedId = userId === '@me' ? resolveUserId(c, db) : userId
-    addThreadMember(db, channelId, resolvedId)
+    const resolvedId = userId === '@me' ? resolveUserId(c, database) : userId
+    addThreadMember(database, channelId, resolvedId)
     return c.body(null, 204)
   })
 
@@ -316,13 +335,13 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     const { channelId, userId } = c.req.param()
     const thread = requireEntity(
       c,
-      getThread(db, channelId),
+      getThread(database, channelId),
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
     if (thread instanceof Response) return thread
-    const resolvedId = userId === '@me' ? resolveUserId(c, db) : userId
-    removeThreadMember(db, channelId, resolvedId)
+    const resolvedId = userId === '@me' ? resolveUserId(c, database) : userId
+    removeThreadMember(database, channelId, resolvedId)
     return c.body(null, 204)
   })
 

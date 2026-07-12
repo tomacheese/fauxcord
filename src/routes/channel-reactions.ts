@@ -6,9 +6,9 @@
 
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import {
-  addReaction,
+  didAddReaction,
   removeReaction,
   removeEmojiReactions,
   removeAllReactions,
@@ -16,7 +16,7 @@ import {
 } from '../services/reactions'
 import { getMessage } from '../services/messages'
 import { DiscordErrorCode, discordError } from '../errors'
-import type { AppEnv } from '../middleware/auth'
+import type { AppEnvironment } from '../middleware/auth'
 import { parseLimitQuery } from '../lib/route-helpers'
 
 /**
@@ -27,33 +27,33 @@ import { parseLimitQuery } from '../lib/route-helpers'
  * @param emoji - Raw (percent-encoded) emoji path segment
  * @returns The decoded emoji, or a 400 Response when decoding fails
  */
-function decodeEmojiParam(
-  c: Context<AppEnv>,
+function decodeEmojiParameter(
+  c: Context<AppEnvironment>,
   emoji: string
 ): string | Response {
   try {
     return decodeURIComponent(emoji)
   } catch {
-    const err = discordError(
+    const error = discordError(
       DiscordErrorCode.INVALID_FORM_BODY,
       'Invalid emoji',
       400
     )
-    return c.json(err.body, 400)
+    return c.json(error.body, 400)
   }
 }
 
 /**
  * Creates the channel reactions API routes.
- * @param db - Database
+ * @param database - Database
  * @param baseUrl - Base URL, used to build the message existence check
  * @returns Hono router instance
  */
 export function createChannelReactionRoutes(
-  db: Database,
+  database: Database,
   baseUrl: string
-): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me — Add own reaction
   app.put(
@@ -62,21 +62,21 @@ export function createChannelReactionRoutes(
       const { messageId, emoji } = c.req.param()
       const bot = c.get('bot')
       const userId = bot?.user_id ?? '000000000000000000'
-      const decodedResult = decodeEmojiParam(c, emoji)
+      const decodedResult = decodeEmojiParameter(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
       const decodedEmoji = decodedResult
 
-      const msg = getMessage(db, messageId, baseUrl)
-      if (!msg) {
-        const err = discordError(
+      const message = getMessage(database, messageId, baseUrl)
+      if (!message) {
+        const error = discordError(
           DiscordErrorCode.UNKNOWN_MESSAGE,
           'Unknown Message',
           404
         )
-        return c.json(err.body, 404)
+        return c.json(error.body, 404)
       }
 
-      addReaction(db, messageId, userId, decodedEmoji)
+      didAddReaction(database, messageId, userId, decodedEmoji)
       return c.body(null, 204)
     }
   )
@@ -88,11 +88,11 @@ export function createChannelReactionRoutes(
       const { messageId, emoji } = c.req.param()
       const bot = c.get('bot')
       const userId = bot?.user_id ?? '000000000000000000'
-      const decodedResult = decodeEmojiParam(c, emoji)
+      const decodedResult = decodeEmojiParameter(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
       const decodedEmoji = decodedResult
 
-      removeReaction(db, messageId, userId, decodedEmoji)
+      removeReaction(database, messageId, userId, decodedEmoji)
       return c.body(null, 204)
     }
   )
@@ -102,11 +102,11 @@ export function createChannelReactionRoutes(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/:userId',
     (c) => {
       const { messageId, emoji, userId } = c.req.param()
-      const decodedResult = decodeEmojiParam(c, emoji)
+      const decodedResult = decodeEmojiParameter(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
       const decodedEmoji = decodedResult
 
-      removeReaction(db, messageId, userId, decodedEmoji)
+      removeReaction(database, messageId, userId, decodedEmoji)
       return c.body(null, 204)
     }
   )
@@ -114,13 +114,19 @@ export function createChannelReactionRoutes(
   // GET /channels/:channelId/messages/:messageId/reactions/:emoji — List users who reacted
   app.get('/channels/:channelId/messages/:messageId/reactions/:emoji', (c) => {
     const { messageId, emoji } = c.req.param()
-    const decodedResult = decodeEmojiParam(c, emoji)
+    const decodedResult = decodeEmojiParameter(c, emoji)
     if (decodedResult instanceof Response) return decodedResult
     const decodedEmoji = decodedResult
     const limit = parseLimitQuery(c, 25, 100)
     const after = c.req.query('after')
 
-    const users = getReactionUsers(db, messageId, decodedEmoji, limit, after)
+    const users = getReactionUsers(
+      database,
+      messageId,
+      decodedEmoji,
+      limit,
+      after
+    )
     return c.json(
       users.map((u) => ({
         id: u.id,
@@ -137,10 +143,10 @@ export function createChannelReactionRoutes(
     '/channels/:channelId/messages/:messageId/reactions/:emoji',
     (c) => {
       const { messageId, emoji } = c.req.param()
-      const decodedResult = decodeEmojiParam(c, emoji)
+      const decodedResult = decodeEmojiParameter(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
       const decodedEmoji = decodedResult
-      removeEmojiReactions(db, messageId, decodedEmoji)
+      removeEmojiReactions(database, messageId, decodedEmoji)
       return c.body(null, 204)
     }
   )
@@ -148,7 +154,7 @@ export function createChannelReactionRoutes(
   // DELETE /channels/:channelId/messages/:messageId/reactions — Remove all reactions from a message
   app.delete('/channels/:channelId/messages/:messageId/reactions', (c) => {
     const { messageId } = c.req.param()
-    removeAllReactions(db, messageId)
+    removeAllReactions(database, messageId)
     return c.body(null, 204)
   })
 

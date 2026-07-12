@@ -5,25 +5,20 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
-import {
-  getBotUser,
-  getUser,
-  getApplication,
-  updateBotUser,
-} from '../services/users'
+import { getBotUser, getUser, getApp, updateBotUser } from '../services/users'
 import { getBotGuilds } from '../services/guilds'
 import { validateCurrentUserUpdate } from '../validators/user'
-import type { AppEnv } from '../middleware/auth'
+import type { AppEnvironment } from '../middleware/auth'
 
 /**
  * Creates the Users API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createUserRoutes(db: Database): Hono<AppEnv> {
-  const app = new Hono<AppEnv>()
+export function createUserRoutes(database: Database): Hono<AppEnvironment> {
+  const app = new Hono<AppEnvironment>()
 
   // GET /users/@me — Retrieve the authenticated bot user's information
   app.get('/users/@me', (c) => {
@@ -32,7 +27,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const user = getBotUser(db, bot.token)
+    const user = getBotUser(database, bot.token)
     if (!user) {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
@@ -49,7 +44,12 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     // Tolerate an empty/invalid/non-object JSON body (including a literal
     // `null` or an array, both of which parse without error): treat it as an
     // empty (no-op) update rather than dereferencing a non-object.
-    const parsed: unknown = await c.req.json().catch(() => ({}))
+    let parsed: unknown
+    try {
+      parsed = await c.req.json()
+    } catch {
+      parsed = {}
+    }
     const body: Record<string, unknown> =
       typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
@@ -60,7 +60,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
       return c.json(validationError(errors).body, 400)
     }
 
-    const user = updateBotUser(db, bot.token, body)
+    const user = updateBotUser(database, bot.token, body)
     if (!user) {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
@@ -80,21 +80,21 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
       if (!bot) {
         return c.json({ message: '401: Unauthorized', code: 0 }, 401)
       }
-      const user = getBotUser(db, bot.token)
+      const user = getBotUser(database, bot.token)
       if (!user) {
         return c.json({ message: '401: Unauthorized', code: 0 }, 401)
       }
       return c.json(user)
     }
 
-    const user = getUser(db, userId)
+    const user = getUser(database, userId)
     if (!user) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_USER,
         'Unknown User',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.json(user)
   })
@@ -106,7 +106,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const guilds = getBotGuilds(db, bot.token)
+    const guilds = getBotGuilds(database, bot.token)
     return c.json(guilds)
   })
 
@@ -117,7 +117,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const app_ = getApplication(db, bot.token)
+    const app_ = getApp(database, bot.token)
     if (!app_) {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
@@ -134,7 +134,7 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
-    const app_ = getApplication(db, bot.token)
+    const app_ = getApp(database, bot.token)
     if (!app_) {
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }

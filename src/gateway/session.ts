@@ -37,10 +37,10 @@ export class SessionManager {
 
   /**
    * Creates and registers a new session.
-   * @param params - Session initialization parameters
+   * @param parameters - Session initialization parameters
    * @returns The created session
    */
-  create(params: {
+  create(parameters: {
     botId: string
     token: string
     intents: number
@@ -48,11 +48,11 @@ export class SessionManager {
   }): Session {
     const session: Session = {
       sessionId: randomUUID().replaceAll('-', ''),
-      botId: params.botId,
-      token: params.token,
+      botId: parameters.botId,
+      token: parameters.token,
       seq: 0,
-      intents: params.intents,
-      ws: params.ws,
+      intents: parameters.intents,
+      ws: parameters.ws,
       replayBuffer: [],
       heartbeatTimer: undefined,
       lastHeartbeatAt: Date.now(),
@@ -91,6 +91,7 @@ export class SessionManager {
    * @returns Array of sessions
    */
   getAll(): Session[] {
+    // eslint-disable-next-line unicorn/prefer-iterator-to-array -- Iterator#toArray() isn't in the ES2024 lib this project targets (would need an ES2025 lib bump, out of scope here); the spread is the available equivalent.
     return [...this.sessionsById.values()]
   }
 

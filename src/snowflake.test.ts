@@ -20,8 +20,8 @@ describe('generateSnowflake', () => {
 
   it('IDs are monotonically increasing', () => {
     const ids = Array.from({ length: 5 }, () => generateSnowflake())
-    for (let i = 1; i < ids.length; i++) {
-      expect(BigInt(ids[i])).toBeGreaterThan(BigInt(ids[i - 1]))
+    for (let index = 1; index < ids.length; index++) {
+      expect(BigInt(ids[index])).toBeGreaterThan(BigInt(ids[index - 1]))
     }
   })
 

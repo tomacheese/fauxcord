@@ -5,24 +5,24 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { getGuild } from '../services/guilds'
 import {
   getGuildBan,
   getGuildBans,
   createGuildBan,
-  removeGuildBan,
+  didRemoveGuildBan,
 } from '../services/guild-bans'
 import { validateBanCreate, type BanCreatePayload } from '../validators/guild'
 import { requireEntity, parseLimitQuery } from '../lib/route-helpers'
 
 /**
  * Creates the guild bans API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createGuildBanRoutes(db: Database): Hono {
+export function createGuildBanRoutes(database: Database): Hono {
   const app = new Hono()
 
   // GET /guilds/:guildId/bans — List a guild's bans
@@ -31,7 +31,7 @@ export function createGuildBanRoutes(db: Database): Hono {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -41,7 +41,7 @@ export function createGuildBanRoutes(db: Database): Hono {
     const before = c.req.query('before')
     const after = c.req.query('after')
 
-    const bans = getGuildBans(db, guildId, limit, before, after)
+    const bans = getGuildBans(database, guildId, limit, before, after)
     return c.json(bans)
   })
 
@@ -52,7 +52,7 @@ export function createGuildBanRoutes(db: Database): Hono {
     // Check guild existence first so a missing guild returns Unknown Guild.
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -60,7 +60,7 @@ export function createGuildBanRoutes(db: Database): Hono {
 
     const ban = requireEntity(
       c,
-      getGuildBan(db, guildId, userId),
+      getGuildBan(database, guildId, userId),
       DiscordErrorCode.UNKNOWN_BAN,
       'Unknown Ban'
     )
@@ -74,7 +74,7 @@ export function createGuildBanRoutes(db: Database): Hono {
 
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
@@ -84,7 +84,12 @@ export function createGuildBanRoutes(db: Database): Hono {
     // `null` or an array, both of which parse without error): treat it as an
     // empty (no-op) payload rather than dereferencing a non-object below
     // (same idiom as PATCH /users/@me).
-    const parsed: unknown = await c.req.json().catch(() => ({}))
+    let parsed: unknown
+    try {
+      parsed = await c.req.json()
+    } catch {
+      parsed = {}
+    }
     const payload: BanCreatePayload =
       typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
         ? parsed
@@ -98,12 +103,12 @@ export function createGuildBanRoutes(db: Database): Hono {
     const reason = c.req.header('X-Audit-Log-Reason') ?? null
     // Discord accepts either delete_message_seconds or the deprecated
     // delete_message_days; normalize both to a seconds window.
-    const deleteMessageSeconds =
+    const messageDeleteSeconds =
       payload.delete_message_seconds ??
       (payload.delete_message_days == null
         ? 0
         : payload.delete_message_days * 86_400)
-    createGuildBan(db, guildId, userId, reason, deleteMessageSeconds)
+    createGuildBan(database, guildId, userId, reason, messageDeleteSeconds)
     return c.body(null, 204)
   })
 
@@ -114,16 +119,20 @@ export function createGuildBanRoutes(db: Database): Hono {
     // Check guild existence first so a missing guild returns Unknown Guild.
     const guild = requireEntity(
       c,
-      getGuild(db, guildId),
+      getGuild(database, guildId),
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
     if (guild instanceof Response) return guild
 
-    const removed = removeGuildBan(db, guildId, userId)
-    if (!removed) {
-      const err = discordError(DiscordErrorCode.UNKNOWN_BAN, 'Unknown Ban', 404)
-      return c.json(err.body, 404)
+    const isRemoved = didRemoveGuildBan(database, guildId, userId)
+    if (!isRemoved) {
+      const error = discordError(
+        DiscordErrorCode.UNKNOWN_BAN,
+        'Unknown Ban',
+        404
+      )
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })

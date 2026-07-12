@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { initializeDatabase, closeDatabase } from '../db'
-import type { Database } from '../db'
-import { addMemberRole, removeMemberRole } from './guild-members'
+import { initializeDatabase, closeDatabase } from '../database'
+import type { Database } from '../database'
+import { didAddMemberRole, didRemoveMemberRole } from './guild-members'
 import { gatewayBus } from '../gateway/bus'
 
 describe('Guilds Service', () => {
-  let db: Database
+  let database: Database
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:')
+    database = initializeDatabase(':memory:')
   })
 
   afterEach(() => {
-    closeDatabase(db)
+    closeDatabase(database)
   })
 
   describe('addMemberRole', () => {
@@ -21,31 +21,39 @@ describe('Guilds Service', () => {
     const roleId = '444444444444444444'
 
     beforeEach(() => {
-      db.prepare(
-        "INSERT INTO users (id, username, bot) VALUES (?, 'TestBot', 1)"
-      ).run('111111111111111111')
-      db.prepare(
-        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'TestBot')"
-      ).run('Bot testtoken', '111111111111111111')
-      db.prepare(
-        'INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
-      ).run(guildId, 'Test Guild', '111111111111111111', 'Bot testtoken')
-      db.prepare(
-        "INSERT INTO users (id, username) VALUES (?, 'TestMember')"
-      ).run(userId)
-      db.prepare(
-        'INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)'
-      ).run(guildId, userId)
-      db.prepare(
-        'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
-      ).run(roleId, guildId, 'Test Role')
+      database
+        .prepare(
+          "INSERT INTO users (id, username, bot) VALUES (?, 'TestBot', 1)"
+        )
+        .run('111111111111111111')
+      database
+        .prepare(
+          "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'TestBot')"
+        )
+        .run('Bot testtoken', '111111111111111111')
+      database
+        .prepare(
+          'INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
+        )
+        .run(guildId, 'Test Guild', '111111111111111111', 'Bot testtoken')
+      database
+        .prepare("INSERT INTO users (id, username) VALUES (?, 'TestMember')")
+        .run(userId)
+      database
+        .prepare('INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)')
+        .run(guildId, userId)
+      database
+        .prepare(
+          'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
+        )
+        .run(roleId, guildId, 'Test Role')
     })
 
     it('adds a role to an existing member and returns true', () => {
-      const result = addMemberRole(db, guildId, userId, roleId)
-      expect(result).toBe(true)
+      const isResult = didAddMemberRole(database, guildId, userId, roleId)
+      expect(isResult).toBe(true)
 
-      const row = db
+      const row = database
         .prepare(
           'SELECT 1 FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
         )
@@ -54,11 +62,11 @@ describe('Guilds Service', () => {
     })
 
     it('is idempotent when the role is already assigned', () => {
-      addMemberRole(db, guildId, userId, roleId)
-      const result = addMemberRole(db, guildId, userId, roleId)
-      expect(result).toBe(true)
+      didAddMemberRole(database, guildId, userId, roleId)
+      const isResult = didAddMemberRole(database, guildId, userId, roleId)
+      expect(isResult).toBe(true)
 
-      const rows = db
+      const rows = database
         .prepare(
           'SELECT * FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
         )
@@ -67,15 +75,25 @@ describe('Guilds Service', () => {
     })
 
     it('returns false when the member does not exist', () => {
-      const result = addMemberRole(db, guildId, '999999999999999999', roleId)
-      expect(result).toBe(false)
+      const isResult = didAddMemberRole(
+        database,
+        guildId,
+        '999999999999999999',
+        roleId
+      )
+      expect(isResult).toBe(false)
     })
 
     it('returns false when the role does not exist', () => {
-      const result = addMemberRole(db, guildId, userId, '999999999999999999')
-      expect(result).toBe(false)
+      const isResult = didAddMemberRole(
+        database,
+        guildId,
+        userId,
+        '999999999999999999'
+      )
+      expect(isResult).toBe(false)
 
-      const row = db
+      const row = database
         .prepare(
           'SELECT 1 FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
         )
@@ -87,7 +105,7 @@ describe('Guilds Service', () => {
       const listener = vi.fn()
       gatewayBus.on('guild.member.update', listener)
       try {
-        addMemberRole(db, guildId, userId, roleId)
+        didAddMemberRole(database, guildId, userId, roleId)
         expect(listener).toHaveBeenCalledTimes(1)
         expect(listener).toHaveBeenCalledWith(
           expect.objectContaining({ guildId })
@@ -101,14 +119,14 @@ describe('Guilds Service', () => {
       // Simulate a member row whose user record has gone missing, which makes
       // getGuildMember() return null even though the initial membership check
       // (which only looks at guild_members) passes.
-      db.pragma('foreign_keys = OFF')
-      db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+      database.pragma('foreign_keys = OFF')
+      database.prepare('DELETE FROM users WHERE id = ?').run(userId)
 
       const listener = vi.fn()
       gatewayBus.on('guild.member.update', listener)
       try {
-        const result = addMemberRole(db, guildId, userId, roleId)
-        expect(result).toBe(true)
+        const isResult = didAddMemberRole(database, guildId, userId, roleId)
+        expect(isResult).toBe(true)
         expect(listener).not.toHaveBeenCalled()
       } finally {
         gatewayBus.off('guild.member.update', listener)
@@ -122,34 +140,44 @@ describe('Guilds Service', () => {
     const roleId = '444444444444444444'
 
     beforeEach(() => {
-      db.prepare(
-        "INSERT INTO users (id, username, bot) VALUES (?, 'TestBot', 1)"
-      ).run('111111111111111111')
-      db.prepare(
-        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'TestBot')"
-      ).run('Bot testtoken', '111111111111111111')
-      db.prepare(
-        'INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
-      ).run(guildId, 'Test Guild', '111111111111111111', 'Bot testtoken')
-      db.prepare(
-        "INSERT INTO users (id, username) VALUES (?, 'TestMember')"
-      ).run(userId)
-      db.prepare(
-        'INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)'
-      ).run(guildId, userId)
-      db.prepare(
-        'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
-      ).run(roleId, guildId, 'Test Role')
-      db.prepare(
-        'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
-      ).run(guildId, userId, roleId)
+      database
+        .prepare(
+          "INSERT INTO users (id, username, bot) VALUES (?, 'TestBot', 1)"
+        )
+        .run('111111111111111111')
+      database
+        .prepare(
+          "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'TestBot')"
+        )
+        .run('Bot testtoken', '111111111111111111')
+      database
+        .prepare(
+          'INSERT INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
+        )
+        .run(guildId, 'Test Guild', '111111111111111111', 'Bot testtoken')
+      database
+        .prepare("INSERT INTO users (id, username) VALUES (?, 'TestMember')")
+        .run(userId)
+      database
+        .prepare('INSERT INTO guild_members (guild_id, user_id) VALUES (?, ?)')
+        .run(guildId, userId)
+      database
+        .prepare(
+          'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
+        )
+        .run(roleId, guildId, 'Test Role')
+      database
+        .prepare(
+          'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+        )
+        .run(guildId, userId, roleId)
     })
 
     it('removes an assigned role and returns true', () => {
-      const result = removeMemberRole(db, guildId, userId, roleId)
-      expect(result).toBe(true)
+      const isResult = didRemoveMemberRole(database, guildId, userId, roleId)
+      expect(isResult).toBe(true)
 
-      const row = db
+      const row = database
         .prepare(
           'SELECT 1 FROM member_roles WHERE guild_id = ? AND user_id = ? AND role_id = ?'
         )
@@ -158,21 +186,26 @@ describe('Guilds Service', () => {
     })
 
     it('is idempotent when the role is not assigned', () => {
-      removeMemberRole(db, guildId, userId, roleId)
-      const result = removeMemberRole(db, guildId, userId, roleId)
-      expect(result).toBe(true)
+      didRemoveMemberRole(database, guildId, userId, roleId)
+      const isResult = didRemoveMemberRole(database, guildId, userId, roleId)
+      expect(isResult).toBe(true)
     })
 
     it('returns false when the member does not exist', () => {
-      const result = removeMemberRole(db, guildId, '999999999999999999', roleId)
-      expect(result).toBe(false)
+      const isResult = didRemoveMemberRole(
+        database,
+        guildId,
+        '999999999999999999',
+        roleId
+      )
+      expect(isResult).toBe(false)
     })
 
     it('emits guild.member.update with the updated member on success', () => {
       const listener = vi.fn()
       gatewayBus.on('guild.member.update', listener)
       try {
-        removeMemberRole(db, guildId, userId, roleId)
+        didRemoveMemberRole(database, guildId, userId, roleId)
         expect(listener).toHaveBeenCalledTimes(1)
         expect(listener).toHaveBeenCalledWith(
           expect.objectContaining({ guildId })
@@ -186,14 +219,14 @@ describe('Guilds Service', () => {
       // Simulate a member row whose user record has gone missing, which makes
       // getGuildMember() return null even though the initial membership check
       // (which only looks at guild_members) passes.
-      db.pragma('foreign_keys = OFF')
-      db.prepare('DELETE FROM users WHERE id = ?').run(userId)
+      database.pragma('foreign_keys = OFF')
+      database.prepare('DELETE FROM users WHERE id = ?').run(userId)
 
       const listener = vi.fn()
       gatewayBus.on('guild.member.update', listener)
       try {
-        const result = removeMemberRole(db, guildId, userId, roleId)
-        expect(result).toBe(true)
+        const isResult = didRemoveMemberRole(database, guildId, userId, roleId)
+        expect(isResult).toBe(true)
         expect(listener).not.toHaveBeenCalled()
       } finally {
         gatewayBus.off('guild.member.update', listener)

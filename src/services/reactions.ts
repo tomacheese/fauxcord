@@ -4,22 +4,22 @@
  * Provides add/remove/list operations for message reactions.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import type { UserRow } from './messages'
 import { gatewayBus } from '../gateway/bus'
 import { getGuildIdForChannel } from './messages'
 
 /**
  * Gets the channel ID that a message belongs to, given its message ID.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @returns Channel ID, or undefined if the message doesn't exist
  */
 function getChannelIdForMessage(
-  db: Database,
+  database: Database,
   messageId: string
 ): string | undefined {
-  const row = db
+  const row = database
     .prepare('SELECT channel_id FROM messages WHERE id = ?')
     .get(messageId) as { channel_id: string } | undefined
   return row?.channel_id
@@ -27,26 +27,26 @@ function getChannelIdForMessage(
 
 /**
  * Adds a reaction.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param userId - User ID
  * @param emoji - Emoji
  * @returns true on successful addition
  */
-export function addReaction(
-  db: Database,
+export function didAddReaction(
+  database: Database,
   messageId: string,
   userId: string,
   emoji: string
 ): boolean {
-  let inserted: boolean
+  let isInserted: boolean
   try {
-    const result = db
+    const result = database
       .prepare(
         'INSERT OR IGNORE INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
       )
       .run(messageId, userId, emoji)
-    inserted = result.changes > 0
+    isInserted = result.changes > 0
   } catch {
     return false
   }
@@ -56,11 +56,11 @@ export function addReaction(
   // Only emit when the row was actually inserted, so a duplicate reaction
   // (INSERT OR IGNORE with no state change) does not produce a spurious
   // MESSAGE_REACTION_ADD dispatch.
-  if (inserted) {
-    const channelId = getChannelIdForMessage(db, messageId)
+  if (isInserted) {
+    const channelId = getChannelIdForMessage(database, messageId)
     if (channelId !== undefined) {
       gatewayBus.emit('message.reaction.add', {
-        guildId: getGuildIdForChannel(db, channelId),
+        guildId: getGuildIdForChannel(database, channelId),
         channelId,
         messageId,
         userId,
@@ -74,18 +74,18 @@ export function addReaction(
 
 /**
  * Removes a reaction (the user's own reaction).
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param userId - User ID
  * @param emoji - Emoji
  */
 export function removeReaction(
-  db: Database,
+  database: Database,
   messageId: string,
   userId: string,
   emoji: string
 ): void {
-  const result = db
+  const result = database
     .prepare(
       'DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?'
     )
@@ -95,10 +95,10 @@ export function removeReaction(
   // non-existent reaction does not produce a misleading
   // MESSAGE_REACTION_REMOVE dispatch.
   if (result.changes > 0) {
-    const channelId = getChannelIdForMessage(db, messageId)
+    const channelId = getChannelIdForMessage(database, messageId)
     if (channelId !== undefined) {
       gatewayBus.emit('message.reaction.remove', {
-        guildId: getGuildIdForChannel(db, channelId),
+        guildId: getGuildIdForChannel(database, channelId),
         channelId,
         messageId,
         userId,
@@ -110,33 +110,35 @@ export function removeReaction(
 
 /**
  * Removes all reactions for the specified emoji.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param emoji - Emoji
  */
 export function removeEmojiReactions(
-  db: Database,
+  database: Database,
   messageId: string,
   emoji: string
 ): void {
-  db.prepare('DELETE FROM reactions WHERE message_id = ? AND emoji = ?').run(
-    messageId,
-    emoji
-  )
+  database
+    .prepare('DELETE FROM reactions WHERE message_id = ? AND emoji = ?')
+    .run(messageId, emoji)
 }
 
 /**
  * Removes all reactions from a message.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  */
-export function removeAllReactions(db: Database, messageId: string): void {
-  db.prepare('DELETE FROM reactions WHERE message_id = ?').run(messageId)
+export function removeAllReactions(
+  database: Database,
+  messageId: string
+): void {
+  database.prepare('DELETE FROM reactions WHERE message_id = ?').run(messageId)
 }
 
 /**
  * Retrieves the list of users who reacted.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param emoji - Emoji
  * @param limit - Number of items to retrieve (clamped to 100, default 25)
@@ -144,7 +146,7 @@ export function removeAllReactions(db: Database, messageId: string): void {
  * @returns Array of user records
  */
 export function getReactionUsers(
-  db: Database,
+  database: Database,
   messageId: string,
   emoji: string,
   limit = 25,
@@ -152,7 +154,7 @@ export function getReactionUsers(
 ): UserRow[] {
   const clampedLimit = Math.min(limit, 100)
   if (after) {
-    return db
+    return database
       .prepare(
         `SELECT u.* FROM users u
          JOIN reactions r ON r.user_id = u.id
@@ -161,7 +163,7 @@ export function getReactionUsers(
       )
       .all(messageId, emoji, after, clampedLimit) as UserRow[]
   }
-  return db
+  return database
     .prepare(
       `SELECT u.* FROM users u
        JOIN reactions r ON r.user_id = u.id

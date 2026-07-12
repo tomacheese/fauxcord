@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { initializeDatabase, closeDatabase } from './db'
+import { initializeDatabase, closeDatabase } from './database'
 import BetterSqlite3 from 'better-sqlite3'
 import type Database from 'better-sqlite3'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -7,20 +7,20 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 describe('initializeDatabase', () => {
-  let db: Database.Database
+  let database: Database.Database
 
   afterEach(() => {
-    closeDatabase(db)
+    closeDatabase(database)
   })
 
   it('initializes an in-memory database', () => {
-    db = initializeDatabase(':memory:')
-    expect(db).toBeDefined()
+    database = initializeDatabase(':memory:')
+    expect(database).toBeDefined()
   })
 
   it('sets journal_mode (in-memory DB uses memory mode)', () => {
-    db = initializeDatabase(':memory:')
-    const result = db.prepare('PRAGMA journal_mode').get() as {
+    database = initializeDatabase(':memory:')
+    const result = database.prepare('PRAGMA journal_mode').get() as {
       journal_mode: string
     }
     // In-memory DB does not support WAL, so it falls back to memory mode
@@ -28,16 +28,16 @@ describe('initializeDatabase', () => {
   })
 
   it('enables foreign key constraints', () => {
-    db = initializeDatabase(':memory:')
-    const result = db.prepare('PRAGMA foreign_keys').get() as {
+    database = initializeDatabase(':memory:')
+    const result = database.prepare('PRAGMA foreign_keys').get() as {
       foreign_keys: number
     }
     expect(result.foreign_keys).toBe(1)
   })
 
   it('creates all expected tables', () => {
-    db = initializeDatabase(':memory:')
-    const tables = db
+    database = initializeDatabase(':memory:')
+    const tables = database
       .prepare(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
       )
@@ -68,8 +68,8 @@ describe('initializeDatabase', () => {
   })
 
   it('bots table has the correct schema', () => {
-    db = initializeDatabase(':memory:')
-    const info = db.prepare('PRAGMA table_info(bots)').all() as {
+    database = initializeDatabase(':memory:')
+    const info = database.prepare('PRAGMA table_info(bots)').all() as {
       name: string
     }[]
     const columnNames = info.map((c) => c.name)
@@ -81,10 +81,10 @@ describe('initializeDatabase', () => {
   it('migrates thread columns onto a legacy channels table that predates thread support', () => {
     // Simulate a database file created before thread support: a `channels`
     // table without any of the thread-related columns.
-    const dir = mkdtempSync(path.join(tmpdir(), 'fauxcord-db-'))
-    const dbPath = path.join(dir, 'legacy.db')
+    const direction = mkdtempSync(path.join(tmpdir(), 'fauxcord-db-'))
+    const databasePath = path.join(direction, 'legacy.db')
     try {
-      const legacy = new BetterSqlite3(dbPath)
+      const legacy = new BetterSqlite3(databasePath)
       legacy.exec(`
         CREATE TABLE channels (
           id       TEXT PRIMARY KEY,
@@ -96,9 +96,11 @@ describe('initializeDatabase', () => {
       legacy.close()
 
       // Reopening through initializeDatabase must add the missing columns.
-      db = initializeDatabase(dbPath)
+      database = initializeDatabase(databasePath)
       const columnNames = (
-        db.prepare('PRAGMA table_info(channels)').all() as { name: string }[]
+        database.prepare('PRAGMA table_info(channels)').all() as {
+          name: string
+        }[]
       ).map((c) => c.name)
 
       for (const column of [
@@ -112,7 +114,7 @@ describe('initializeDatabase', () => {
         expect(columnNames).toContain(column)
       }
     } finally {
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(direction, { recursive: true, force: true })
     }
   })
 })

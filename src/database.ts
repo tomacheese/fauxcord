@@ -22,35 +22,37 @@ const CHANNELS_THREAD_COLUMNS: Record<string, string> = {
  * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so a database
  * created before thread support would otherwise lack these columns and cause
  * thread INSERT/SELECTs to fail at runtime.
- * @param db - Database instance
+ * @param database - Database instance
  */
-function migrateChannelsThreadColumns(db: Database): void {
+function migrateChannelsThreadColumns(database: Database): void {
   const existing = new Set(
-    (db.prepare('PRAGMA table_info(channels)').all() as { name: string }[]).map(
-      (col) => col.name
-    )
+    (
+      database.prepare('PRAGMA table_info(channels)').all() as {
+        name: string
+      }[]
+    ).map((col) => col.name)
   )
   for (const [name, ddl] of Object.entries(CHANNELS_THREAD_COLUMNS)) {
     if (!existing.has(name)) {
-      db.exec(`ALTER TABLE channels ADD COLUMN ${name} ${ddl}`)
+      database.exec(`ALTER TABLE channels ADD COLUMN ${name} ${ddl}`)
     }
   }
 }
 
 /**
  * Initializes the database and creates tables.
- * @param dbPath - SQLite file path (":memory:" for an in-memory DB)
+ * @param databasePath - SQLite file path (":memory:" for an in-memory DB)
  * @returns Initialized Database instance
  */
-export function initializeDatabase(dbPath: string): Database {
-  const db = new BetterSqlite3(dbPath)
+export function initializeDatabase(databasePath: string): Database {
+  const database = new BetterSqlite3(databasePath)
 
   // Performance and integrity settings
-  db.exec('PRAGMA journal_mode = WAL')
-  db.exec('PRAGMA foreign_keys = ON')
-  db.exec('PRAGMA synchronous = NORMAL')
+  database.exec('PRAGMA journal_mode = WAL')
+  database.exec('PRAGMA foreign_keys = ON')
+  database.exec('PRAGMA synchronous = NORMAL')
 
-  db.exec(`
+  database.exec(`
     CREATE TABLE IF NOT EXISTS bots (
       token         TEXT PRIMARY KEY,
       user_id       TEXT NOT NULL,
@@ -300,18 +302,18 @@ export function initializeDatabase(dbPath: string): Database {
     CREATE INDEX IF NOT EXISTS idx_invites_channel ON invites(channel_id);
   `)
 
-  migrateChannelsThreadColumns(db)
+  migrateChannelsThreadColumns(database)
 
-  return db
+  return database
 }
 
 /**
  * Closes the database connection.
- * @param db - Database instance to close
+ * @param database - Database instance to close
  */
-export function closeDatabase(db: Database): void {
-  if (db.open) {
-    db.close()
+export function closeDatabase(database: Database): void {
+  if (database.open) {
+    database.close()
   }
 }
 

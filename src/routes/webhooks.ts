@@ -5,17 +5,21 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
 import {
   getWebhook,
   getWebhookByToken,
   updateWebhook,
-  deleteWebhook,
+  didDeleteWebhook,
   executeWebhook,
 } from '../services/webhooks'
-import { getMessage, updateMessage, deleteMessage } from '../services/messages'
+import {
+  getMessage,
+  updateMessage,
+  didDeleteMessage,
+} from '../services/messages'
 import { getChannel } from '../services/channels'
 import {
   validateWebhookExecute,
@@ -25,24 +29,24 @@ import { isEmptyMessage } from '../validators/message'
 
 /**
  * Creates the Webhooks API routes.
- * @param db - Database
+ * @param database - Database
  * @param baseUrl - Base URL
  * @returns Hono router instance
  */
-export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
+export function createWebhookRoutes(database: Database, baseUrl: string): Hono {
   const app = new Hono()
 
   // GET /webhooks/:webhookId — Retrieve a webhook by ID
   app.get('/webhooks/:webhookId', (c) => {
     const { webhookId } = c.req.param()
-    const webhook = getWebhook(db, webhookId)
+    const webhook = getWebhook(database, webhookId)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.json(webhook)
   })
@@ -50,14 +54,14 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   // GET /webhooks/:webhookId/:token — Retrieve a webhook by token without bot authentication
   app.get('/webhooks/:webhookId/:token', (c) => {
     const { webhookId, token } = c.req.param()
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     // Return the webhook without the token field.
     // The Omit annotation ensures TypeScript catches any future addition
@@ -91,24 +95,24 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     // inconsistent state, so reject it like the real API.
     if (
       payload.channel_id !== undefined &&
-      !getChannel(db, payload.channel_id)
+      !getChannel(database, payload.channel_id)
     ) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_CHANNEL,
         'Unknown Channel',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
-    const updated = updateWebhook(db, webhookId, payload)
+    const updated = updateWebhook(database, webhookId, payload)
     if (!updated) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.json(updated)
   })
@@ -116,14 +120,14 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   // DELETE /webhooks/:webhookId — Delete a webhook
   app.delete('/webhooks/:webhookId', (c) => {
     const { webhookId } = c.req.param()
-    const deleted = deleteWebhook(db, webhookId)
-    if (!deleted) {
-      const err = discordError(
+    const isDeleted = didDeleteWebhook(database, webhookId)
+    if (!isDeleted) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })
@@ -132,14 +136,14 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   app.patch('/webhooks/:webhookId/:token', async (c) => {
     const { webhookId, token } = c.req.param()
 
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
     const payload = await c.req.json<{
@@ -152,17 +156,17 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(validationError(errors).body, 400)
     }
 
-    const updated = updateWebhook(db, webhookId, {
+    const updated = updateWebhook(database, webhookId, {
       name: payload.name,
       avatar: payload.avatar,
     })
     if (!updated) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
     // Token-based endpoints return the webhook without the token field.
@@ -184,17 +188,17 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   app.delete('/webhooks/:webhookId/:token', (c) => {
     const { webhookId, token } = c.req.param()
 
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
-    deleteWebhook(db, webhookId)
+    didDeleteWebhook(database, webhookId)
     return c.body(null, 204)
   })
 
@@ -202,17 +206,17 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   app.post('/webhooks/:webhookId/:token', async (c) => {
     const { webhookId, token } = c.req.param()
     // discord.py sends wait=True as ?wait=1. Interpret both "true" and "1" as truthy
-    const waitParam = c.req.query('wait') ?? ''
-    const wait = waitParam === 'true' || waitParam === '1'
+    const waitParameter = c.req.query('wait') ?? ''
+    const isWait = waitParameter === 'true' || waitParameter === '1'
 
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
     const contentType = c.req.header('content-type') ?? ''
@@ -227,7 +231,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
         : {}
       // A file-only message (no content/embeds) is not empty, so detect any
       // uploaded file entry rather than assuming there are no attachments.
-      for (const [key, value] of formData.entries()) {
+      for (const [key, value] of formData) {
         if (
           (key === 'file' || key.startsWith('files[')) &&
           value instanceof File
@@ -242,12 +246,12 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
 
     // Empty message check
     if (isEmptyMessage(payload, hasAttachments)) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.EMPTY_MESSAGE,
         'Cannot send an empty message',
         400
       )
-      return c.json(err.body, 400)
+      return c.json(error.body, 400)
     }
 
     // Validation
@@ -256,12 +260,12 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(validationError(errors).body, 400)
     }
 
-    if (!wait) {
+    if (!isWait) {
       // When wait is false, execute asynchronously (save to DB in the background)
       const messageId = generateSnowflake()
       try {
         executeWebhook(
-          db,
+          database,
           {
             messageId,
             channelId: webhook.channel_id,
@@ -281,8 +285,8 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     }
 
     const messageId = generateSnowflake()
-    const msg = executeWebhook(
-      db,
+    const message = executeWebhook(
+      database,
       {
         messageId,
         channelId: webhook.channel_id,
@@ -296,47 +300,47 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       baseUrl
     )
 
-    return c.json(msg)
+    return c.json(message)
   })
 
   // GET /webhooks/:webhookId/:token/messages/:messageId — Retrieve a message sent via webhook
   app.get('/webhooks/:webhookId/:token/messages/:messageId', (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
-    const msg = getMessage(db, messageId, baseUrl)
-    if (!msg) {
-      const err = discordError(
+    const message = getMessage(database, messageId, baseUrl)
+    if (!message) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,
         'Unknown Message',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
-    return c.json(msg)
+    return c.json(message)
   })
 
   // PATCH /webhooks/:webhookId/:token/messages/:messageId — Edit a message sent via webhook
   app.patch('/webhooks/:webhookId/:token/messages/:messageId', async (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
     const payload = await c.req.json<{
@@ -344,14 +348,14 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       embeds?: unknown[]
     }>()
 
-    const updated = updateMessage(db, messageId, payload, baseUrl)
+    const updated = updateMessage(database, messageId, payload, baseUrl)
     if (!updated) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,
         'Unknown Message',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.json(updated)
   })
@@ -360,24 +364,24 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
   app.delete('/webhooks/:webhookId/:token/messages/:messageId', (c) => {
     const { webhookId, token, messageId } = c.req.param()
 
-    const webhook = getWebhookByToken(db, webhookId, token)
+    const webhook = getWebhookByToken(database, webhookId, token)
     if (!webhook) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
 
-    const deleted = deleteMessage(db, messageId)
-    if (!deleted) {
-      const err = discordError(
+    const isDeleted = didDeleteMessage(database, messageId)
+    if (!isDeleted) {
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,
         'Unknown Message',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.body(null, 204)
   })

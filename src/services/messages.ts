@@ -5,7 +5,7 @@
  * reused by the message-list, single-message, and pin-list queries.
  */
 
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { snowflakeToTimestamp } from '../snowflake'
 import { toDiscordTimestamp } from '../timestamp'
 import { gatewayBus } from '../gateway/bus'
@@ -180,15 +180,15 @@ export interface AttachmentObject {
 /**
  * Gets the Guild ID that a channel belongs to, given its channel ID.
  * Returns undefined for DM-like data that has no guild_id.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @returns Guild ID, or undefined if it doesn't exist
  */
 export function getGuildIdForChannel(
-  db: Database,
+  database: Database,
   channelId: string
 ): string | undefined {
-  const row = db
+  const row = database
     .prepare('SELECT guild_id FROM channels WHERE id = ?')
     .get(channelId) as { guild_id: string | null } | undefined
   return row?.guild_id ?? undefined
@@ -212,7 +212,7 @@ export function toMessageObject(
   reactions: ReactionAggRow[],
   baseUrl: string
 ): MessageObject {
-  const obj: MessageObject = {
+  const object: MessageObject = {
     id: row.id,
     channel_id: row.channel_id,
     author: {
@@ -245,7 +245,7 @@ export function toMessageObject(
     })),
     embeds: embeds
       .toSorted((a, b) => a.position - b.position)
-      .map((e) => JSON.parse(e.data) as unknown),
+      .map((error) => JSON.parse(error.data) as unknown),
     components: [],
     pinned: row.pinned === 1,
     type: row.type,
@@ -253,17 +253,17 @@ export function toMessageObject(
   }
 
   if (row.referenced_message_id) {
-    obj.message_reference = { message_id: row.referenced_message_id }
+    object.message_reference = { message_id: row.referenced_message_id }
   }
 
   // Add webhook_id to messages sent via webhook (author_id = webhook ID)
   if (row.author_token === 'webhook') {
-    obj.webhook_id = row.author_id
+    object.webhook_id = row.author_id
   }
 
   // Add the reactions field only when reactions exist (conforming to the Discord API spec)
   if (reactions.length > 0) {
-    obj.reactions = reactions.map((r) => ({
+    object.reactions = reactions.map((r) => ({
       count: r.count,
       count_details: { burst: 0, normal: r.count },
       me: false, // Always false in the mock (the requesting user is not identified)
@@ -276,7 +276,7 @@ export function toMessageObject(
     }))
   }
 
-  return obj
+  return object
 }
 
 /**
@@ -284,30 +284,30 @@ export function toMessageObject(
  * converts it into the API response format. Returns null if the author no
  * longer exists (e.g. a deleted user), matching the filtering behavior the
  * call sites relied on before this helper existed.
- * @param db - Database
+ * @param database - Database
  * @param row - Message DB record
  * @param baseUrl - Base URL
  * @returns Message object, or null if the author record is missing
  */
 export function hydrateMessageRow(
-  db: Database,
+  database: Database,
   row: MessageRow,
   baseUrl: string
 ): MessageObject | null {
-  const author = db
+  const author = database
     .prepare('SELECT * FROM users WHERE id = ?')
     .get(row.author_id) as UserRow | undefined
   if (!author) return null
 
-  const embeds = db
+  const embeds = database
     .prepare('SELECT * FROM embeds WHERE message_id = ? ORDER BY position')
     .all(row.id) as EmbedRow[]
 
-  const attachments = db
+  const attachments = database
     .prepare('SELECT * FROM attachments WHERE message_id = ?')
     .all(row.id) as AttachmentRow[]
 
-  const reactions = db
+  const reactions = database
     .prepare(
       'SELECT emoji, COUNT(*) as count FROM reactions WHERE message_id = ? GROUP BY emoji'
     )
@@ -318,26 +318,26 @@ export function hydrateMessageRow(
 
 /**
  * Retrieves a message from the DB and converts it into the API response format.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param baseUrl - Base URL
  * @returns Message object, or null if it does not exist
  */
 export function getMessage(
-  db: Database,
+  database: Database,
   messageId: string,
   baseUrl: string
 ): MessageObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM messages WHERE id = ?')
     .get(messageId) as MessageRow | undefined
   if (!row) return null
 
-  return hydrateMessageRow(db, row, baseUrl)
+  return hydrateMessageRow(database, row, baseUrl)
 }
 
 /** Query parameters for listing messages */
-export interface MessageListParams {
+export interface MessageListParameters {
   limit?: number
   before?: string
   after?: string
@@ -346,72 +346,72 @@ export interface MessageListParams {
 
 /**
  * Retrieves the list of messages in a channel.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
- * @param params - Pagination parameters
+ * @param parameters - Pagination parameters
  * @param baseUrl - Base URL
  * @returns Array of message objects (newest first)
  */
 export function getMessages(
-  db: Database,
+  database: Database,
   channelId: string,
-  params: MessageListParams,
+  parameters: MessageListParameters,
   baseUrl: string
 ): MessageObject[] {
-  const limit = Math.min(Math.max(params.limit ?? 50, 1), 100)
+  const limit = Math.min(Math.max(parameters.limit ?? 50, 1), 100)
 
   let query: string
-  let queryParams: unknown[]
+  let queryParameters: unknown[]
 
-  if (params.before) {
+  if (parameters.before) {
     query =
       'SELECT * FROM messages WHERE channel_id = ? AND id < ? ORDER BY id DESC LIMIT ?'
-    queryParams = [channelId, params.before, limit]
-  } else if (params.after) {
+    queryParameters = [channelId, parameters.before, limit]
+  } else if (parameters.after) {
     query =
       'SELECT * FROM messages WHERE channel_id = ? AND id > ? ORDER BY id ASC LIMIT ?'
-    queryParams = [channelId, params.after, limit]
-  } else if (params.around) {
+    queryParameters = [channelId, parameters.after, limit]
+  } else if (parameters.around) {
     const half = Math.floor(limit / 2)
     // Messages before "around" (fetch half items in newest-first order)
-    const beforeRows = db
+    const beforeRows = database
       .prepare(
         'SELECT * FROM messages WHERE channel_id = ? AND id < ? ORDER BY id DESC LIMIT ?'
       )
-      .all(channelId, params.around, half) as MessageRow[]
+      .all(channelId, parameters.around, half) as MessageRow[]
     // Messages from "around" onward, inclusive (fetch (limit - half) items in oldest-first order)
-    const afterRows = db
+    const afterRows = database
       .prepare(
         'SELECT * FROM messages WHERE channel_id = ? AND id >= ? ORDER BY id ASC LIMIT ?'
       )
-      .all(channelId, params.around, limit - half) as MessageRow[]
+      .all(channelId, parameters.around, limit - half) as MessageRow[]
     // beforeRows is fetched in descending (newest-first) order and afterRows in ascending (oldest-first) order,
     // so reverse afterRows to align with descending order, then concatenate afterRows → beforeRows
     // so the whole list is newest-first (descending)
     const rows = [...afterRows.toReversed(), ...beforeRows]
 
     return rows
-      .map((r) => hydrateMessageRow(db, r, baseUrl))
+      .map((r) => hydrateMessageRow(database, r, baseUrl))
       .filter((m): m is MessageObject => m !== null)
   } else {
     query =
       'SELECT * FROM messages WHERE channel_id = ? ORDER BY id DESC LIMIT ?'
-    queryParams = [channelId, limit]
+    queryParameters = [channelId, limit]
   }
 
-  const rows = db.prepare(query).all(...queryParams) as MessageRow[]
+  const rows = database.prepare(query).all(...queryParameters) as MessageRow[]
 
   // "after" is fetched in oldest-first (ASC) order, so reverse it to newest-first.
   // "before" and the default case are already fetched in descending (DESC) order, so return as-is
-  const orderedRows = params.after ? rows.toReversed() : rows
+  const orderedRows = parameters.after ? rows.toReversed() : rows
 
   return orderedRows
-    .map((r) => hydrateMessageRow(db, r, baseUrl))
+    .map((r) => hydrateMessageRow(database, r, baseUrl))
     .filter((m): m is MessageObject => m !== null)
 }
 
 /** Message creation parameters */
-export interface MessageCreateParams {
+export interface MessageCreateParameters {
   channelId: string
   authorId: string
   authorToken: string
@@ -434,122 +434,135 @@ export interface MessageCreateParams {
  * guild *member* record (nick, roles, joined_at, …). That member data is not
  * loaded anywhere else on the create/update path, so a separate lookup here is
  * genuinely required.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID the message's channel belongs to, if any
  * @param authorId - Message author's user ID
  * @returns Guild member object, or undefined when not applicable
  */
 function dispatchMemberFor(
-  db: Database,
+  database: Database,
   guildId: string | undefined,
   authorId: string
 ): Record<string, unknown> | undefined {
   if (!guildId) return undefined
   return (
-    (getGuildMember(db, guildId, authorId) as Record<string, unknown> | null) ??
-    undefined
+    (getGuildMember(database, guildId, authorId) as Record<
+      string,
+      unknown
+    > | null) ?? undefined
   )
 }
 
 /**
  * Creates a message.
- * @param db - Database
- * @param params - Message creation parameters
+ * @param database - Database
+ * @param parameters - Message creation parameters
  * @param baseUrl - Base URL
  * @returns Created message object
  */
 export function createMessage(
-  db: Database,
-  params: MessageCreateParams,
+  database: Database,
+  parameters: MessageCreateParameters,
   baseUrl: string
 ): MessageObject {
-  db.prepare(
-    `INSERT INTO messages (id, channel_id, author_id, author_token, content, tts, flags, referenced_message_id)
+  database
+    .prepare(
+      `INSERT INTO messages (id, channel_id, author_id, author_token, content, tts, flags, referenced_message_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    params.messageId,
-    params.channelId,
-    params.authorId,
-    params.authorToken,
-    params.content ?? '',
-    params.tts ? 1 : 0,
-    params.flags ?? 0,
-    params.messageReference?.message_id ?? null
-  )
+    )
+    .run(
+      parameters.messageId,
+      parameters.channelId,
+      parameters.authorId,
+      parameters.authorToken,
+      parameters.content ?? '',
+      parameters.tts ? 1 : 0,
+      parameters.flags ?? 0,
+      parameters.messageReference?.message_id ?? null
+    )
 
   // Save embeds
-  if (params.embeds) {
-    for (let i = 0; i < params.embeds.length; i++) {
-      db.prepare(
-        'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
-      ).run(params.messageId, JSON.stringify(params.embeds[i]), i)
+  if (parameters.embeds) {
+    for (let index = 0; index < parameters.embeds.length; index++) {
+      database
+        .prepare(
+          'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
+        )
+        .run(
+          parameters.messageId,
+          JSON.stringify(parameters.embeds[index]),
+          index
+        )
     }
   }
 
   // Update the channel's last_message_id
-  db.prepare('UPDATE channels SET last_message_id = ? WHERE id = ?').run(
-    params.messageId,
-    params.channelId
-  )
+  database
+    .prepare('UPDATE channels SET last_message_id = ? WHERE id = ?')
+    .run(parameters.messageId, parameters.channelId)
 
-  const msg = getMessage(db, params.messageId, baseUrl)
-  if (!msg) throw new Error('Failed to create message')
+  const message = getMessage(database, parameters.messageId, baseUrl)
+  if (!message) throw new Error('Failed to create message')
 
-  const guildId = getGuildIdForChannel(db, params.channelId)
+  const guildId = getGuildIdForChannel(database, parameters.channelId)
   gatewayBus.emit('message.create', {
     guildId,
-    channelId: params.channelId,
-    message: msg as unknown as Record<string, unknown>,
-    member: dispatchMemberFor(db, guildId, params.authorId),
+    channelId: parameters.channelId,
+    message: message as unknown as Record<string, unknown>,
+    member: dispatchMemberFor(database, guildId, parameters.authorId),
   })
 
-  return msg
+  return message
 }
 
 /**
  * Updates a message.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param payload - Update payload
  * @param baseUrl - Base URL
  * @returns Updated message object
  */
 export function updateMessage(
-  db: Database,
+  database: Database,
   messageId: string,
   payload: { content?: string; embeds?: unknown[] | null },
   baseUrl: string
 ): MessageObject | null {
-  const row = db
+  const row = database
     .prepare('SELECT * FROM messages WHERE id = ?')
     .get(messageId) as MessageRow | undefined
   if (!row) return null
 
   if (payload.content !== undefined) {
-    db.prepare(
-      "UPDATE messages SET content = ?, edited_at = datetime('now') WHERE id = ?"
-    ).run(payload.content, messageId)
+    database
+      .prepare(
+        "UPDATE messages SET content = ?, edited_at = datetime('now') WHERE id = ?"
+      )
+      .run(payload.content, messageId)
   }
 
   // null is equivalent to an empty array (delete all embeds). undefined means "no change" and is ignored
   if (payload.embeds !== undefined) {
-    db.prepare('DELETE FROM embeds WHERE message_id = ?').run(messageId)
+    database.prepare('DELETE FROM embeds WHERE message_id = ?').run(messageId)
     const embedsArray = Array.isArray(payload.embeds) ? payload.embeds : []
-    for (const [i, element] of embedsArray.entries()) {
-      db.prepare(
-        'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
-      ).run(messageId, JSON.stringify(element), i)
+    for (const [index, element] of embedsArray.entries()) {
+      database
+        .prepare(
+          'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
+        )
+        .run(messageId, JSON.stringify(element), index)
     }
   }
 
-  const updated = getMessage(db, messageId, baseUrl)
+  const updated = getMessage(database, messageId, baseUrl)
   if (updated) {
-    const guildId = getGuildIdForChannel(db, row.channel_id)
+    const guildId = getGuildIdForChannel(database, row.channel_id)
     gatewayBus.emit('message.update', {
       guildId,
       channelId: row.channel_id,
       message: updated as unknown as Record<string, unknown>,
-      member: dispatchMemberFor(db, guildId, row.author_id),
+      member: dispatchMemberFor(database, guildId, row.author_id),
     })
   }
   return updated
@@ -559,31 +572,31 @@ export function updateMessage(
  * Deletes a message. When `channelId` is provided, the deletion is scoped to
  * that channel so a message can only be removed through the channel it belongs
  * to (matching Discord's per-channel message endpoints).
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @param channelId - Optional channel ID the message must belong to
  * @returns true on successful deletion
  */
-export function deleteMessage(
-  db: Database,
+export function didDeleteMessage(
+  database: Database,
   messageId: string,
   channelId?: string
 ): boolean {
   // The row is gone after DELETE runs, so capture channel_id beforehand
-  const target = db
+  const target = database
     .prepare('SELECT channel_id FROM messages WHERE id = ?')
     .get(messageId) as { channel_id: string } | undefined
 
   const result =
     channelId === undefined
-      ? db.prepare('DELETE FROM messages WHERE id = ?').run(messageId)
-      : db
+      ? database.prepare('DELETE FROM messages WHERE id = ?').run(messageId)
+      : database
           .prepare('DELETE FROM messages WHERE id = ? AND channel_id = ?')
           .run(messageId, channelId)
 
   if (result.changes > 0 && target) {
     gatewayBus.emit('message.delete', {
-      guildId: getGuildIdForChannel(db, target.channel_id),
+      guildId: getGuildIdForChannel(database, target.channel_id),
       channelId: target.channel_id,
       messageId,
     })
@@ -600,12 +613,12 @@ const TWO_WEEKS_MS = 14 * 24 * 60 * 60 * 1000
  *
  * Like the real Discord API, the elapsed time is determined from the timestamp
  * embedded in the Snowflake ID, regardless of whether the message exists.
- * @param db - Database
+ * @param database - Database
  * @param messageId - Message ID
  * @returns true if older than 2 weeks
  */
 export function isTooOldForBulkDelete(
-  db: Database,
+  database: Database,
   messageId: string
 ): boolean {
   // Recover the timestamp from the Snowflake ID to make the determination (same behavior as real Discord)
@@ -614,7 +627,7 @@ export function isTooOldForBulkDelete(
     return Date.now() - createdAt > TWO_WEEKS_MS
   } catch {
     // For IDs that cannot be interpreted as Snowflakes, fall back to the DB's created_at
-    const row = db
+    const row = database
       .prepare('SELECT created_at FROM messages WHERE id = ?')
       .get(messageId) as { created_at: string } | undefined
     if (!row) return false

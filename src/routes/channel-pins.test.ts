@@ -1,46 +1,51 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createChannelPinRoutes } from './channel-pins'
-import { initializeDatabase, closeDatabase } from '../db'
+import { initializeDatabase, closeDatabase } from '../database'
 import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
-import type { Database } from '../db'
+import type { Database } from '../database'
 
 const BASE_URL = 'http://localhost:3000'
 
 describe('Channel Pins API', () => {
-  let db: Database
+  let database: Database
   let app: Hono
   let channelId: string
   let token: string
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:')
+    database = initializeDatabase(':memory:')
     app = new Hono()
-    app.route('/', createChannelPinRoutes(db, BASE_URL))
+    app.route('/', createChannelPinRoutes(database, BASE_URL))
 
-    token = seedBot(db)
-    const guildId = seedGuild(db, token)
-    channelId = seedChannel(db, guildId)
+    token = seedBot(database)
+    const guildId = seedGuild(database, token)
+    channelId = seedChannel(database, guildId)
   })
 
   afterEach(() => {
-    closeDatabase(db)
+    closeDatabase(database)
   })
 
   describe('GET /channels/:channelId/pins', () => {
     it('retrieves the list of pinned messages', async () => {
-      const res = await app.request(`/channels/${channelId}/pins`, {
+      const resource = await app.request(`/channels/${channelId}/pins`, {
         headers: { Authorization: token },
       })
-      expect(res.status).toBe(200)
-      const body = await res.json()
+      expect(resource.status).toBe(200)
+      const body = await resource.json()
       expect(Array.isArray(body)).toBe(true)
     })
   })
 
   describe('PUT /channels/:channelId/pins/:messageId', () => {
     it('is idempotent: pinning an already-pinned message returns 204, not an error', async () => {
-      const messageId = seedMessage(db, channelId, '111111111111111111', token)
+      const messageId = seedMessage(
+        database,
+        channelId,
+        '111111111111111111',
+        token
+      )
 
       const first = await app.request(
         `/channels/${channelId}/pins/${messageId}`,
@@ -60,11 +65,14 @@ describe('Channel Pins API', () => {
 
   describe('new-format pins API (/messages/pins)', () => {
     it('returns the {items, has_more} shape', async () => {
-      const res = await app.request(`/channels/${channelId}/messages/pins`, {
-        headers: { Authorization: token },
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as {
+      const resource = await app.request(
+        `/channels/${channelId}/messages/pins`,
+        {
+          headers: { Authorization: token },
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as {
         items: unknown[]
         has_more: boolean
       }
@@ -74,59 +82,72 @@ describe('Channel Pins API', () => {
 
     it('pins and unpins a message', async () => {
       const botUserId = (
-        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+        database
+          .prepare('SELECT user_id FROM bots WHERE token = ?')
+          .get(token) as {
           user_id: string
         }
       ).user_id
-      const messageId = seedMessage(db, channelId, botUserId, token, 'pin me')
+      const messageId = seedMessage(
+        database,
+        channelId,
+        botUserId,
+        token,
+        'pin me'
+      )
 
-      const putRes = await app.request(
+      const putResource = await app.request(
         `/channels/${channelId}/messages/pins/${messageId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(putRes.status).toBe(204)
+      expect(putResource.status).toBe(204)
 
-      const listRes = await app.request(
+      const listResource = await app.request(
         `/channels/${channelId}/messages/pins`,
         { headers: { Authorization: token } }
       )
-      const listBody = (await listRes.json()) as { items: unknown[] }
+      const listBody = (await listResource.json()) as { items: unknown[] }
       expect(listBody.items.length).toBe(1)
 
-      const delRes = await app.request(
+      const delResource = await app.request(
         `/channels/${channelId}/messages/pins/${messageId}`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(delRes.status).toBe(204)
+      expect(delResource.status).toBe(204)
     })
 
     it('returns 404 when pinning a non-existent message', async () => {
-      const res = await app.request(
+      const resource = await app.request(
         `/channels/${channelId}/messages/pins/999999999999999999`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(res.status).toBe(404)
-      const body = (await res.json()) as { code: number }
+      expect(resource.status).toBe(404)
+      const body = (await resource.json()) as { code: number }
       expect(body.code).toBe(10_008)
     })
 
     it('returns a valid ISO pinned_at timestamp for a pinned message', async () => {
       const authorId = '222222222222222222'
-      db.prepare(
-        "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'Author')"
-      ).run(authorId)
-      const messageId = seedMessage(db, channelId, authorId, token)
-      const pinRes = await app.request(
+      database
+        .prepare(
+          "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'Author')"
+        )
+        .run(authorId)
+      const messageId = seedMessage(database, channelId, authorId, token)
+      const pinResource = await app.request(
         `/channels/${channelId}/messages/pins/${messageId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(pinRes.status).toBe(204)
+      expect(pinResource.status).toBe(204)
 
-      const res = await app.request(`/channels/${channelId}/messages/pins`, {
-        headers: { Authorization: token },
-      })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as {
+      const resource = await app.request(
+        `/channels/${channelId}/messages/pins`,
+        {
+          headers: { Authorization: token },
+        }
+      )
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as {
         items: { pinned_at: string; message: { id: string } }[]
         has_more: boolean
       }
@@ -146,23 +167,31 @@ describe('Channel Pins API', () => {
   describe('legacy pins API (/pins)', () => {
     it('pins a message via the legacy route', async () => {
       const botUserId = (
-        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+        database
+          .prepare('SELECT user_id FROM bots WHERE token = ?')
+          .get(token) as {
           user_id: string
         }
       ).user_id
-      const messageId = seedMessage(db, channelId, botUserId, token, 'legacy')
+      const messageId = seedMessage(
+        database,
+        channelId,
+        botUserId,
+        token,
+        'legacy'
+      )
 
-      const putRes = await app.request(
+      const putResource = await app.request(
         `/channels/${channelId}/pins/${messageId}`,
         { method: 'PUT', headers: { Authorization: token } }
       )
-      expect(putRes.status).toBe(204)
+      expect(putResource.status).toBe(204)
 
-      const delRes = await app.request(
+      const delResource = await app.request(
         `/channels/${channelId}/pins/${messageId}`,
         { method: 'DELETE', headers: { Authorization: token } }
       )
-      expect(delRes.status).toBe(204)
+      expect(delResource.status).toBe(204)
     })
   })
 })

@@ -1,26 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createTestRoutes } from './test'
-import { initializeDatabase, closeDatabase } from '../db'
-import type { Database } from '../db'
+import { initializeDatabase, closeDatabase } from '../database'
+import type { Database } from '../database'
 
 describe('Test Control API', () => {
-  let db: Database
+  let database: Database
   let app: Hono
 
   beforeEach(() => {
-    db = initializeDatabase(':memory:')
+    database = initializeDatabase(':memory:')
     app = new Hono()
-    app.route('/', createTestRoutes(db))
+    app.route('/', createTestRoutes(database))
   })
 
   afterEach(() => {
-    closeDatabase(db)
+    closeDatabase(database)
   })
 
   describe('POST /_test/setup', () => {
     it('sets up the test environment', async () => {
-      const res = await app.request('/_test/setup', {
+      const resource = await app.request('/_test/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -37,8 +37,8 @@ describe('Test Control API', () => {
           ],
         }),
       })
-      expect(res.status).toBe(201)
-      const body = (await res.json()) as {
+      expect(resource.status).toBe(201)
+      const body = (await resource.json()) as {
         token: string
         user: Record<string, unknown>
         guilds: { channels: Record<string, unknown>[] }[]
@@ -49,7 +49,7 @@ describe('Test Control API', () => {
     })
 
     it('auto-generates IDs when omitted', async () => {
-      const res = await app.request('/_test/setup', {
+      const resource = await app.request('/_test/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -62,8 +62,8 @@ describe('Test Control API', () => {
           ],
         }),
       })
-      expect(res.status).toBe(201)
-      const body = (await res.json()) as {
+      expect(resource.status).toBe(201)
+      const body = (await resource.json()) as {
         guilds: { id: unknown; channels: { id: unknown }[] }[]
       }
       expect(body.guilds[0].id).toBeTruthy()
@@ -78,7 +78,7 @@ describe('Test Control API', () => {
       // role assignment) — confirmed via a real Discord.Net compat run
       // (compat/dotnet-discordnet) where RestGuild.GetUserAsync(botId)
       // silently returned null because of exactly this gap.
-      const res = await app.request('/_test/setup', {
+      const resource = await app.request('/_test/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -87,9 +87,9 @@ describe('Test Control API', () => {
           guilds: [{ id: '222222222222222222', name: 'Test Guild' }],
         }),
       })
-      expect(res.status).toBe(201)
+      expect(resource.status).toBe(201)
 
-      const memberRow = db
+      const memberRow = database
         .prepare(
           'SELECT * FROM guild_members WHERE guild_id = ? AND user_id = ?'
         )
@@ -109,31 +109,31 @@ describe('Test Control API', () => {
         body: setupBody,
       })
 
-      const res = await app.request('/_test/setup', {
+      const resource = await app.request('/_test/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: setupBody,
       })
-      expect(res.status).toBe(409)
+      expect(resource.status).toBe(409)
     })
   })
 
   describe('POST /_test/reset', () => {
     it('resets all data', async () => {
-      const res = await app.request('/_test/reset', {
+      const resource = await app.request('/_test/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       })
-      expect(res.status).toBe(204)
+      expect(resource.status).toBe(204)
     })
   })
 
   describe('GET /_test/messages/:channelId', () => {
     it('retrieves messages for a channel', async () => {
-      const res = await app.request('/_test/messages/333333333333333333')
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as Record<string, unknown>
+      const resource = await app.request('/_test/messages/333333333333333333')
+      expect(resource.status).toBe(200)
+      const body = (await resource.json()) as Record<string, unknown>
       expect(body).toHaveProperty('messages')
       expect(Array.isArray(body.messages)).toBe(true)
     })

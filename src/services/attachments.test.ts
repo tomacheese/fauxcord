@@ -3,37 +3,41 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { saveAttachment, getAttachment, guessContentType } from './attachments'
-import { initializeDatabase, closeDatabase } from '../db'
-import type { Database } from '../db'
+import { initializeDatabase, closeDatabase } from '../database'
+import type { Database } from '../database'
 
 const BASE_URL = 'http://localhost:3000'
 
 describe('attachments service', () => {
-  let db: Database
+  let database: Database
   let uploadPath: string
 
   beforeEach(async () => {
-    db = initializeDatabase(':memory:')
+    database = initializeDatabase(':memory:')
     uploadPath = await mkdtemp(path.join(tmpdir(), 'fauxcord-att-'))
     // saveAttachment inserts into attachments(message_id); satisfy the schema
     // by inserting a channel + message row first.
-    db.prepare(
-      "INSERT INTO channels (id, name, type) VALUES ('c1', 'general', 0)"
-    ).run()
-    db.prepare(
-      "INSERT INTO messages (id, channel_id, author_id, author_token, content) VALUES ('m1', 'c1', 'u1', 'Bot t', 'hi')"
-    ).run()
+    database
+      .prepare(
+        "INSERT INTO channels (id, name, type) VALUES ('c1', 'general', 0)"
+      )
+      .run()
+    database
+      .prepare(
+        "INSERT INTO messages (id, channel_id, author_id, author_token, content) VALUES ('m1', 'c1', 'u1', 'Bot t', 'hi')"
+      )
+      .run()
   })
 
   afterEach(async () => {
-    closeDatabase(db)
+    closeDatabase(database)
     await rm(uploadPath, { recursive: true, force: true })
   })
 
   it('saves a Uint8Array and records it in the DB', async () => {
     const data = new TextEncoder().encode('hello world')
     const info = await saveAttachment(
-      db,
+      database,
       uploadPath,
       BASE_URL,
       'c1',
@@ -48,7 +52,7 @@ describe('attachments service', () => {
     expect(info.size).toBe(data.byteLength)
     expect(info.url).toBe(`${BASE_URL}/_mock/attachments/c1/m1/note.txt`)
 
-    const row = db
+    const row = database
       .prepare('SELECT filename, size FROM attachments WHERE id = ?')
       .get('a1') as { filename: string; size: number }
     expect(row.filename).toBe('note.txt')
@@ -56,9 +60,9 @@ describe('attachments service', () => {
   })
 
   it('saves an ArrayBuffer', async () => {
-    const buf = new TextEncoder().encode('abc').buffer
+    const buffer = new TextEncoder().encode('abc').buffer
     const info = await saveAttachment(
-      db,
+      database,
       uploadPath,
       BASE_URL,
       'c1',
@@ -66,7 +70,7 @@ describe('attachments service', () => {
       'a2',
       'x.bin',
       'application/octet-stream',
-      buf
+      buffer
     )
     expect(info.size).toBe(3)
   })
@@ -74,7 +78,7 @@ describe('attachments service', () => {
   it('reads back a saved attachment', async () => {
     const data = new TextEncoder().encode('roundtrip')
     await saveAttachment(
-      db,
+      database,
       uploadPath,
       BASE_URL,
       'c1',

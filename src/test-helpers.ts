@@ -8,9 +8,9 @@
 
 import { Hono } from 'hono'
 import { serveWithGateway } from './http-server'
-import { initializeDatabase, closeDatabase } from './db'
-import type { Database } from './db'
-import { createAuthMiddleware, type AppEnv } from './middleware/auth'
+import { initializeDatabase, closeDatabase } from './database'
+import type { Database } from './database'
+import { createAuthMiddleware, type AppEnvironment } from './middleware/auth'
 import { corsMiddleware } from './middleware/cors'
 import { versionMiddleware } from './middleware/version'
 import { createChannelRoutes } from './routes/channels'
@@ -40,7 +40,7 @@ export interface TestContext {
 /** DB/App pair for full-stack contract testing */
 export interface FullTestContext {
   db: Database
-  app: Hono<AppEnv>
+  app: Hono<AppEnvironment>
   cleanup: () => void
 }
 
@@ -49,14 +49,14 @@ export interface FullTestContext {
  * @returns Test context
  */
 export function createTestApp(): TestContext {
-  const db = initializeDatabase(':memory:')
+  const database = initializeDatabase(':memory:')
   const app = new Hono()
 
   return {
-    db,
+    db: database,
     app,
     cleanup: () => {
-      closeDatabase(db)
+      closeDatabase(database)
     },
   }
 }
@@ -73,43 +73,46 @@ export function createTestApp(): TestContext {
  * @returns Full test context with `app` and `db`
  */
 export function createFullTestApp(): FullTestContext {
-  const db = initializeDatabase(':memory:')
-  const app = new Hono<AppEnv>()
+  const database = initializeDatabase(':memory:')
+  const app = new Hono<AppEnvironment>()
 
   // Middleware (same order as index.ts)
   app.use('*', corsMiddleware)
   app.use('*', versionMiddleware)
 
   // Routes that do not require authentication (mounted before auth middleware)
-  app.route('/', createMockRoutes(db, TEST_UPLOAD_PATH))
-  app.route('/', createTestRoutes(db))
+  app.route('/', createMockRoutes(database, TEST_UPLOAD_PATH))
+  app.route('/', createTestRoutes(database))
   // OAuth2 must be reachable under all three version prefixes, matching
   // src/index.ts (see its comment for why it is exempt from auth here).
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
-    app.route(oauth2Prefix, createOAuth2Routes(db))
+    app.route(oauth2Prefix, createOAuth2Routes(database))
   }
 
   // Authentication middleware
-  const authMiddleware = createAuthMiddleware(db, false)
+  const authMiddleware = createAuthMiddleware(database, false)
   app.use('*', authMiddleware)
 
   // Discord API routes (mounted under all three prefixes)
   const routePrefixes = ['/api/v10', '/api', '']
   for (const prefix of routePrefixes) {
-    app.route(prefix, createChannelRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH))
-    app.route(prefix, createGuildRoutes(db))
-    app.route(prefix, createUserRoutes(db))
-    app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
+    app.route(
+      prefix,
+      createChannelRoutes(database, TEST_BASE_URL, TEST_UPLOAD_PATH)
+    )
+    app.route(prefix, createGuildRoutes(database))
+    app.route(prefix, createUserRoutes(database))
+    app.route(prefix, createGatewayRoutes(database, TEST_BASE_URL))
     app.route(prefix, createSoundboardRoutes())
-    app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
-    app.route(prefix, createInviteRoutes(db))
+    app.route(prefix, createWebhookRoutes(database, TEST_BASE_URL))
+    app.route(prefix, createInviteRoutes(database))
   }
 
   return {
-    db,
+    db: database,
     app,
     cleanup: () => {
-      closeDatabase(db)
+      closeDatabase(database)
     },
   }
 }
@@ -125,8 +128,8 @@ export async function createTestGatewayServer(): Promise<{
   sessionManager: SessionManager
   close: () => Promise<void>
 }> {
-  const db = initializeDatabase(':memory:') // same DB initialization as the existing createTestApp
-  const { app, wss, sessionManager, unsubscribeGateway } = buildApp(db, {
+  const database = initializeDatabase(':memory:') // same DB initialization as the existing createTestApp
+  const { app, wss, sessionManager, unsubscribeGateway } = buildApp(database, {
     baseUrl: 'http://localhost:0',
     disableAuth: false,
   })
@@ -151,7 +154,7 @@ export async function createTestGatewayServer(): Promise<{
   const port = typeof address === 'object' && address ? address.port : 0
 
   return {
-    db,
+    db: database,
     url: `ws://127.0.0.1:${port}`,
     sessionManager,
     close: () => {
@@ -159,12 +162,12 @@ export async function createTestGatewayServer(): Promise<{
       // repeated createTestGatewayServer() calls in the test suite.
       unsubscribeGateway()
       return new Promise<void>((resolve, reject) => {
-        server.close((err) => {
-          if (err) {
-            reject(err)
+        server.close((error) => {
+          if (error) {
+            reject(error)
             return
           }
-          closeDatabase(db)
+          closeDatabase(database)
           resolve()
         })
       })
@@ -174,69 +177,75 @@ export async function createTestGatewayServer(): Promise<{
 
 /**
  * Registers a Bot token in the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param token - Bot token string (default: "Bot testtoken")
  * @param userId - User ID (default: "111111111111111111")
  * @returns Registered token
  */
 export function seedBot(
-  db: Database,
+  database: Database,
   token = 'Bot testtoken',
   userId = '111111111111111111'
 ): string {
-  db.prepare(
-    'INSERT OR IGNORE INTO users (id, username, bot) VALUES (?, ?, 1)'
-  ).run(userId, 'TestBot')
-  db.prepare(
-    'INSERT OR IGNORE INTO bots (token, user_id, username) VALUES (?, ?, ?)'
-  ).run(token, userId, 'TestBot')
+  database
+    .prepare('INSERT OR IGNORE INTO users (id, username, bot) VALUES (?, ?, 1)')
+    .run(userId, 'TestBot')
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO bots (token, user_id, username) VALUES (?, ?, ?)'
+    )
+    .run(token, userId, 'TestBot')
   return token
 }
 
 /**
  * Registers a Guild in the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param botToken - Associated Bot token
  * @param guildId - Guild ID (default: "222222222222222222")
  * @returns Registered Guild ID
  */
 export function seedGuild(
-  db: Database,
+  database: Database,
   botToken: string,
   guildId = '222222222222222222'
 ): string {
-  const bot = db
+  const bot = database
     .prepare('SELECT user_id FROM bots WHERE token = ?')
     .get(botToken) as { user_id: string } | undefined
   const ownerId = bot?.user_id ?? '111111111111111111'
 
-  db.prepare(
-    'INSERT OR IGNORE INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
-  ).run(guildId, 'Test Guild', ownerId, botToken)
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO guilds (id, name, owner_id, bot_token) VALUES (?, ?, ?, ?)'
+    )
+    .run(guildId, 'Test Guild', ownerId, botToken)
   return guildId
 }
 
 /**
  * Registers a Channel in the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Parent Guild ID
  * @param channelId - Channel ID (default: "333333333333333333")
  * @returns Registered Channel ID
  */
 export function seedChannel(
-  db: Database,
+  database: Database,
   guildId: string,
   channelId = '333333333333333333'
 ): string {
-  db.prepare(
-    'INSERT OR IGNORE INTO channels (id, guild_id, name, type) VALUES (?, ?, ?, 0)'
-  ).run(channelId, guildId, 'general')
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO channels (id, guild_id, name, type) VALUES (?, ?, ?, 0)'
+    )
+    .run(channelId, guildId, 'general')
   return channelId
 }
 
 /**
  * Inserts a message into the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param authorId - Author user ID
  * @param authorToken - Author Bot token (or "webhook" for webhook messages)
@@ -244,91 +253,99 @@ export function seedChannel(
  * @returns Generated message ID
  */
 export function seedMessage(
-  db: Database,
+  database: Database,
   channelId: string,
   authorId: string,
   authorToken: string,
   content = 'Test message'
 ): string {
   const messageId = generateSnowflake()
-  db.prepare(
-    'INSERT INTO messages (id, channel_id, author_id, author_token, content) VALUES (?, ?, ?, ?, ?)'
-  ).run(messageId, channelId, authorId, authorToken, content)
+  database
+    .prepare(
+      'INSERT INTO messages (id, channel_id, author_id, author_token, content) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(messageId, channelId, authorId, authorToken, content)
   return messageId
 }
 
 /**
  * Inserts a webhook into the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param guildId - Guild ID (nullable)
  * @param name - Webhook name
  * @returns Object with webhookId and webhookToken
  */
 export function seedWebhook(
-  db: Database,
+  database: Database,
   channelId: string,
   guildId: string | null,
   name = 'Test Webhook'
 ): { webhookId: string; webhookToken: string } {
   const webhookId = generateSnowflake()
   const webhookToken = `mock_wh_token_${webhookId}`
-  db.prepare(
-    'INSERT INTO webhooks (id, guild_id, channel_id, name, token) VALUES (?, ?, ?, ?, ?)'
-  ).run(webhookId, guildId, channelId, name, webhookToken)
+  database
+    .prepare(
+      'INSERT INTO webhooks (id, guild_id, channel_id, name, token) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(webhookId, guildId, channelId, name, webhookToken)
   return { webhookId, webhookToken }
 }
 
 /**
  * Inserts a role into the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param name - Role name
  * @returns Generated role ID
  */
 export function seedRole(
-  db: Database,
+  database: Database,
   guildId: string,
   name = 'test-role'
 ): string {
   const roleId = generateSnowflake()
   const maxPosition = (
-    db
+    database
       .prepare(
         'SELECT COALESCE(MAX(position), 0) as pos FROM roles WHERE guild_id = ?'
       )
       .get(guildId) as { pos: number }
   ).pos
-  db.prepare(
-    'INSERT INTO roles (id, guild_id, name, color, hoist, position, permissions, mentionable) VALUES (?, ?, ?, 0, 0, ?, ?, 0)'
-  ).run(roleId, guildId, name, maxPosition + 1, '0')
+  database
+    .prepare(
+      'INSERT INTO roles (id, guild_id, name, color, hoist, position, permissions, mentionable) VALUES (?, ?, ?, 0, 0, ?, ?, 0)'
+    )
+    .run(roleId, guildId, name, maxPosition + 1, '0')
   return roleId
 }
 
 /**
  * Inserts an emoji into the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - Creator user ID (nullable)
  * @param name - Emoji name
  * @returns Generated emoji ID
  */
 export function seedEmoji(
-  db: Database,
+  database: Database,
   guildId: string,
   userId: string | null,
   name = 'test_emoji'
 ): string {
   const emojiId = generateSnowflake()
-  db.prepare(
-    "INSERT INTO emojis (id, guild_id, name, user_id, roles) VALUES (?, ?, ?, ?, '[]')"
-  ).run(emojiId, guildId, name, userId)
+  database
+    .prepare(
+      "INSERT INTO emojis (id, guild_id, name, user_id, roles) VALUES (?, ?, ?, ?, '[]')"
+    )
+    .run(emojiId, guildId, name, userId)
   return emojiId
 }
 
 /**
  * Inserts an invite into the DB for testing.
- * @param db - Database
+ * @param database - Database
  * @param channelId - Channel ID
  * @param guildId - Guild ID (nullable)
  * @param inviterId - Inviter user ID (nullable)
@@ -336,7 +353,7 @@ export function seedEmoji(
  * @returns The invite code
  */
 export function seedInvite(
-  db: Database,
+  database: Database,
   channelId: string,
   guildId: string | null,
   inviterId: string | null,
@@ -346,55 +363,65 @@ export function seedInvite(
   // with the default code in the same in-memory DB replaces the row instead
   // of throwing a UNIQUE constraint error, matching the other seed helpers'
   // idempotent style.
-  db.prepare(
-    'INSERT OR REPLACE INTO invites (code, channel_id, guild_id, inviter_id) VALUES (?, ?, ?, ?)'
-  ).run(code, channelId, guildId, inviterId)
+  database
+    .prepare(
+      'INSERT OR REPLACE INTO invites (code, channel_id, guild_id, inviter_id) VALUES (?, ?, ?, ?)'
+    )
+    .run(code, channelId, guildId, inviterId)
   return code
 }
 
 /**
  * Registers a second user and adds them as a guild member for testing.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - User ID (auto-generated if omitted)
  * @returns User ID of the registered member
  */
 export function seedMember(
-  db: Database,
+  database: Database,
   guildId: string,
   userId?: string
 ): string {
   const memberId = userId ?? generateSnowflake()
-  db.prepare(
-    "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'TestMember', '0', 0)"
-  ).run(memberId)
-  db.prepare(
-    'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
-  ).run(guildId, memberId)
+  database
+    .prepare(
+      "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'TestMember', '0', 0)"
+    )
+    .run(memberId)
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+    )
+    .run(guildId, memberId)
   return memberId
 }
 
 /**
  * Registers a banned user and inserts a guild ban for testing.
  * Also registers the user so ban responses can resolve a full user object.
- * @param db - Database
+ * @param database - Database
  * @param guildId - Guild ID
  * @param userId - Banned user ID (auto-generated if omitted)
  * @param reason - Ban reason (default null)
  * @returns User ID of the banned user
  */
 export function seedBan(
-  db: Database,
+  database: Database,
   guildId: string,
   userId?: string,
   reason: string | null = null
 ): string {
   const bannedId = userId ?? generateSnowflake()
-  db.prepare(
-    "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'BannedUser', '0', 0)"
-  ).run(bannedId)
-  db.prepare(
-    'INSERT OR IGNORE INTO guild_bans (guild_id, user_id, reason) VALUES (?, ?, ?)'
-  ).run(guildId, bannedId, reason)
+  database
+    .prepare(
+      "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'BannedUser', '0', 0)"
+    )
+    .run(bannedId)
+  database
+    .prepare(
+      'INSERT OR IGNORE INTO guild_bans (guild_id, user_id, reason) VALUES (?, ?, ?)'
+    )
+    .run(guildId, bannedId, reason)
   return bannedId
 }

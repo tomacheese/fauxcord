@@ -5,17 +5,17 @@
  */
 
 import { Hono } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 import { DiscordErrorCode, discordError } from '../errors'
 import { getInvite, deleteInvite } from '../services/invites'
 import { requireEntity } from '../lib/route-helpers'
 
 /**
  * Creates the invites API routes.
- * @param db - Database
+ * @param database - Database
  * @returns Hono router instance
  */
-export function createInviteRoutes(db: Database): Hono {
+export function createInviteRoutes(database: Database): Hono {
   const app = new Hono()
 
   // GET /invites/:code — Retrieve invite information by code
@@ -23,7 +23,7 @@ export function createInviteRoutes(db: Database): Hono {
     const { code } = c.req.param()
     const invite = requireEntity(
       c,
-      getInvite(db, code),
+      getInvite(database, code),
       DiscordErrorCode.UNKNOWN_INVITE,
       'Unknown Invite'
     )
@@ -34,14 +34,14 @@ export function createInviteRoutes(db: Database): Hono {
   // DELETE /invites/:code — Delete an invite
   app.delete('/invites/:code', (c) => {
     const { code } = c.req.param()
-    const invite = deleteInvite(db, code)
+    const invite = deleteInvite(database, code)
     if (!invite) {
-      const err = discordError(
+      const error = discordError(
         DiscordErrorCode.UNKNOWN_INVITE,
         'Unknown Invite',
         404
       )
-      return c.json(err.body, 404)
+      return c.json(error.body, 404)
     }
     return c.json(invite)
   })

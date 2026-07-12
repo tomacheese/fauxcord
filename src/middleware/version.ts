@@ -24,12 +24,12 @@ export const versionMiddleware = async (
   const path = c.req.path
 
   if (UNSUPPORTED_VERSION_PATTERN.test(path)) {
-    const err = discordError(
+    const error = discordError(
       DiscordErrorCode.INVALID_API_VERSION,
       '400: Bad Request',
       400
     )
-    return c.json(err.body, 400)
+    return c.json(error.body, 400)
   }
 
   await next()

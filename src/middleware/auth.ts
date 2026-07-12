@@ -6,7 +6,7 @@
  */
 
 import type { Context, Next } from 'hono'
-import type { Database } from '../db'
+import type { Database } from '../database'
 
 /**
  * Path prefixes that do not require authentication
@@ -56,7 +56,7 @@ export interface AccessTokenRecord {
 }
 
 /** Common environment type for the Hono app (context variable type definitions) */
-export interface AppEnv {
+export interface AppEnvironment {
   Variables: {
     /** Authenticated Bot information (set on Bot token authentication) */
     bot?: BotRecord
@@ -84,13 +84,16 @@ function createDummyBot(token: string): BotRecord {
 
 /**
  * Creates a Bot/Bearer token authentication middleware.
- * @param db - Database
- * @param disableAuth - When true, any token is allowed
+ * @param database - Database
+ * @param shouldDisableAuth - When true, any token is allowed
  * @returns Middleware function
  */
 export const createAuthMiddleware =
-  (db: Database, disableAuth: boolean) =>
-  async (c: Context<AppEnv>, next: Next): Promise<undefined | Response> => {
+  (database: Database, shouldDisableAuth: boolean) =>
+  async (
+    c: Context<AppEnvironment>,
+    next: Next
+  ): Promise<undefined | Response> => {
     const path = c.req.path
 
     // Check for auth-exempt paths
@@ -112,7 +115,7 @@ export const createAuthMiddleware =
     // Bot token authentication
     if (authorization.startsWith('Bot ')) {
       const token = authorization
-      const bot = db
+      const bot = database
         .prepare('SELECT * FROM bots WHERE token = ?')
         .get(token) as BotRecord | undefined
 
@@ -123,7 +126,7 @@ export const createAuthMiddleware =
       }
 
       // Auth-disabled mode: treat tokens not in the DB as a default Bot
-      if (disableAuth) {
+      if (shouldDisableAuth) {
         c.set('bot', createDummyBot(token))
         await next()
         return
@@ -135,7 +138,7 @@ export const createAuthMiddleware =
     // Bearer token authentication
     if (authorization.startsWith('Bearer ')) {
       const token = authorization.slice(7)
-      const accessToken = db
+      const accessToken = database
         .prepare(
           "SELECT * FROM oauth2_access_tokens WHERE token = ? AND datetime(expires_at) > datetime('now')"
         )
@@ -148,7 +151,7 @@ export const createAuthMiddleware =
       }
 
       // Auth-disabled mode: accept any Bearer token with a dummy access token
-      if (disableAuth) {
+      if (shouldDisableAuth) {
         c.set('accessToken', {
           token,
           user_id: '000000000000000000',
@@ -163,7 +166,7 @@ export const createAuthMiddleware =
 
     // Unrecognized authorization scheme: allow through as a dummy Bot when
     // authentication is disabled, otherwise reject.
-    if (disableAuth) {
+    if (shouldDisableAuth) {
       c.set('bot', createDummyBot(authorization))
       await next()
       return

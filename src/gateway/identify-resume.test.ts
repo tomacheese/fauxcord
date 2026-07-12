@@ -370,10 +370,10 @@ describe('Intent filtering', () => {
     )
     await nextMessage(ws) // READY
 
-    let received = false
+    let isReceived = false
     ws.on('message', (raw: Buffer) => {
       const payload = JSON.parse(raw.toString()) as Record<string, unknown>
-      if (payload.t === 'MESSAGE_CREATE') received = true
+      if (payload.t === 'MESSAGE_CREATE') isReceived = true
     })
 
     const httpUrl = url.replace('ws://', 'http://')
@@ -387,7 +387,7 @@ describe('Intent filtering', () => {
     })
 
     await new Promise((resolve) => setTimeout(resolve, 300))
-    expect(received).toBe(false)
+    expect(isReceived).toBe(false)
 
     ws.close()
   })

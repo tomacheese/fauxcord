@@ -47,25 +47,25 @@ async function createThreadViaApi(
   channelId: string,
   name = 'my-thread'
 ): Promise<Record<string, unknown>> {
-  const res = await app.request(`/channels/${channelId}/threads`, {
+  const resource = await app.request(`/channels/${channelId}/threads`, {
     method: 'POST',
     headers: JSON_HEADERS,
     body: JSON.stringify({ name, type: 11 }),
   })
-  expect(res.status).toBe(201)
-  return (await res.json()) as Record<string, unknown>
+  expect(resource.status).toBe(201)
+  return (await resource.json()) as Record<string, unknown>
 }
 
 describe('POST /channels/:channelId/threads', () => {
   it('creates a thread and returns 201', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(`/channels/${channelId}/threads`, {
+    const resource = await app.request(`/channels/${channelId}/threads`, {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({ name: 'general-thread', type: 11 }),
     })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as Record<string, unknown>
+    expect(resource.status).toBe(201)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.type).toBe(11)
     expect(body.name).toBe('general-thread')
     expect(body.owner_id).toBe(BOT_USER_ID)
@@ -80,25 +80,25 @@ describe('POST /channels/:channelId/threads', () => {
 
   it('returns 400 when name is missing', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(`/channels/${channelId}/threads`, {
+    const resource = await app.request(`/channels/${channelId}/threads`, {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({ type: 11 }),
     })
-    expect(res.status).toBe(400)
-    const body = (await res.json()) as { code: number }
+    expect(resource.status).toBe(400)
+    const body = (await resource.json()) as { code: number }
     expect(body.code).toBe(50_035)
   })
 
   it('honors invitable: false for a private thread', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(`/channels/${channelId}/threads`, {
+    const resource = await app.request(`/channels/${channelId}/threads`, {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({ name: 'private', type: 12, invitable: false }),
     })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as {
+    expect(resource.status).toBe(201)
+    const body = (await resource.json()) as {
       thread_metadata: { invitable?: boolean }
     }
     expect(body.thread_metadata.invitable).toBe(false)
@@ -106,14 +106,14 @@ describe('POST /channels/:channelId/threads', () => {
 
   it('does not treat a non-boolean invitable as false (defaults to invitable)', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(`/channels/${channelId}/threads`, {
+    const resource = await app.request(`/channels/${channelId}/threads`, {
       method: 'POST',
       headers: JSON_HEADERS,
       // A malformed non-boolean value must not silently disable invitable.
       body: JSON.stringify({ name: 'private', type: 12, invitable: 'false' }),
     })
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as {
+    expect(resource.status).toBe(201)
+    const body = (await resource.json()) as {
       thread_metadata: { invitable?: boolean }
     }
     expect(body.thread_metadata.invitable).toBe(true)
@@ -121,12 +121,12 @@ describe('POST /channels/:channelId/threads', () => {
 
   it('returns 404 for an unknown channel', async () => {
     const { app } = setup()
-    const res = await app.request('/channels/999999999999999999/threads', {
+    const resource = await app.request('/channels/999999999999999999/threads', {
       method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({ name: 'x' }),
     })
-    expect(res.status).toBe(404)
+    expect(resource.status).toBe(404)
   })
 })
 
@@ -134,7 +134,7 @@ describe('POST /channels/:channelId/messages/:messageId/threads', () => {
   it('creates a thread from a message with id equal to the message id', async () => {
     const { app, db, channelId } = setup()
     const messageId = seedMessage(db, channelId, BOT_USER_ID, 'Bot testtoken')
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${channelId}/messages/${messageId}/threads`,
       {
         method: 'POST',
@@ -142,15 +142,15 @@ describe('POST /channels/:channelId/messages/:messageId/threads', () => {
         body: JSON.stringify({ name: 'from-message' }),
       }
     )
-    expect(res.status).toBe(201)
-    const body = (await res.json()) as Record<string, unknown>
+    expect(resource.status).toBe(201)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.id).toBe(messageId)
     expect(body.name).toBe('from-message')
   })
 
   it('returns 404 for an unknown message', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${channelId}/messages/999999999999999999/threads`,
       {
         method: 'POST',
@@ -158,8 +158,8 @@ describe('POST /channels/:channelId/messages/:messageId/threads', () => {
         body: JSON.stringify({ name: 'x' }),
       }
     )
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as { code: number }
+    expect(resource.status).toBe(404)
+    const body = (await resource.json()) as { code: number }
     expect(body.code).toBe(10_008)
   })
 
@@ -172,7 +172,7 @@ describe('POST /channels/:channelId/messages/:messageId/threads', () => {
       BOT_USER_ID,
       'Bot testtoken'
     )
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${channelId}/messages/${messageId}/threads`,
       {
         method: 'POST',
@@ -180,8 +180,8 @@ describe('POST /channels/:channelId/messages/:messageId/threads', () => {
         body: JSON.stringify({ name: 'x' }),
       }
     )
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as { code: number }
+    expect(resource.status).toBe(404)
+    const body = (await resource.json()) as { code: number }
     expect(body.code).toBe(10_008)
   })
 
@@ -233,11 +233,11 @@ describe('thread member join/leave (@me)', () => {
 
   it('returns 404 when joining an unknown thread', async () => {
     const { app } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       '/channels/999999999999999999/thread-members/@me',
       { method: 'PUT', headers: AUTH }
     )
-    expect(res.status).toBe(404)
+    expect(resource.status).toBe(404)
   })
 })
 
@@ -268,11 +268,11 @@ describe('GET /channels/:channelId/thread-members', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(`/channels/${threadId}/thread-members`, {
+    const resource = await app.request(`/channels/${threadId}/thread-members`, {
       headers: AUTH,
     })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { user_id: string }[]
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as { user_id: string }[]
     expect(Array.isArray(body)).toBe(true)
     expect(body.some((m) => m.user_id === BOT_USER_ID)).toBe(true)
   })
@@ -286,22 +286,22 @@ describe('GET /channels/:channelId/thread-members', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members?after=${BOT_USER_ID}`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { user_id: string }[]
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as { user_id: string }[]
     expect(body).toEqual([])
   })
 
   it('returns 404 for an unknown thread', async () => {
     const { app } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       '/channels/999999999999999999/thread-members',
       { headers: AUTH }
     )
-    expect(res.status).toBe(404)
+    expect(resource.status).toBe(404)
   })
 
   it('does not error and returns members when limit is non-numeric', async () => {
@@ -311,12 +311,12 @@ describe('GET /channels/:channelId/thread-members', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members?limit=abc`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { user_id: string }[]
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as { user_id: string }[]
     expect(body.some((m) => m.user_id === BOT_USER_ID)).toBe(true)
   })
 
@@ -327,12 +327,12 @@ describe('GET /channels/:channelId/thread-members', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members?limit=-1`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { user_id: string }[]
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as { user_id: string }[]
     expect(body).toEqual([])
   })
 
@@ -344,12 +344,12 @@ describe('GET /channels/:channelId/thread-members', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members?with_member=true`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>[]
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as Record<string, unknown>[]
     expect(body.length).toBeGreaterThan(0)
     for (const entry of body) {
       const member = entry.member as Record<string, unknown>
@@ -364,12 +364,12 @@ describe('GET /channels/:channelId/thread-members/:userId', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members/${BOT_USER_ID}`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.user_id).toBe(BOT_USER_ID)
     expect(body.id).toBe(threadId)
   })
@@ -379,11 +379,14 @@ describe('GET /channels/:channelId/thread-members/:userId', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(`/channels/${threadId}/thread-members/@me`, {
-      headers: AUTH,
-    })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
+    const resource = await app.request(
+      `/channels/${threadId}/thread-members/@me`,
+      {
+        headers: AUTH,
+      }
+    )
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.user_id).toBe(BOT_USER_ID)
   })
 
@@ -392,12 +395,12 @@ describe('GET /channels/:channelId/thread-members/:userId', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members/222222222222222222`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(404)
-    const body = (await res.json()) as { code: number }
+    expect(resource.status).toBe(404)
+    const body = (await resource.json()) as { code: number }
     expect(body.code).toBe(10_007)
   })
 
@@ -406,11 +409,11 @@ describe('GET /channels/:channelId/thread-members/:userId', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members/${BOT_USER_ID}`,
       { headers: AUTH }
     )
-    const body = (await res.json()) as Record<string, unknown>
+    const body = (await resource.json()) as Record<string, unknown>
     expect(body.member).toBeUndefined()
   })
 
@@ -423,12 +426,12 @@ describe('GET /channels/:channelId/thread-members/:userId', () => {
     const thread = await createThreadViaApi(app, channelId)
     const threadId = thread.id as string
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${threadId}/thread-members/${BOT_USER_ID}?with_member=true`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as Record<string, unknown>
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as Record<string, unknown>
     const member = body.member as Record<string, unknown>
     expect(member).toBeDefined()
     expect(member.user).toMatchObject({ id: BOT_USER_ID })
@@ -444,12 +447,12 @@ describe('archived thread listings', () => {
        VALUES ('900000000000000001', ?, 11, 'archived-pub', ?, ?, 1, 1440, datetime('now'))`
     ).run('222222222222222222', channelId, BOT_USER_ID)
 
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${channelId}/threads/archived/public`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as {
       threads: unknown[]
       members: unknown[]
       has_more: boolean
@@ -461,23 +464,23 @@ describe('archived thread listings', () => {
 
   it('returns private archived threads (empty when none)', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${channelId}/threads/archived/private`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as { threads: unknown[] }
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as { threads: unknown[] }
     expect(body.threads).toHaveLength(0)
   })
 
   it('returns joined private archived threads', async () => {
     const { app, channelId } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       `/channels/${channelId}/users/@me/threads/archived/private`,
       { headers: AUTH }
     )
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as {
       threads: unknown[]
       members: unknown[]
     }
@@ -486,11 +489,11 @@ describe('archived thread listings', () => {
 
   it('returns 404 for an unknown channel', async () => {
     const { app } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       '/channels/999999999999999999/threads/archived/public',
       { headers: AUTH }
     )
-    expect(res.status).toBe(404)
+    expect(resource.status).toBe(404)
   })
 })
 
@@ -499,11 +502,14 @@ describe('GET /channels/:channelId/threads/search', () => {
     const { app, channelId } = setup()
     await createThreadViaApi(app, channelId, 'searchable')
 
-    const res = await app.request(`/channels/${channelId}/threads/search`, {
-      headers: AUTH,
-    })
-    expect(res.status).toBe(200)
-    const body = (await res.json()) as {
+    const resource = await app.request(
+      `/channels/${channelId}/threads/search`,
+      {
+        headers: AUTH,
+      }
+    )
+    expect(resource.status).toBe(200)
+    const body = (await resource.json()) as {
       threads: unknown[]
       total_results: number
       has_more: boolean
@@ -514,10 +520,10 @@ describe('GET /channels/:channelId/threads/search', () => {
 
   it('returns 404 for an unknown channel', async () => {
     const { app } = setup()
-    const res = await app.request(
+    const resource = await app.request(
       '/channels/999999999999999999/threads/search',
       { headers: AUTH }
     )
-    expect(res.status).toBe(404)
+    expect(resource.status).toBe(404)
   })
 })
