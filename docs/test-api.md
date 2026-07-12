@@ -198,6 +198,42 @@ Returns the created message object (same shape as
 
 ---
 
+## `POST /_test/interactions` — Simulate an interaction
+
+Generates a pseudo-interaction against a registered command (global or
+guild-scoped) and dispatches it to the bot via the Gateway as
+`INTERACTION_CREATE`. Responds `201` immediately with the interaction's
+info; the Gateway dispatch happens asynchronously right after.
+
+```bash
+curl -X POST http://localhost:3000/_test/interactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "application_id": "111111111111111111",
+    "command_name": "ping",
+    "guild_id": "222222222222222222",
+    "channel_id": "333333333333333333"
+  }'
+```
+
+**Fields**
+
+| Field            | Required | Description                                                        |
+| ---------------- | -------- | ------------------------------------------------------------------ |
+| `application_id` | ✅       | The bot's application ID (same as its `user.id`)                  |
+| `command_name`   | ✅       | Name of a command already registered via the Application Commands API |
+| `type`           | —        | Interaction type (default: `2`, APPLICATION_COMMAND)               |
+| `guild_id`       | —        | Guild ID. When set, prefers a guild-scoped command match, falling back to a global command of the same name |
+| `channel_id`     | —        | Channel ID the interaction is bound to (needed for `type: 4` callback responses and followups) |
+| `user_id`        | —        | Invoking user ID (auto-generated if omitted)                       |
+| `options`        | —        | Command option values, passed through into the interaction's `data.options` |
+
+**Response**: `201` with the created interaction object (matches the
+Discord `Interaction` shape). `404` (`{"message": "404: Not Found", "code": 0}`)
+when `command_name` does not match any registered command in scope.
+
+---
+
 ## `GET /_mock/health` — Check server status
 
 ```bash

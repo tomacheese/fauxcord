@@ -15,13 +15,73 @@ import {
   deleteWebhook,
   executeWebhook,
 } from '../services/webhooks'
-import { getMessage, updateMessage, deleteMessage } from '../services/messages'
+import {
+  getMessage,
+  updateMessage,
+  deleteMessage,
+  createMessage,
+} from '../services/messages'
 import { getChannel } from '../services/channels'
+import { getInteractionFollowupTarget } from '../services/interactions'
 import {
   validateWebhookExecute,
   validateWebhookUpdate,
 } from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
+
+/**
+ * Creates either a webhook-authored message (real webhook) or an
+ * interaction-followup message (pseudo-webhook), depending on which one
+ * `POST /webhooks/:id/:token` resolved to.
+ * @param db - Database
+ * @param messageId - Pre-generated message ID
+ * @param webhook - The resolved webhook, or null when this is a followup
+ * @param webhookIdParam - The route's `:webhookId` param (the application ID
+ * for a followup)
+ * @param targetChannelId - Destination channel ID
+ * @param payload - Parsed request body
+ * @param baseUrl - Base URL
+ * @returns The created message object
+ */
+function createFollowupOrWebhookMessage(
+  db: Database,
+  messageId: string,
+  webhook: ReturnType<typeof getWebhookByToken>,
+  webhookIdParam: string,
+  targetChannelId: string,
+  payload: Record<string, unknown>,
+  baseUrl: string
+) {
+  if (webhook) {
+    return executeWebhook(
+      db,
+      {
+        messageId,
+        channelId: webhook.channel_id,
+        webhookId: webhook.id,
+        webhookName: webhook.name,
+        content: payload.content as string | undefined,
+        username: payload.username as string | undefined,
+        tts: payload.tts as boolean | undefined,
+        embeds: payload.embeds as unknown[] | undefined,
+      },
+      baseUrl
+    )
+  }
+  return createMessage(
+    db,
+    {
+      messageId,
+      channelId: targetChannelId,
+      authorId: webhookIdParam,
+      authorToken: 'interaction',
+      content: payload.content as string | undefined,
+      tts: payload.tts as boolean | undefined,
+      embeds: payload.embeds as unknown[] | undefined,
+    },
+    baseUrl
+  )
+}
 
 /**
  * Creates the Webhooks API routes.
@@ -206,7 +266,10 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     const wait = waitParam === 'true' || waitParam === '1'
 
     const webhook = getWebhookByToken(db, webhookId, token)
-    if (!webhook) {
+    const interactionTarget = webhook
+      ? null
+      : getInteractionFollowupTarget(db, webhookId, token)
+    if (!webhook && !interactionTarget) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
@@ -214,6 +277,9 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       )
       return c.json(err.body, 404)
     }
+    const targetChannelId = webhook
+      ? webhook.channel_id
+      : (interactionTarget as { channelId: string }).channelId
 
     const contentType = c.req.header('content-type') ?? ''
     let payload: Record<string, unknown>
@@ -260,18 +326,13 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       // When wait is false, execute asynchronously (save to DB in the background)
       const messageId = generateSnowflake()
       try {
-        executeWebhook(
+        createFollowupOrWebhookMessage(
           db,
-          {
-            messageId,
-            channelId: webhook.channel_id,
-            webhookId: webhook.id,
-            webhookName: webhook.name,
-            content: payload.content as string | undefined,
-            username: payload.username as string | undefined,
-            tts: payload.tts as boolean | undefined,
-            embeds: payload.embeds as unknown[] | undefined,
-          },
+          messageId,
+          webhook,
+          webhookId,
+          targetChannelId,
+          payload,
           baseUrl
         )
       } catch {
@@ -281,22 +342,100 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     }
 
     const messageId = generateSnowflake()
-    const msg = executeWebhook(
+    const msg = createFollowupOrWebhookMessage(
       db,
-      {
-        messageId,
-        channelId: webhook.channel_id,
-        webhookId: webhook.id,
-        webhookName: webhook.name,
-        content: payload.content as string | undefined,
-        username: payload.username as string | undefined,
-        tts: payload.tts as boolean | undefined,
-        embeds: payload.embeds as unknown[] | undefined,
-      },
+      messageId,
+      webhook,
+      webhookId,
+      targetChannelId,
+      payload,
       baseUrl
     )
 
     return c.json(msg)
+  })
+
+  // GET /webhooks/:webhookId/:token/messages/@original — Retrieve the
+  // interaction's initial response message (real webhooks have no
+  // "original" response concept; this 404s for them).
+  app.get('/webhooks/:webhookId/:token/messages/@original', (c) => {
+    const { webhookId, token } = c.req.param()
+    const target = getInteractionFollowupTarget(db, webhookId, token)
+    if (!target?.initialResponseMessageId) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    const msg = getMessage(db, target.initialResponseMessageId, baseUrl)
+    if (!msg) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.json(msg)
+  })
+
+  // PATCH /webhooks/:webhookId/:token/messages/@original
+  app.patch('/webhooks/:webhookId/:token/messages/@original', async (c) => {
+    const { webhookId, token } = c.req.param()
+    const target = getInteractionFollowupTarget(db, webhookId, token)
+    if (!target?.initialResponseMessageId) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    const payload = await c.req.json<{
+      content?: string
+      embeds?: unknown[]
+    }>()
+    const updated = updateMessage(
+      db,
+      target.initialResponseMessageId,
+      payload,
+      baseUrl
+    )
+    if (!updated) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.json(updated)
+  })
+
+  // DELETE /webhooks/:webhookId/:token/messages/@original
+  app.delete('/webhooks/:webhookId/:token/messages/@original', (c) => {
+    const { webhookId, token } = c.req.param()
+    const target = getInteractionFollowupTarget(db, webhookId, token)
+    if (!target?.initialResponseMessageId) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    const deleted = deleteMessage(db, target.initialResponseMessageId)
+    if (!deleted) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.body(null, 204)
   })
 
   // GET /webhooks/:webhookId/:token/messages/:messageId — Retrieve a message sent via webhook
@@ -304,7 +443,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     const { webhookId, token, messageId } = c.req.param()
 
     const webhook = getWebhookByToken(db, webhookId, token)
-    if (!webhook) {
+    if (!webhook && !getInteractionFollowupTarget(db, webhookId, token)) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
@@ -330,7 +469,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     const { webhookId, token, messageId } = c.req.param()
 
     const webhook = getWebhookByToken(db, webhookId, token)
-    if (!webhook) {
+    if (!webhook && !getInteractionFollowupTarget(db, webhookId, token)) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',
@@ -361,7 +500,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
     const { webhookId, token, messageId } = c.req.param()
 
     const webhook = getWebhookByToken(db, webhookId, token)
-    if (!webhook) {
+    if (!webhook && !getInteractionFollowupTarget(db, webhookId, token)) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_WEBHOOK,
         'Unknown Webhook',

@@ -13,6 +13,18 @@ describe('DiscordErrorCode', () => {
   it('INVALID_FORM_BODY equals 50035', () => {
     expect(DiscordErrorCode.INVALID_FORM_BODY).toBe(50_035)
   })
+
+  it('UNKNOWN_INTERACTION equals 10062', () => {
+    expect(DiscordErrorCode.UNKNOWN_INTERACTION).toBe(10_062)
+  })
+
+  it('UNKNOWN_APPLICATION_COMMAND equals 10063', () => {
+    expect(DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND).toBe(10_063)
+  })
+
+  it('INTERACTION_ALREADY_ACKNOWLEDGED equals 40060', () => {
+    expect(DiscordErrorCode.INTERACTION_ALREADY_ACKNOWLEDGED).toBe(40_060)
+  })
 })
 
 describe('discordError', () => {

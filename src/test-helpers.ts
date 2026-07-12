@@ -23,8 +23,12 @@ import { createInviteRoutes } from './routes/invites'
 import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
+import { createApplicationCommandRoutes } from './routes/application-commands'
+import { createInteractionRoutes } from './routes/interactions'
 import { generateSnowflake } from './snowflake'
 import { buildApp } from './app'
+import { createCommand } from './services/application-commands'
+import { createInteraction } from './services/interactions'
 import type { SessionManager } from './gateway/session'
 
 const TEST_BASE_URL = 'http://localhost:3000'
@@ -103,6 +107,8 @@ export function createFullTestApp(): FullTestContext {
     app.route(prefix, createSoundboardRoutes())
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
     app.route(prefix, createInviteRoutes(db))
+    app.route(prefix, createApplicationCommandRoutes(db))
+    app.route(prefix, createInteractionRoutes(db, TEST_BASE_URL))
   }
 
   return {
@@ -397,4 +403,58 @@ export function seedBan(
     'INSERT OR IGNORE INTO guild_bans (guild_id, user_id, reason) VALUES (?, ?, ?)'
   ).run(guildId, bannedId, reason)
   return bannedId
+}
+
+/**
+ * Registers an Application Command for testing.
+ * @param db - Database
+ * @param applicationId - Application (bot user) ID
+ * @param guildId - Guild ID to scope the command to, or `null` for global
+ * @param name - Command name (default: "testcommand")
+ * @returns Generated command ID
+ */
+export function seedApplicationCommand(
+  db: Database,
+  applicationId: string,
+  guildId: string | null,
+  name = 'testcommand'
+): string {
+  const result = createCommand(db, applicationId, guildId, {
+    name,
+    description: 'Test command',
+  })
+  if (!result.ok) {
+    throw new Error(`failed to seed application command: ${result.reason}`)
+  }
+  return result.command.id
+}
+
+/**
+ * Registers an Interaction for testing.
+ * @param db - Database
+ * @param applicationId - Application (bot user) ID
+ * @param channelId - Channel ID the interaction occurs in
+ * @param userId - Invoking user ID
+ * @param commandId - Associated command ID (optional)
+ * @returns Generated interactionId and interactionToken
+ */
+export function seedInteraction(
+  db: Database,
+  applicationId: string,
+  channelId: string,
+  userId: string,
+  commandId?: string
+): { interactionId: string; interactionToken: string } {
+  const interactionId = generateSnowflake()
+  const interactionToken = `mock_interaction_token_${interactionId}`
+  createInteraction(db, {
+    interactionId,
+    applicationId,
+    token: interactionToken,
+    type: 2,
+    channelId,
+    commandId,
+    userId,
+  })
+  return { interactionId, interactionToken }
 }

@@ -298,6 +298,53 @@ export function initializeDatabase(dbPath: string): Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_invites_channel ON invites(channel_id);
+
+    CREATE TABLE IF NOT EXISTS application_commands (
+      id                          TEXT PRIMARY KEY,
+      application_id              TEXT NOT NULL,
+      guild_id                    TEXT REFERENCES guilds(id) ON DELETE CASCADE,
+      type                        INTEGER NOT NULL DEFAULT 1,
+      name                        TEXT NOT NULL,
+      description                 TEXT NOT NULL DEFAULT '',
+      options                     TEXT NOT NULL DEFAULT '[]',
+      default_member_permissions  TEXT,
+      dm_permission                INTEGER,
+      nsfw                        INTEGER NOT NULL DEFAULT 0,
+      version                     TEXT NOT NULL,
+      created_at                  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_app_commands_app ON application_commands(application_id, guild_id);
+    -- SQLite treats NULL as distinct in a plain UNIQUE constraint, which
+    -- would let multiple global (guild_id IS NULL) commands share a
+    -- name/type; COALESCE to '' so global commands are deduplicated too.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_app_commands_unique
+      ON application_commands(application_id, COALESCE(guild_id, ''), type, name);
+
+    CREATE TABLE IF NOT EXISTS application_command_permissions (
+      application_id TEXT NOT NULL,
+      guild_id       TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      command_id     TEXT NOT NULL REFERENCES application_commands(id) ON DELETE CASCADE,
+      permissions    TEXT NOT NULL DEFAULT '[]',
+      created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (guild_id, command_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS interactions (
+      id                          TEXT PRIMARY KEY,
+      application_id              TEXT NOT NULL,
+      token                       TEXT NOT NULL UNIQUE,
+      type                        INTEGER NOT NULL,
+      guild_id                    TEXT,
+      channel_id                  TEXT,
+      command_id                  TEXT,
+      data                        TEXT NOT NULL DEFAULT '{}',
+      user_id                     TEXT NOT NULL,
+      member_json                 TEXT,
+      responded                   INTEGER NOT NULL DEFAULT 0,
+      initial_response_message_id TEXT,
+      created_at                  TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_interactions_app ON interactions(application_id);
   `)
 
   migrateChannelsThreadColumns(db)

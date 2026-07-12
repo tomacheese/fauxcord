@@ -38,6 +38,15 @@ const WEBHOOK_WITH_TOKEN_PATTERN =
  */
 const GATEWAY_PUBLIC_PATTERN = /^\/(?:api\/(?:v10\/)?)?gateway$/
 
+/**
+ * Interaction callback endpoint pattern (no authentication required)
+ *
+ * `POST /interactions/{id}/{token}/callback` is authenticated by the
+ * interaction token itself, matching real Discord.
+ */
+const INTERACTION_CALLBACK_PATTERN =
+  /^\/(?:api\/(?:v10\/)?)?interactions\/[^/]+\/[^/]+\/callback$/
+
 /** Type of a Bot record fetched from the DB */
 export interface BotRecord {
   token: string
@@ -97,7 +106,8 @@ export const createAuthMiddleware =
     const isExempt =
       AUTH_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
       WEBHOOK_WITH_TOKEN_PATTERN.test(path) ||
-      GATEWAY_PUBLIC_PATTERN.test(path)
+      GATEWAY_PUBLIC_PATTERN.test(path) ||
+      INTERACTION_CALLBACK_PATTERN.test(path)
 
     if (isExempt) {
       await next()

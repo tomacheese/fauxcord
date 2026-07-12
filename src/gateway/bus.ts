@@ -49,6 +49,10 @@ export interface GatewayBusEvents {
   'guild.role.create': { guildId: string; role: Record<string, unknown> }
   'guild.role.update': { guildId: string; role: Record<string, unknown> }
   'guild.role.delete': { guildId: string; roleId: string }
+  'interaction.create': {
+    applicationId: string
+    interaction: Record<string, unknown>
+  }
 }
 
 /**

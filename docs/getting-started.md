@@ -227,6 +227,52 @@ ws.on('message', (raw) => {
 
 ---
 
+## 9. Slash commands and interactions
+
+Register a global command, then simulate a user invoking it via the
+`/_test/interactions` endpoint (no real Discord client required):
+
+```bash
+# Register a global command
+curl -X POST http://localhost:3000/api/v10/applications/111111111111111111/commands \
+  -H "Authorization: Bot mytoken" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "ping", "description": "Replies with pong"}'
+
+# Simulate a user running /ping
+curl -X POST http://localhost:3000/_test/interactions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "application_id": "111111111111111111",
+    "command_name": "ping",
+    "guild_id": "222222222222222222",
+    "channel_id": "333333333333333333"
+  }'
+```
+
+Your bot receives an `INTERACTION_CREATE` Gateway event for the simulated
+interaction and responds via the callback endpoint:
+
+```bash
+curl -X POST "http://localhost:3000/interactions/<interaction_id>/<interaction_token>/callback" \
+  -H "Content-Type: application/json" \
+  -d '{"type": 4, "data": {"content": "pong"}}'
+```
+
+Followup messages reuse the Webhook API, treating the application ID as the
+webhook ID and the interaction token as the webhook token:
+
+```bash
+curl -X POST "http://localhost:3000/webhooks/111111111111111111/<interaction_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "a followup message"}'
+```
+
+See [test-api.md](./test-api.md) for the full `/_test/interactions` request
+shape.
+
+---
+
 ## Environment variables
 
 | Variable       | Default                 | Description                                         |

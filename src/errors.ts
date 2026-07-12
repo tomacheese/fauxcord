@@ -19,6 +19,8 @@ export const DiscordErrorCode = {
   UNKNOWN_USER: 10_013,
   UNKNOWN_EMOJI: 10_014,
   UNKNOWN_WEBHOOK: 10_015,
+  UNKNOWN_INTERACTION: 10_062,
+  UNKNOWN_APPLICATION_COMMAND: 10_063,
   UNKNOWN_BAN: 10_026,
   // 30xxx — Limit exceeded
   MAX_PINS_REACHED: 30_003,
@@ -30,6 +32,7 @@ export const DiscordErrorCode = {
   UNAUTHORIZED: 40_001,
   REQUEST_TOO_LARGE: 40_005,
   ALREADY_PINNED: 40_041,
+  INTERACTION_ALREADY_ACKNOWLEDGED: 40_060,
   // 50xxx — Operation not allowed
   MISSING_ACCESS: 50_001,
   CANNOT_EDIT_OTHER: 50_005,
@@ -107,6 +110,8 @@ export const ERROR_MESSAGES = {
   [DiscordErrorCode.UNKNOWN_USER]: 'Unknown User',
   [DiscordErrorCode.UNKNOWN_EMOJI]: 'Unknown Emoji',
   [DiscordErrorCode.UNKNOWN_WEBHOOK]: 'Unknown Webhook',
+  [DiscordErrorCode.UNKNOWN_INTERACTION]: 'Unknown Interaction',
+  [DiscordErrorCode.UNKNOWN_APPLICATION_COMMAND]: 'Unknown Application Command',
   [DiscordErrorCode.UNKNOWN_BAN]: 'Unknown Ban',
   [DiscordErrorCode.MAX_PINS_REACHED]:
     'Maximum number of pins reached for the channel (50)',
@@ -121,6 +126,8 @@ export const ERROR_MESSAGES = {
   [DiscordErrorCode.UNAUTHORIZED]: 'Unauthorized',
   [DiscordErrorCode.REQUEST_TOO_LARGE]: 'Request entity too large',
   [DiscordErrorCode.ALREADY_PINNED]: 'This message was already pinned',
+  [DiscordErrorCode.INTERACTION_ALREADY_ACKNOWLEDGED]:
+    'Interaction has already been acknowledged',
   [DiscordErrorCode.MISSING_ACCESS]: 'Missing Access',
   [DiscordErrorCode.CANNOT_EDIT_OTHER]:
     'Cannot edit a message authored by another user',

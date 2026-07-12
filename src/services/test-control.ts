@@ -4,6 +4,7 @@
  * Handles test environment setup and reset.
  */
 
+import { randomBytes } from 'node:crypto'
 import type { Database } from '../db'
 import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
@@ -15,6 +16,8 @@ import {
   getGuildIdForChannel,
   type MessageObject,
 } from './messages'
+import { createInteraction } from './interactions'
+import type { InteractionObject } from './interactions'
 
 /** Test setup request type */
 export interface SetupRequest {
@@ -199,11 +202,24 @@ export function setupTestEnvironment(
  * @returns true on successful deletion
  */
 export function deleteTestSetup(db: Database, token: string): boolean {
-  const bot = db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token)
+  const bot = db
+    .prepare('SELECT user_id FROM bots WHERE token = ?')
+    .get(token) as { user_id: string } | undefined
   if (!bot) return false
 
-  // Related Guilds/Channels/Messages are also deleted via cascade delete
+  // Related Guilds/Channels/Messages, plus guild-scoped
+  // application_commands/application_command_permissions rows, are also
+  // deleted via cascade delete (guilds.bot_token -> bots ON DELETE CASCADE,
+  // application_commands.guild_id -> guilds ON DELETE CASCADE). Global-scope
+  // application_commands and every interactions row have no FK to bots
+  // (there is no applications table), so they are cleaned up explicitly.
   db.prepare('DELETE FROM bots WHERE token = ?').run(token)
+  db.prepare(
+    'DELETE FROM application_commands WHERE application_id = ? AND guild_id IS NULL'
+  ).run(bot.user_id)
+  db.prepare('DELETE FROM interactions WHERE application_id = ?').run(
+    bot.user_id
+  )
   return true
 }
 
@@ -214,6 +230,10 @@ export function deleteTestSetup(db: Database, token: string): boolean {
  */
 export function resetTestData(db: Database, token?: string): void {
   if (token) {
+    const bot = db
+      .prepare('SELECT user_id FROM bots WHERE token = ?')
+      .get(token) as { user_id: string } | undefined
+
     // Reset only the messages and webhooks of the specified token
     db.prepare('DELETE FROM messages WHERE author_token = ?').run(token)
     db.prepare(
@@ -230,6 +250,13 @@ export function resetTestData(db: Database, token?: string): void {
          WHERE g.bot_token = ?
        )`
     ).run(token)
+    // application_commands/application_command_permissions are persistent
+    // registration data and are deliberately NOT reset here.
+    if (bot) {
+      db.prepare('DELETE FROM interactions WHERE application_id = ?').run(
+        bot.user_id
+      )
+    }
   } else {
     // Reset all data (the tables themselves are kept)
     db.exec('DELETE FROM messages')
@@ -239,6 +266,7 @@ export function resetTestData(db: Database, token?: string): void {
     db.exec('DELETE FROM pins')
     db.exec('DELETE FROM embeds')
     db.exec('DELETE FROM attachments')
+    db.exec('DELETE FROM interactions')
   }
 }
 
@@ -372,4 +400,81 @@ export function injectTestMessage(
     },
     baseUrl
   )
+}
+
+/** Request body accepted by POST /_test/interactions */
+export interface TestInteractionRequest {
+  application_id: string
+  type?: number
+  command_name: string
+  guild_id?: string
+  channel_id?: string
+  user_id?: string
+  options?: Record<string, unknown>[]
+}
+
+/** Result of a test-interaction creation attempt */
+export type CreateTestInteractionResult =
+  | { ok: true; interaction: InteractionObject }
+  | { ok: false; reason: 'unknown_command' }
+
+/** Minimal row shape needed to resolve a command by name */
+interface CommandIdRow {
+  id: string
+}
+
+/**
+ * Simulates an interaction against a registered command, without a real
+ * Discord client. Prefers a guild-scoped command match (when `guild_id` is
+ * given) and falls back to a global command of the same name; a request
+ * with no `guild_id` only ever matches a global command.
+ * @param db - Database
+ * @param request - Test interaction request body
+ * @returns The created interaction, or unknown_command if no match exists
+ */
+export function createTestInteraction(
+  db: Database,
+  request: TestInteractionRequest
+): CreateTestInteractionResult {
+  const guildCommand = request.guild_id
+    ? (db
+        .prepare(
+          'SELECT id FROM application_commands WHERE application_id = ? AND guild_id = ? AND name = ?'
+        )
+        .get(request.application_id, request.guild_id, request.command_name) as
+        CommandIdRow | undefined)
+    : undefined
+
+  const globalCommand = guildCommand
+    ? undefined
+    : (db
+        .prepare(
+          'SELECT id FROM application_commands WHERE application_id = ? AND guild_id IS NULL AND name = ?'
+        )
+        .get(request.application_id, request.command_name) as
+        CommandIdRow | undefined)
+
+  const command = guildCommand ?? globalCommand
+  if (!command) return { ok: false, reason: 'unknown_command' }
+
+  const userId = request.user_id ?? generateSnowflake()
+  const interactionId = generateSnowflake()
+  // Interaction tokens authorize the callback/followup endpoints on their
+  // own (no bot-token auth), so use a CSPRNG rather than a predictable
+  // Snowflake-derived value, matching webhook token generation.
+  const interactionToken = randomBytes(48).toString('base64url')
+
+  const interaction = createInteraction(db, {
+    interactionId,
+    applicationId: request.application_id,
+    token: interactionToken,
+    type: request.type ?? 2,
+    guildId: request.guild_id,
+    channelId: request.channel_id,
+    commandId: command.id,
+    data: { options: request.options ?? [] },
+    userId,
+  })
+
+  return { ok: true, interaction }
 }

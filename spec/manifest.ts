@@ -93,6 +93,14 @@ export interface ContractFixture {
   bannedUserId: string
   /** Seeded thread (channel type 11) ID, archived, with the bot as a member */
   threadId: string
+  /** Seeded global application command ID */
+  commandId: string
+  /** Seeded guild-scoped application command ID */
+  guildCommandId: string
+  /** Seeded interaction ID (guild-scoped, channel-bound) */
+  interactionId: string
+  /** Seeded interaction token */
+  interactionToken: string
 }
 
 /** A single entry in the endpoint manifest. */
@@ -952,6 +960,252 @@ export const MANIFEST: SpecEndpoint[] = [
     request: (f) => ({
       path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/messages/${f.webhookMessageId}`,
       init: { method: 'DELETE' },
+    }),
+  },
+
+  // ── Application Commands (global) ─────────────────────────────────────
+  {
+    specPath: '/applications/{application_id}/commands',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/commands`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/commands',
+    method: 'post',
+    contractTested: true,
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/commands`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'contractcreate', description: 'x' }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/commands',
+    method: 'put',
+    contractTested: false,
+    // Bulk overwrite is destructive to fixture state shared across tests;
+    // covered by src/routes/application-commands.test.ts instead.
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/commands`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ name: 'ping', description: 'x' }]),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/commands/{command_id}',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/commands/${f.commandId}`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/commands/{command_id}',
+    method: 'patch',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/commands/${f.commandId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: 'updated' }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/commands/{command_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    // Destructive; not run against the shared fixture command to avoid
+    // breaking other tests in this suite that rely on f.commandId existing.
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/commands/nonexistent-for-contract`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  // ── Application Commands (guild) ──────────────────────────────────────
+  {
+    specPath: '/applications/{application_id}/guilds/{guild_id}/commands',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/guilds/{guild_id}/commands',
+    method: 'post',
+    contractTested: true,
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'guildcreate', description: 'x' }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/guilds/{guild_id}/commands',
+    method: 'put',
+    contractTested: false,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ name: 'guildping', description: 'x' }]),
+      },
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}`,
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}',
+    method: 'patch',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: 'updated' }),
+      },
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/nonexistent-for-contract`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  // ── Command Permissions ────────────────────────────────────────────────
+  {
+    specPath:
+      '/applications/{application_id}/guilds/{guild_id}/commands/permissions',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/permissions`,
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}/permissions`,
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions',
+    method: 'put',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}/permissions`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          permissions: [{ id: f.roleId, type: 1, permission: true }],
+        }),
+      },
+    }),
+  },
+  // ── Interactions ────────────────────────────────────────────────────────
+  {
+    specPath: '/interactions/{interaction_id}/{interaction_token}/callback',
+    method: 'post',
+    contractTested: false,
+    // 204 No Content — no response body schema to validate.
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/interactions/${f.interactionId}/${f.interactionToken}/callback`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 5 }),
+      },
+    }),
+  },
+  {
+    // Followup messages reuse the Webhook execute endpoint — Discord treats
+    // application_id/interaction_token as webhook_id/webhook_token, so the
+    // spec path is the same `webhook_token` template as the regular webhook
+    // execute entry above (there is no distinct openapi path for this).
+    specPath: '/webhooks/{webhook_id}/{webhook_token}',
+    method: 'post',
+    contractTested: true,
+    successStatus: 200,
+    responseSchemaOverride: 'MessageResponse',
+    request: (f) => ({
+      path: `/api/v10/webhooks/${f.userId}/${f.interactionToken}?wait=true`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'Followup message' }),
+      },
+    }),
+  },
+  {
+    specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}',
+    method: 'get',
+    contractTested: false,
+    // Depends on a message created by the followup POST above, whose ID is
+    // not deterministic ahead of time within this fixture; covered by
+    // src/routes/webhooks.test.ts instead.
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/webhooks/${f.userId}/${f.interactionToken}/messages/${f.webhookMessageId}`,
+    }),
+  },
+  {
+    specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/@original',
+    method: 'get',
+    contractTested: false,
+    // Requires a prior type-4 callback to populate initial_response_message_id;
+    // covered by src/routes/webhooks.test.ts instead.
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/webhooks/${f.userId}/${f.interactionToken}/messages/@original`,
     }),
   },
 
