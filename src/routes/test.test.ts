@@ -343,4 +343,56 @@ describe('Test Control API', () => {
       expect(res.status).toBe(400)
     })
   })
+
+  describe('POST /_test/interactions', () => {
+    it('creates a test interaction and returns 201', async () => {
+      // Setup: register a bot/guild/command first via the existing test flow
+      await app.request('/_test/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: 'Bot interactiontoken',
+          user: { id: '555555555555555555', username: 'IBot' },
+          guilds: [
+            {
+              id: '666666666666666666',
+              name: 'IGuild',
+              channels: [{ id: '777777777777777777', name: 'general' }],
+            },
+          ],
+        }),
+      })
+      const { createCommand } = await import('../services/application-commands')
+      createCommand(db, '555555555555555555', '666666666666666666', {
+        name: 'ping',
+        description: 'x',
+      })
+
+      const res = await app.request('/_test/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          application_id: '555555555555555555',
+          command_name: 'ping',
+          guild_id: '666666666666666666',
+          channel_id: '777777777777777777',
+        }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as { data: { name: string } }
+      expect(body.data.name).toBe('ping')
+    })
+
+    it('returns 404 for an unregistered command name', async () => {
+      const res = await app.request('/_test/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          application_id: '000000000000000000',
+          command_name: 'does-not-exist',
+        }),
+      })
+      expect(res.status).toBe(404)
+    })
+  })
 })

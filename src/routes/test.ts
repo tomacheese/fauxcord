@@ -13,7 +13,9 @@ import {
   getTestMessages,
   createTestUser,
   injectTestMessage,
+  createTestInteraction,
 } from '../services/test-control'
+import type { TestInteractionRequest } from '../services/test-control'
 import { getChannelWebhooks } from '../services/webhooks'
 
 /**
@@ -143,6 +145,17 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
     }
 
     return c.json(result, 201)
+  })
+
+  // POST /_test/interactions — Simulate an interaction against a registered
+  // command, without a real Discord client.
+  app.post('/_test/interactions', async (c) => {
+    const body = await c.req.json<TestInteractionRequest>()
+    const result = createTestInteraction(db, body)
+    if (!result.ok) {
+      return c.json({ message: '404: Not Found', code: 0 }, 404)
+    }
+    return c.json(result.interaction, 201)
   })
 
   return app
