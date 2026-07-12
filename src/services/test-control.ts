@@ -442,8 +442,7 @@ export function createTestInteraction(
           'SELECT id FROM application_commands WHERE application_id = ? AND guild_id = ? AND name = ?'
         )
         .get(request.application_id, request.guild_id, request.command_name) as
-        | CommandIdRow
-        | undefined)
+        CommandIdRow | undefined)
     : undefined
 
   const globalCommand = guildCommand
@@ -453,8 +452,7 @@ export function createTestInteraction(
           'SELECT id FROM application_commands WHERE application_id = ? AND guild_id IS NULL AND name = ?'
         )
         .get(request.application_id, request.command_name) as
-        | CommandIdRow
-        | undefined)
+        CommandIdRow | undefined)
 
   const command = guildCommand ?? globalCommand
   if (!command) return { ok: false, reason: 'unknown_command' }
