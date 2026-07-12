@@ -258,3 +258,50 @@ export function getTestMessages(
     created_at: string
   }[]
 }
+
+/** Request payload for registering a non-bot test user */
+export interface CreateTestUserRequest {
+  id?: string
+  username: string
+  discriminator?: string
+}
+
+/** Response for a newly registered non-bot test user */
+export interface CreateTestUserResponse {
+  id: string
+  username: string
+  discriminator: string
+}
+
+/**
+ * Registers a non-bot user for testing (e.g. to later author an injected
+ * message via injectTestMessage). Unlike POST /_test/setup, an explicit ID
+ * collision is a hard error -- this endpoint never silently reuses an
+ * existing row, since callers are expected to track the users they create.
+ * @param db - Database
+ * @param request - User creation request
+ * @returns Created user info
+ * @throws Error with message 'CONFLICT' if the explicit ID already exists
+ */
+export function createTestUser(
+  db: Database,
+  request: CreateTestUserRequest
+): CreateTestUserResponse {
+  const id = request.id ?? generateSnowflake()
+  const discriminator = request.discriminator ?? '0'
+
+  if (request.id) {
+    const existing = db
+      .prepare('SELECT id FROM users WHERE id = ?')
+      .get(request.id)
+    if (existing) {
+      throw new Error('CONFLICT')
+    }
+  }
+
+  db.prepare(
+    'INSERT INTO users (id, username, discriminator, bot) VALUES (?, ?, ?, 0)'
+  ).run(id, request.username, discriminator)
+
+  return { id, username: request.username, discriminator }
+}

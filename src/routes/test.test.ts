@@ -4,6 +4,8 @@ import { createTestRoutes } from './test'
 import { initializeDatabase, closeDatabase } from '../db'
 import type { Database } from '../db'
 
+const BASE_URL = 'http://localhost:3000'
+
 describe('Test Control API', () => {
   let db: Database
   let app: Hono
@@ -11,7 +13,7 @@ describe('Test Control API', () => {
   beforeEach(() => {
     db = initializeDatabase(':memory:')
     app = new Hono()
-    app.route('/', createTestRoutes(db))
+    app.route('/', createTestRoutes(db, BASE_URL))
   })
 
   afterEach(() => {
@@ -115,6 +117,73 @@ describe('Test Control API', () => {
         body: setupBody,
       })
       expect(res.status).toBe(409)
+    })
+  })
+
+  describe('POST /_test/users', () => {
+    it('registers a non-bot user with an auto-generated ID', async () => {
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'TestHuman' }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as {
+        id: string
+        username: string
+        discriminator: string
+      }
+      expect(body.id).toBeTruthy()
+      expect(body.username).toBe('TestHuman')
+      expect(body.discriminator).toBe('0')
+
+      const row = db
+        .prepare('SELECT bot FROM users WHERE id = ?')
+        .get(body.id) as { bot: number }
+      expect(row.bot).toBe(0)
+    })
+
+    it('registers a non-bot user with an explicit ID', async () => {
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: '555555555555555555',
+          username: 'TestHuman',
+          discriminator: '1234',
+        }),
+      })
+      expect(res.status).toBe(201)
+      const body = (await res.json()) as { id: string; discriminator: string }
+      expect(body.id).toBe('555555555555555555')
+      expect(body.discriminator).toBe('1234')
+    })
+
+    it('returns 409 when the explicit ID already exists', async () => {
+      const payload = JSON.stringify({
+        id: '555555555555555555',
+        username: 'TestHuman',
+      })
+      await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      })
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      })
+      expect(res.status).toBe(409)
+    })
+
+    it('returns 400 when username is missing', async () => {
+      const res = await app.request('/_test/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      expect(res.status).toBe(400)
     })
   })
 

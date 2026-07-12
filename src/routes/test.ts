@@ -11,15 +11,17 @@ import {
   deleteTestSetup,
   resetTestData,
   getTestMessages,
+  createTestUser,
 } from '../services/test-control'
 import { getChannelWebhooks } from '../services/webhooks'
 
 /**
  * Creates the test control API routes.
  * @param db - Database
+ * @param baseUrl - Base URL (used for injected message attachment URL generation)
  * @returns Hono router instance
  */
-export function createTestRoutes(db: Database): Hono {
+export function createTestRoutes(db: Database, baseUrl: string): Hono {
   const app = new Hono()
 
   // POST /_test/setup — Set up Bot, Guild, and Channel
@@ -58,6 +60,33 @@ export function createTestRoutes(db: Database): Hono {
       return c.json({ message: '404: Not Found', code: 0 }, 404)
     }
     return c.body(null, 204)
+  })
+
+  // POST /_test/users — Register a non-bot user for testing
+  app.post('/_test/users', async (c) => {
+    const payload = await c.req.json<{
+      id?: string
+      username?: string
+      discriminator?: string
+    }>()
+
+    if (!payload.username) {
+      return c.json({ message: '400: Bad Request', code: 0 }, 400)
+    }
+
+    try {
+      const result = createTestUser(db, {
+        id: payload.id,
+        username: payload.username,
+        discriminator: payload.discriminator,
+      })
+      return c.json(result, 201)
+    } catch (err) {
+      if (err instanceof Error && err.message === 'CONFLICT') {
+        return c.json({ message: '409: Conflict', code: 0 }, 409)
+      }
+      throw err
+    }
   })
 
   // POST /_test/reset — Reset test data (messages, etc.)

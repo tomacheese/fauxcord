@@ -37,7 +37,7 @@ function buildTestServer(db: Database): Hono {
 
   // Auth-exempt endpoints
   app.route('/', createMockRoutes(db, '/tmp/uploads-test'))
-  app.route('/', createTestRoutes(db))
+  app.route('/', createTestRoutes(db, BASE_URL))
 
   // Webhook execution does not require auth — register before the auth middleware
   app.route('/', createWebhookRoutes(db, BASE_URL))

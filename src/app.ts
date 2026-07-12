@@ -75,7 +75,7 @@ export function buildApp(
   app.route('/', createMockRoutes(db, config.uploadPath ?? '/data/uploads'))
 
   // Test control APIs require no authentication
-  app.route('/', createTestRoutes(db))
+  app.route('/', createTestRoutes(db, config.baseUrl))
 
   // OAuth2 is partially exempt from authentication (its endpoints validate
   // their own Bearer/client-credential auth internally), so it is mounted
