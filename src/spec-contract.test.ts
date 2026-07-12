@@ -53,6 +53,8 @@ import {
   seedEmoji,
   seedInvite,
   seedBan,
+  seedApplicationCommand,
+  seedInteraction,
 } from './test-helpers'
 import { getContractTestedEntries } from '../spec/manifest'
 import type { ContractFixture, SpecEndpoint } from '../spec/manifest'
@@ -292,6 +294,23 @@ beforeAll(() => {
     'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
   ).run(threadId, BOT_USER_ID)
 
+  // Seed application commands (global + guild-scoped) and an interaction for
+  // the Application Commands / Interactions contract tests.
+  const commandId = seedApplicationCommand(db, BOT_USER_ID, null, 'contractcmd')
+  const guildCommandId = seedApplicationCommand(
+    db,
+    BOT_USER_ID,
+    guildId,
+    'guildcontractcmd'
+  )
+  const { interactionId, interactionToken } = seedInteraction(
+    db,
+    BOT_USER_ID,
+    channelId,
+    memberId,
+    guildCommandId
+  )
+
   fixture = {
     token,
     userId: BOT_USER_ID,
@@ -308,6 +327,10 @@ beforeAll(() => {
     deletableInviteCode,
     bannedUserId,
     threadId,
+    commandId,
+    guildCommandId,
+    interactionId,
+    interactionToken,
   }
 })
 

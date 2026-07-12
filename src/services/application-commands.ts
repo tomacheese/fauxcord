@@ -66,9 +66,11 @@ function toApplicationCommandObject(
   }
   if (row.guild_id) {
     base.guild_id = row.guild_id
-  } else {
-    base.dm_permission =
-      row.dm_permission === null ? null : row.dm_permission === 1
+  } else if (row.dm_permission !== null) {
+    // The spec types `dm_permission` as a plain boolean (not nullable), so
+    // only include it once a value has actually been set; leaving it
+    // unset lets the field fall back to its Discord-side default.
+    base.dm_permission = row.dm_permission === 1
   }
   return base
 }
