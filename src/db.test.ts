@@ -116,3 +116,91 @@ describe('initializeDatabase', () => {
     }
   })
 })
+
+describe('application commands / interactions tables', () => {
+  it('creates the application_commands table', () => {
+    const db = initializeDatabase(':memory:')
+    const columns = db
+      .prepare('PRAGMA table_info(application_commands)')
+      .all() as { name: string }[]
+    const names = columns.map((c) => c.name)
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'id',
+        'application_id',
+        'guild_id',
+        'type',
+        'name',
+        'description',
+        'options',
+        'default_member_permissions',
+        'dm_permission',
+        'nsfw',
+        'version',
+        'created_at',
+      ])
+    )
+    db.close()
+  })
+
+  it('creates the application_command_permissions table', () => {
+    const db = initializeDatabase(':memory:')
+    const columns = db
+      .prepare('PRAGMA table_info(application_command_permissions)')
+      .all() as { name: string }[]
+    const names = columns.map((c) => c.name)
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'application_id',
+        'guild_id',
+        'command_id',
+        'permissions',
+        'created_at',
+      ])
+    )
+    db.close()
+  })
+
+  it('creates the interactions table', () => {
+    const db = initializeDatabase(':memory:')
+    const columns = db
+      .prepare('PRAGMA table_info(interactions)')
+      .all() as { name: string }[]
+    const names = columns.map((c) => c.name)
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'id',
+        'application_id',
+        'token',
+        'type',
+        'guild_id',
+        'channel_id',
+        'command_id',
+        'data',
+        'user_id',
+        'member_json',
+        'responded',
+        'initial_response_message_id',
+        'created_at',
+      ])
+    )
+    db.close()
+  })
+
+  it('enforces UNIQUE(application_id, guild_id, type, name) on application_commands', () => {
+    const db = initializeDatabase(':memory:')
+    db.prepare(
+      `INSERT INTO application_commands (id, application_id, type, name, version)
+       VALUES ('1', 'app1', 1, 'ping', 'v1')`
+    ).run()
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO application_commands (id, application_id, type, name, version)
+           VALUES ('2', 'app1', 1, 'ping', 'v1')`
+        )
+        .run()
+    ).toThrow()
+    db.close()
+  })
+})
