@@ -124,7 +124,7 @@ export function validateRoleCreate(
 
   if (
     payload.color !== undefined &&
-    (!Number.isInteger(payload.color) ||
+    (!Number.isSafeInteger(payload.color) ||
       payload.color < 0 ||
       payload.color > 0xff_ff_ff)
   ) {
@@ -321,7 +321,7 @@ export function validateBanCreate(payload: BanCreatePayload): ValidationErrors {
   if (
     seconds !== undefined &&
     seconds !== null &&
-    (!Number.isInteger(seconds) ||
+    (!Number.isSafeInteger(seconds) ||
       seconds < 0 ||
       seconds > DELETE_MESSAGE_SECONDS_MAX)
   ) {
@@ -339,7 +339,7 @@ export function validateBanCreate(payload: BanCreatePayload): ValidationErrors {
   if (
     days !== undefined &&
     days !== null &&
-    (!Number.isInteger(days) || days < 0 || days > DELETE_MESSAGE_DAYS_MAX)
+    (!Number.isSafeInteger(days) || days < 0 || days > DELETE_MESSAGE_DAYS_MAX)
   ) {
     errors.delete_message_days = {
       _errors: [

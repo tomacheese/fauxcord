@@ -65,7 +65,7 @@ export function createOAuth2Routes(db: Database): Hono {
     redirectUrl.searchParams.set('code', code)
     if (state) redirectUrl.searchParams.set('state', state)
 
-    return c.redirect(redirectUrl.toString())
+    return c.redirect(redirectUrl.href)
   })
 
   // POST /oauth2/token — Issue an OAuth2 token

@@ -275,10 +275,9 @@ export function updateCommand(
   }
 
   const options = payload.options ?? current.options
-  const defaultMemberPermissions =
-    payload.default_member_permissions === undefined
-      ? current.default_member_permissions
-      : payload.default_member_permissions
+  const defaultMemberPermissions = (
+    payload.default_member_permissions === undefined ? current : payload
+  ).default_member_permissions
   const dmPermission =
     payload.dm_permission === undefined
       ? (current.dm_permission ?? null)

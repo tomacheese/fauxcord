@@ -67,6 +67,7 @@ class TypedGatewayBus extends EventEmitter {
    * @param payload - Event payload
    * @returns true if a listener existed
    */
+  // eslint-disable-next-line unicorn/no-useless-override -- narrows EventEmitter's untyped signature to GatewayBusEvents; not a no-op forward.
   emit<K extends keyof GatewayBusEvents>(
     event: K,
     payload: GatewayBusEvents[K]
@@ -80,6 +81,7 @@ class TypedGatewayBus extends EventEmitter {
    * @param listener - Listener function
    * @returns this
    */
+  // eslint-disable-next-line unicorn/no-useless-override -- narrows EventEmitter's untyped signature to GatewayBusEvents; not a no-op forward.
   on<K extends keyof GatewayBusEvents>(
     event: K,
     listener: (payload: GatewayBusEvents[K]) => void
@@ -93,6 +95,7 @@ class TypedGatewayBus extends EventEmitter {
    * @param listener - Listener function
    * @returns this
    */
+  // eslint-disable-next-line unicorn/no-useless-override -- narrows EventEmitter's untyped signature to GatewayBusEvents; not a no-op forward.
   off<K extends keyof GatewayBusEvents>(
     event: K,
     listener: (payload: GatewayBusEvents[K]) => void
@@ -106,4 +109,5 @@ export const gatewayBus = new TypedGatewayBus()
 // Raise the listener limit so frequent emits from the REST layer don't
 // trigger Node's max-listeners warning (leaves headroom for more concurrent
 // sessions).
+// eslint-disable-next-line unicorn/no-top-level-side-effects -- one-time setup on the module's own singleton, not a shared/exported binding mutation.
 gatewayBus.setMaxListeners(50)

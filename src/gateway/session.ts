@@ -91,7 +91,7 @@ export class SessionManager {
    * @returns Array of sessions
    */
   getAll(): Session[] {
-    return [...this.sessionsById.values()]
+    return this.sessionsById.values().toArray()
   }
 
   /**
