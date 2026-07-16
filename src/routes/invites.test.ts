@@ -162,6 +162,15 @@ describe('Invites API', () => {
       expect(res.status).toBe(400)
     })
 
+    it('rejects a non-multipart request', async () => {
+      const res = await app.request(`/invites/${code}/target-users`, {
+        method: 'PUT',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      expect(res.status).toBe(400)
+    })
+
     it('returns 404 for an unknown code', async () => {
       const formData = new FormData()
       formData.set(
