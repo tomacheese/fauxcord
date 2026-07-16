@@ -307,3 +307,132 @@ export function deleteInvite(db: Database, code: string): InviteObject | null {
   db.prepare('DELETE FROM invites WHERE code = ?').run(code)
   return invite
 }
+
+/**
+ * Retrieves the list of invites for a guild (across all of its channels).
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @returns Array of invite objects
+ */
+export function getGuildInvites(db: Database, guildId: string): InviteObject[] {
+  const rows = db
+    .prepare('SELECT * FROM invites WHERE guild_id = ? ORDER BY created_at')
+    .all(guildId) as InviteRow[]
+  return rows
+    .map((row) => toInviteObject(db, row))
+    .filter((invite): invite is InviteObject => invite !== null)
+}
+
+/** Target-users job status, matching the Discord `TargetUsersJobStatusResponse` shape. */
+export interface TargetUsersJobStatusObject {
+  status: number
+  total_users: number
+  processed_users: number
+  created_at: string | null
+  completed_at: string | null
+  error_message: string | null
+}
+
+/** Row shape for the `invite_target_users` table. */
+interface InviteTargetUsersRow {
+  raw_csv: string
+  total_users: number
+  processed_users: number
+  status: number
+  created_at: string
+  completed_at: string | null
+  error_message: string | null
+}
+
+/** CSV returned for an invite that has never had a target-users file set. */
+const EMPTY_TARGET_USERS_CSV = 'user_id\n'
+
+/**
+ * Retrieves the raw target-users CSV for an invite.
+ * @param db - Database
+ * @param code - Invite code
+ * @returns The stored CSV, a header-only CSV if never set, or null if the invite itself does not exist
+ */
+export function getInviteTargetUsersCsv(
+  db: Database,
+  code: string
+): string | null {
+  const invite = db.prepare('SELECT 1 FROM invites WHERE code = ?').get(code)
+  if (!invite) return null
+
+  const row = db
+    .prepare('SELECT raw_csv FROM invite_target_users WHERE code = ?')
+    .get(code) as { raw_csv: string } | undefined
+  return row ? row.raw_csv : EMPTY_TARGET_USERS_CSV
+}
+
+/**
+ * Sets (replaces) the target users for an invite. The mock processes the
+ * file synchronously and immediately marks the job COMPLETED — Fauxcord is
+ * a deterministic mock and does not simulate asynchronous delay.
+ * @param db - Database
+ * @param code - Invite code (caller must have already verified the invite exists)
+ * @param rawCsv - The raw CSV file content, stored verbatim for later GET
+ * @param userIds - The validated user IDs parsed from the CSV
+ */
+export function setInviteTargetUsers(
+  db: Database,
+  code: string,
+  rawCsv: string,
+  userIds: string[]
+): void {
+  db.prepare(
+    `INSERT INTO invite_target_users
+       (code, raw_csv, total_users, processed_users, status, created_at, completed_at, error_message)
+     VALUES (?, ?, ?, ?, 2, datetime('now'), datetime('now'), NULL)
+     ON CONFLICT (code) DO UPDATE SET
+       raw_csv = excluded.raw_csv,
+       total_users = excluded.total_users,
+       processed_users = excluded.processed_users,
+       status = excluded.status,
+       created_at = excluded.created_at,
+       completed_at = excluded.completed_at,
+       error_message = excluded.error_message`
+  ).run(code, rawCsv, userIds.length, userIds.length)
+}
+
+/**
+ * Retrieves the target-users job status for an invite.
+ * @param db - Database
+ * @param code - Invite code
+ * @returns The job status, a default UNSPECIFIED status if never set, or null if the invite itself does not exist
+ */
+export function getInviteTargetUsersJobStatus(
+  db: Database,
+  code: string
+): TargetUsersJobStatusObject | null {
+  const invite = db.prepare('SELECT 1 FROM invites WHERE code = ?').get(code)
+  if (!invite) return null
+
+  const row = db
+    .prepare(
+      `SELECT total_users, processed_users, status, created_at, completed_at, error_message
+       FROM invite_target_users WHERE code = ?`
+    )
+    .get(code) as InviteTargetUsersRow | undefined
+
+  if (!row) {
+    return {
+      status: 0,
+      total_users: 0,
+      processed_users: 0,
+      created_at: null,
+      completed_at: null,
+      error_message: null,
+    }
+  }
+
+  return {
+    status: row.status,
+    total_users: row.total_users,
+    processed_users: row.processed_users,
+    created_at: toIso(row.created_at),
+    completed_at: row.completed_at ? toIso(row.completed_at) : null,
+    error_message: row.error_message,
+  }
+}
