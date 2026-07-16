@@ -465,6 +465,59 @@ export const MANIFEST: SpecEndpoint[] = [
       init: { method: 'DELETE' },
     }),
   },
+  {
+    // Response is an array of oneOf invite types; the mock only ever returns
+    // the guild-invite branch, so pin the schema to validate each item (same
+    // pattern as the existing /channels/{channel_id}/invites entry above).
+    specPath: '/guilds/{guild_id}/invites',
+    method: 'get',
+    contractTested: true,
+    responseSchemaOverride: 'GuildInviteResponse',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/invites` }),
+  },
+  {
+    // Response body is a raw CSV file (text/csv), not JSON. The contract
+    // test harness always calls res.json() on non-204 responses, so a
+    // CSV body is impractical to validate via Ajv here; covered instead by
+    // the route-level tests in src/routes/invites.test.ts.
+    specPath: '/invites/{code}/target-users',
+    method: 'get',
+    contractTested: false,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}/target-users`,
+    }),
+  },
+  {
+    // 204 response, nothing to validate against the schema.
+    specPath: '/invites/{code}/target-users',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f) => {
+      const formData = new FormData()
+      formData.set(
+        'target_users_file',
+        new File(['user_id\n999999999999999999\n'], 'target_users.csv', {
+          type: 'text/csv',
+        })
+      )
+      return {
+        path: `/api/v10/invites/${f.inviteCode}/target-users`,
+        init: { method: 'PUT', body: formData },
+      }
+    },
+  },
+  {
+    specPath: '/invites/{code}/target-users/job-status',
+    method: 'get',
+    contractTested: true,
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}/target-users/job-status`,
+    }),
+  },
 
   // ─── Guilds ─────────────────────────────────────────────────────────────────
 
