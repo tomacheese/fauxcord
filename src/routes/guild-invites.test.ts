@@ -20,7 +20,7 @@ describe('Guild Invites API', () => {
   })
 
   describe('GET /guilds/:guildId/invites', () => {
-    it('lists a guild\'s invites', async () => {
+    it("lists a guild's invites", async () => {
       const token = seedBot(db)
       const guildId = seedGuild(db, token)
       const channelId = seedChannel(db, guildId)
