@@ -22,6 +22,7 @@ import { createGuildRoleRoutes } from './guild-roles'
 import { createGuildMemberRoutes } from './guild-members'
 import { createGuildEmojiRoutes } from './guild-emojis'
 import { createGuildBanRoutes } from './guild-bans'
+import { createGuildInviteRoutes } from './guild-invites'
 
 /**
  * Creates the guilds API routes.
@@ -171,6 +172,7 @@ export function createGuildRoutes(db: Database): Hono {
   app.route('/', createGuildMemberRoutes(db))
   app.route('/', createGuildEmojiRoutes(db))
   app.route('/', createGuildBanRoutes(db))
+  app.route('/', createGuildInviteRoutes(db))
 
   return app
 }
