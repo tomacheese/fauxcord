@@ -299,6 +299,17 @@ export function initializeDatabase(dbPath: string): Database {
 
     CREATE INDEX IF NOT EXISTS idx_invites_channel ON invites(channel_id);
 
+    CREATE TABLE IF NOT EXISTS invite_target_users (
+      code            TEXT PRIMARY KEY REFERENCES invites(code) ON DELETE CASCADE,
+      raw_csv         TEXT NOT NULL,
+      total_users     INTEGER NOT NULL,
+      processed_users INTEGER NOT NULL,
+      status          INTEGER NOT NULL,
+      created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at    TEXT,
+      error_message   TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS application_commands (
       id                          TEXT PRIMARY KEY,
       application_id              TEXT NOT NULL,
