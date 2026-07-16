@@ -162,6 +162,23 @@ describe('Invites API', () => {
       expect(res.status).toBe(400)
     })
 
+    it('rejects a file exceeding the 25 MB size limit', async () => {
+      const oversized = new Uint8Array(25 * 1024 * 1024 + 1)
+      const formData = new FormData()
+      formData.set(
+        'target_users_file',
+        new File([oversized], 'target_users.csv', { type: 'text/csv' })
+      )
+      const res = await app.request(`/invites/${code}/target-users`, {
+        method: 'PUT',
+        headers: { Authorization: token },
+        body: formData,
+      })
+      expect(res.status).toBe(400)
+      const body = (await res.json()) as { code: number }
+      expect(body.code).toBe(50_045)
+    })
+
     it('rejects a non-multipart request', async () => {
       const res = await app.request(`/invites/${code}/target-users`, {
         method: 'PUT',

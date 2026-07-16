@@ -114,6 +114,15 @@ export function createInviteRoutes(db: Database): Hono {
       )
     }
 
+    if (file.size > 25 * 1024 * 1024) {
+      const err = discordError(
+        DiscordErrorCode.FILE_TOO_LARGE,
+        'File uploaded exceeds the maximum size',
+        400
+      )
+      return c.json(err.body, 400)
+    }
+
     const text = await file.text()
     const parsed = parseTargetUsersCsv(text)
     if ('errors' in parsed) {
