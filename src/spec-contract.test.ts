@@ -363,14 +363,6 @@ describe('Discord spec contract tests', () => {
         return
       }
 
-      const schemaName = getResponseSchemaName(entry)
-      expect(
-        schemaName,
-        `No schema name found for ${label}. Add responseSchemaOverride to the manifest entry.`
-      ).toBeTruthy()
-      // Early return narrows schemaName to string for TypeScript (the expect above throws on null).
-      if (!schemaName) return
-
       const { path, init } = entry.request(fixture)
       const headers: Record<string, string> = {
         Authorization: fixture.token,
@@ -385,6 +377,14 @@ describe('Discord spec contract tests', () => {
 
       // 204 responses have no body — nothing to validate
       if (entry.successStatus === 204) return
+
+      const schemaName = getResponseSchemaName(entry)
+      expect(
+        schemaName,
+        `No schema name found for ${label}. Add responseSchemaOverride to the manifest entry.`
+      ).toBeTruthy()
+      // Early return narrows schemaName to string for TypeScript (the expect above throws on null).
+      if (!schemaName) return
 
       const body: unknown = await res.json()
 

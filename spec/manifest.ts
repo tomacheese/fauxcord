@@ -490,10 +490,10 @@ export const MANIFEST: SpecEndpoint[] = [
     }),
   },
   {
-    // 204 response, nothing to validate against the schema.
+    // 204 response, only the status code is asserted.
     specPath: '/invites/{code}/target-users',
     method: 'put',
-    contractTested: false,
+    contractTested: true,
     successStatus: 204,
     request: (f) => {
       const formData = new FormData()
