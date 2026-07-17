@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
-import { requireEntity, parseLimitQuery } from './route-helpers'
+import { requireEntity, parseLimitQuery, parseSlackBody } from './route-helpers'
 import { DiscordErrorCode } from '../errors'
 
 describe('requireEntity', () => {
@@ -77,5 +77,52 @@ describe('parseLimitQuery', () => {
     app.get('/', (c) => c.json({ limit: parseLimitQuery(c, 50, 100) }))
     const res = await app.request('/?limit=500')
     expect((await res.json()) as { limit: number }).toEqual({ limit: 100 })
+  })
+})
+
+describe('parseSlackBody', () => {
+  it('parses a JSON body', async () => {
+    const app = new Hono()
+    app.post('/x', async (c) => c.json(await parseSlackBody(c)))
+
+    const res = await app.request('/x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hello' }),
+    })
+
+    expect(await res.json()).toEqual({ text: 'hello' })
+  })
+
+  it('parses a urlencoded payload field', async () => {
+    const app = new Hono()
+    app.post('/x', async (c) => c.json(await parseSlackBody(c)))
+
+    const form = new URLSearchParams()
+    form.set('payload', JSON.stringify({ text: 'from form' }))
+
+    const res = await app.request('/x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    })
+
+    expect(await res.json()).toEqual({ text: 'from form' })
+  })
+
+  it('returns an empty object for an unparsable payload field', async () => {
+    const app = new Hono()
+    app.post('/x', async (c) => c.json(await parseSlackBody(c)))
+
+    const form = new URLSearchParams()
+    form.set('payload', 'not json')
+
+    const res = await app.request('/x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    })
+
+    expect(await res.json()).toEqual({})
   })
 })

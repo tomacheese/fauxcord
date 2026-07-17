@@ -309,6 +309,35 @@ describe('Webhooks API (with token)', () => {
       expect(res.status).toBe(404)
     })
   })
+
+  describe('POST /webhooks/:webhookId/:token/slack', () => {
+    it('creates a message from a Slack-compatible JSON payload', async () => {
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}/slack`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: 'hello from slack' }),
+        }
+      )
+
+      expect(res.status).toBe(200)
+      expect(await res.json()).toBeNull()
+    })
+
+    it('returns 404 for an unknown webhook token', async () => {
+      const res = await app.request(
+        '/webhooks/999999999999999999/badtoken/slack',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: 'x' }),
+        }
+      )
+
+      expect(res.status).toBe(404)
+    })
+  })
 })
 
 describe('Channel Webhooks API', () => {
