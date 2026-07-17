@@ -19,6 +19,8 @@ import {
   addChannelRecipient,
   removeChannelRecipient,
   getChannelRecipientUsers,
+  getOrCreateDmChannel,
+  createGroupDmChannel,
 } from './channels'
 import { createTestUser } from './test-control'
 import type { Database } from '../db'
@@ -233,5 +235,66 @@ describe('channel recipients', () => {
 
     const fetched = getChannel(db, channel)
     expect(fetched?.recipients).toHaveLength(1)
+  })
+})
+
+describe('getOrCreateDmChannel', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('creates a new DM channel with the bot and recipient as recipients', () => {
+    const botUserId = '111111111111111111'
+    seedBot(db, 'Bot testtoken', botUserId)
+    const recipient = createTestUser(db, { username: 'Grace' }).id
+
+    const channel = getOrCreateDmChannel(db, botUserId, recipient)
+
+    expect(channel.type).toBe(1)
+    const sortIds = (ids: string[]) =>
+      ids.toSorted((a, b) => a.localeCompare(b))
+    expect(sortIds(channel.recipients?.map((r) => r.id) ?? [])).toEqual(
+      sortIds([botUserId, recipient])
+    )
+  })
+
+  it('returns the same DM channel on a repeated call', () => {
+    const botUserId = '111111111111111111'
+    seedBot(db, 'Bot testtoken', botUserId)
+    const recipient = createTestUser(db, { username: 'Heidi' }).id
+
+    const first = getOrCreateDmChannel(db, botUserId, recipient)
+    const second = getOrCreateDmChannel(db, botUserId, recipient)
+
+    expect(second.id).toBe(first.id)
+  })
+})
+
+describe('createGroupDmChannel', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('creates a group-DM channel with only the bot as a recipient', () => {
+    const botUserId = '111111111111111111'
+    seedBot(db, 'Bot testtoken', botUserId)
+
+    const channel = createGroupDmChannel(db, botUserId)
+
+    expect(channel.type).toBe(3)
+    expect(channel.recipients).toHaveLength(1)
+    expect(channel.recipients?.[0].id).toBe(botUserId)
   })
 })

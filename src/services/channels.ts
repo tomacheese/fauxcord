@@ -512,3 +512,77 @@ export function createGuildChannel(
 
   return result
 }
+
+/**
+ * Finds or creates a 1:1 DM channel between the bot and a recipient user.
+ * Reuses an existing DM channel with the same recipient (matching real
+ * Discord's `POST /users/@me/channels` idempotency), scoping the lookup to
+ * channels with exactly the bot and the recipient as recipients, to avoid
+ * confusing a DM with a stale group-DM containing the same user.
+ * @param db - Database
+ * @param botUserId - Bot's own user ID (also stored as a recipient row so
+ * `getChannelRecipientUsers` reflects both parties)
+ * @param recipientId - Recipient user ID
+ * @returns The existing or newly created DM channel object
+ */
+export function getOrCreateDmChannel(
+  db: Database,
+  botUserId: string,
+  recipientId: string
+): ChannelObject {
+  const existing = db
+    .prepare(
+      `SELECT c.id FROM channels c
+       WHERE c.type = 1
+         AND c.guild_id IS NULL
+         AND EXISTS (
+           SELECT 1 FROM channel_recipients cr
+           WHERE cr.channel_id = c.id AND cr.user_id = ?
+         )
+         AND (
+           SELECT COUNT(*) FROM channel_recipients cr2
+           WHERE cr2.channel_id = c.id
+         ) = 2`
+    )
+    .get(recipientId) as { id: string } | undefined
+
+  if (existing) {
+    const channel = getChannel(db, existing.id)
+    if (channel) return channel
+  }
+
+  const channelId = generateSnowflake()
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type) VALUES (?, NULL, 1)'
+  ).run(channelId)
+  addChannelRecipient(db, channelId, botUserId)
+  addChannelRecipient(db, channelId, recipientId)
+
+  const channel = getChannel(db, channelId)
+  if (!channel) throw new Error('Failed to create DM channel')
+  return channel
+}
+
+/**
+ * Creates a group-DM channel. `access_tokens` in the real API resolve to
+ * distinct OAuth2 users; the mock does not perform token resolution, so
+ * the created channel's only recipient is the calling bot itself (see
+ * spec Issue #136 for this deliberate scope limitation).
+ * @param db - Database
+ * @param botUserId - Bot's own user ID, added as the sole recipient
+ * @returns The newly created group-DM channel object
+ */
+export function createGroupDmChannel(
+  db: Database,
+  botUserId: string
+): ChannelObject {
+  const channelId = generateSnowflake()
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type) VALUES (?, NULL, 3)'
+  ).run(channelId)
+  addChannelRecipient(db, channelId, botUserId)
+
+  const channel = getChannel(db, channelId)
+  if (!channel) throw new Error('Failed to create group DM channel')
+  return channel
+}

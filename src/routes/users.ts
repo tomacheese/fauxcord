@@ -14,7 +14,13 @@ import {
   updateBotUser,
 } from '../services/users'
 import { getBotGuilds } from '../services/guilds'
+import {
+  getOrCreateDmChannel,
+  createGroupDmChannel,
+} from '../services/channels'
 import { validateCurrentUserUpdate } from '../validators/user'
+import { requiredError } from '../validators/common'
+import { parseJsonBody } from '../lib/route-helpers'
 import type { AppEnv } from '../middleware/auth'
 
 /**
@@ -108,6 +114,54 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
 
     const guilds = getBotGuilds(db, bot.token)
     return c.json(guilds)
+  })
+
+  // POST /users/@me/channels — Create a DM or group-DM channel
+  app.post('/users/@me/channels', async (c) => {
+    const bot = c.get('bot')
+    if (!bot) {
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    }
+
+    const payload = (await parseJsonBody(c)) as {
+      recipient_id?: unknown
+      access_tokens?: unknown
+    }
+
+    if (
+      Array.isArray(payload.access_tokens) &&
+      payload.access_tokens.length > 0
+    ) {
+      const channel = createGroupDmChannel(db, bot.user_id)
+      return c.json(channel)
+    }
+
+    if (typeof payload.recipient_id === 'string') {
+      const recipient = db
+        .prepare('SELECT id FROM users WHERE id = ?')
+        .get(payload.recipient_id)
+      if (!recipient) {
+        const err = discordError(
+          DiscordErrorCode.UNKNOWN_USER,
+          'Unknown User',
+          404
+        )
+        return c.json(err.body, 404)
+      }
+      const channel = getOrCreateDmChannel(
+        db,
+        bot.user_id,
+        payload.recipient_id
+      )
+      return c.json(channel)
+    }
+
+    return c.json(
+      validationError({
+        recipient_id: { _errors: [requiredError()] },
+      }).body,
+      400
+    )
   })
 
   // GET /applications/@me — Retrieve application information

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createFullTestApp, seedBot } from '../test-helpers'
+import { createTestUser } from '../services/test-control'
 import type { Database } from '../db'
 
 describe('PATCH /users/@me', () => {
@@ -277,5 +278,97 @@ describe('GET /oauth2/applications/@me', () => {
     const body = (await res.json()) as Record<string, unknown>
     expect(typeof body.verify_key).toBe('string')
     expect((body.verify_key as string).length).toBeGreaterThan(0)
+  })
+})
+
+describe('POST /users/@me/channels', () => {
+  let db: ReturnType<typeof createFullTestApp>['db']
+  let app: ReturnType<typeof createFullTestApp>['app']
+  let cleanup: () => void
+
+  beforeEach(() => {
+    const ctx = createFullTestApp()
+    db = ctx.db
+    app = ctx.app
+    cleanup = ctx.cleanup
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('creates a DM channel for a valid recipient_id', async () => {
+    seedBot(db, 'Bot testtoken')
+    const recipient = createTestUser(db, { username: 'Ivan' })
+
+    const res = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipient_id: recipient.id }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.type).toBe(1)
+  })
+
+  it('creates a group-DM channel when access_tokens is present', async () => {
+    seedBot(db, 'Bot testtoken')
+
+    const res = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ access_tokens: ['dummy-token'] }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as Record<string, unknown>
+    expect(body.type).toBe(3)
+  })
+
+  it('returns 404 for an unknown recipient_id', async () => {
+    seedBot(db, 'Bot testtoken')
+
+    const res = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipient_id: '999999999999999999' }),
+    })
+
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 400 when neither recipient_id nor access_tokens is present', async () => {
+    seedBot(db, 'Bot testtoken')
+
+    const res = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 401 without an Authorization header', async () => {
+    const res = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+
+    expect(res.status).toBe(401)
   })
 })
