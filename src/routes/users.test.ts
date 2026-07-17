@@ -371,4 +371,33 @@ describe('POST /users/@me/channels', () => {
 
     expect(res.status).toBe(401)
   })
+
+  it("does not reuse another bot's DM channel with the same recipient", async () => {
+    seedBot(db, 'Bot testtoken', '111111111111111111')
+    seedBot(db, 'Bot othertoken', '222222222222222222')
+    const recipient = createTestUser(db, { username: 'Ivan' })
+
+    const firstRes = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipient_id: recipient.id }),
+    })
+    const firstBody = (await firstRes.json()) as { id: string }
+
+    const secondRes = await app.request('/users/@me/channels', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot othertoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ recipient_id: recipient.id }),
+    })
+    const secondBody = (await secondRes.json()) as { id: string }
+
+    expect(secondRes.status).toBe(200)
+    expect(secondBody.id).not.toBe(firstBody.id)
+  })
 })

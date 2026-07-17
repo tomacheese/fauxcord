@@ -308,6 +308,29 @@ describe('Webhooks API (with token)', () => {
 
       expect(res.status).toBe(404)
     })
+
+    it('creates a message from a form-urlencoded payload field', async () => {
+      const form = new URLSearchParams()
+      form.set(
+        'payload',
+        JSON.stringify({
+          head_commit: { message: 'fix: bug', id: 'abc' },
+          repository: { full_name: 'owner/repo' },
+          sender: { login: 'octocat' },
+        })
+      )
+
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}/github`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: form.toString(),
+        }
+      )
+
+      expect(res.status).toBe(204)
+    })
   })
 
   describe('POST /webhooks/:webhookId/:token/slack', () => {

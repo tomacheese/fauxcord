@@ -30,7 +30,7 @@ import {
   validateWebhookUpdate,
 } from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
-import { parseSlackBody } from '../lib/route-helpers'
+import { parseGithubBody, parseSlackBody } from '../lib/route-helpers'
 
 /**
  * Creates either a webhook-authored message (real webhook) or an
@@ -150,7 +150,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       return c.json(err.body, 404)
     }
 
-    const payload = await c.req.json<GithubWebhookPayload>()
+    const payload = await parseGithubBody<GithubWebhookPayload>(c)
     const embed = buildGithubEmbed(payload)
     const messageId = generateSnowflake()
 

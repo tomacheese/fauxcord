@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
-import { requireEntity, parseLimitQuery, parseSlackBody } from './route-helpers'
+import {
+  requireEntity,
+  parseLimitQuery,
+  parseSlackBody,
+  parseGithubBody,
+} from './route-helpers'
 import { DiscordErrorCode } from '../errors'
 
 describe('requireEntity', () => {
@@ -113,6 +118,59 @@ describe('parseSlackBody', () => {
   it('returns an empty object for an unparsable payload field', async () => {
     const app = new Hono()
     app.post('/x', async (c) => c.json(await parseSlackBody(c)))
+
+    const form = new URLSearchParams()
+    form.set('payload', 'not json')
+
+    const res = await app.request('/x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    })
+
+    expect(await res.json()).toEqual({})
+  })
+})
+
+describe('parseGithubBody', () => {
+  it('parses a JSON body', async () => {
+    const app = new Hono()
+    app.post('/x', async (c) =>
+      c.json(await parseGithubBody<Record<string, unknown>>(c))
+    )
+
+    const res = await app.request('/x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'opened' }),
+    })
+
+    expect(await res.json()).toEqual({ action: 'opened' })
+  })
+
+  it('parses a urlencoded payload field', async () => {
+    const app = new Hono()
+    app.post('/x', async (c) =>
+      c.json(await parseGithubBody<Record<string, unknown>>(c))
+    )
+
+    const form = new URLSearchParams()
+    form.set('payload', JSON.stringify({ action: 'opened' }))
+
+    const res = await app.request('/x', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    })
+
+    expect(await res.json()).toEqual({ action: 'opened' })
+  })
+
+  it('returns an empty object for an unparsable payload field', async () => {
+    const app = new Hono()
+    app.post('/x', async (c) =>
+      c.json(await parseGithubBody<Record<string, unknown>>(c))
+    )
 
     const form = new URLSearchParams()
     form.set('payload', 'not json')

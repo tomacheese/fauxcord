@@ -517,8 +517,11 @@ export function createGuildChannel(
  * Finds or creates a 1:1 DM channel between the bot and a recipient user.
  * Reuses an existing DM channel with the same recipient (matching real
  * Discord's `POST /users/@me/channels` idempotency), scoping the lookup to
- * channels with exactly the bot and the recipient as recipients, to avoid
- * confusing a DM with a stale group-DM containing the same user.
+ * channels with exactly the bot and the recipient as recipients — both the
+ * calling bot and the target recipient are required, so a DM previously
+ * created between the same recipient and a *different* bot is never reused
+ * across bots, and a stale group-DM containing the same user is also not
+ * confused with a 1:1 DM.
  * @param db - Database
  * @param botUserId - Bot's own user ID (also stored as a recipient row so
  * `getChannelRecipientUsers` reflects both parties)
@@ -539,12 +542,16 @@ export function getOrCreateDmChannel(
            SELECT 1 FROM channel_recipients cr
            WHERE cr.channel_id = c.id AND cr.user_id = ?
          )
+         AND EXISTS (
+           SELECT 1 FROM channel_recipients cr3
+           WHERE cr3.channel_id = c.id AND cr3.user_id = ?
+         )
          AND (
            SELECT COUNT(*) FROM channel_recipients cr2
            WHERE cr2.channel_id = c.id
          ) = 2`
     )
-    .get(recipientId) as { id: string } | undefined
+    .get(recipientId, botUserId) as { id: string } | undefined
 
   if (existing) {
     const channel = getChannel(db, existing.id)
