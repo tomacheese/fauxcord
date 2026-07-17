@@ -270,8 +270,8 @@ export function expirePoll(
   if (!poll) return 'UNKNOWN_MESSAGE'
 
   db.prepare(
-    "UPDATE polls SET finalized = 1, expiry = datetime('now') WHERE message_id = ?"
-  ).run(messageId)
+    'UPDATE polls SET finalized = 1, expiry = ? WHERE message_id = ?'
+  ).run(new Date().toISOString(), messageId)
 
   const message = getMessage(db, messageId, baseUrl)
   if (!message) return 'UNKNOWN_MESSAGE'

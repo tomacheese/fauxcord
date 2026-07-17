@@ -82,9 +82,13 @@ describe('POST /channels/:channelId/polls/:messageId/expire', () => {
 
     expect(res.status).toBe(200)
     const body = (await res.json()) as {
-      poll: { results: { is_finalized: boolean } }
+      poll: { results: { is_finalized: boolean }; expiry: string }
     }
     expect(body.poll.results.is_finalized).toBe(true)
+    // expiry must stay ISO 8601, matching the format used at poll creation
+    expect(body.poll.expiry).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+    )
   })
 
   it('returns 404 for a message with no poll', async () => {
