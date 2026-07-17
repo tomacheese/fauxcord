@@ -56,7 +56,7 @@ import {
   seedApplicationCommand,
   seedInteraction,
 } from './test-helpers'
-import { getContractTestedEntries } from '../spec/manifest'
+import { getContractTestedEntries, MANIFEST } from '../spec/manifest'
 import type { ContractFixture, SpecEndpoint } from '../spec/manifest'
 import { SKIP_LIST } from '../spec/skip'
 import type { Database } from './db'
@@ -417,4 +417,25 @@ describe('Discord spec contract tests', () => {
       }
     })
   }
+})
+
+describe('manifest coverage for Issue #136 endpoints', () => {
+  const newPaths = [
+    '/channels/{channel_id}/messages/{message_id}/crosspost',
+    '/channels/{channel_id}/followers',
+    '/channels/{channel_id}/voice-status',
+    '/channels/{channel_id}/recipients/{user_id}',
+    '/users/@me/channels',
+    '/channels/{channel_id}/polls/{message_id}/answers/{answer_id}',
+    '/channels/{channel_id}/polls/{message_id}/expire',
+    '/webhooks/{webhook_id}/{webhook_token}/github',
+    '/webhooks/{webhook_id}/{webhook_token}/slack',
+  ]
+
+  it('has a manifest entry for every new endpoint', () => {
+    for (const path of newPaths) {
+      const entry = MANIFEST.find((e) => e.specPath === path)
+      expect(entry, `missing manifest entry for ${path}`).toBeDefined()
+    }
+  })
 })

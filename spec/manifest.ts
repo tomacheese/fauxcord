@@ -1385,6 +1385,129 @@ export const MANIFEST: SpecEndpoint[] = [
       path: `/api/v10/channels/${f.channelId}/threads/search`,
     }),
   },
+
+  // ─── Issue #136 ─────────────────────────────────────────────────────────────
+
+  {
+    specPath: '/channels/{channel_id}/messages/{message_id}/crosspost',
+    method: 'post',
+    contractTested: false,
+    successStatus: 200,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/crosspost`,
+      init: { method: 'POST' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/followers',
+    method: 'post',
+    contractTested: false,
+    successStatus: 200,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/followers`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhook_channel_id: f.channelId }),
+      },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/voice-status',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/voice-status`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'contract test' }),
+      },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/recipients/{user_id}',
+    method: 'put',
+    contractTested: false,
+    successStatus: 204,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/recipients/${f.memberId}`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/recipients/{user_id}',
+    method: 'delete',
+    contractTested: false,
+    successStatus: 204,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/recipients/${f.memberId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/users/@me/channels',
+    method: 'post',
+    contractTested: false,
+    successStatus: 200,
+    request: (f: ContractFixture) => ({
+      path: '/api/v10/users/@me/channels',
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient_id: f.memberId }),
+      },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/polls/{message_id}/answers/{answer_id}',
+    method: 'get',
+    contractTested: false,
+    successStatus: 200,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/polls/${f.messageId}/answers/1`,
+      init: {},
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/polls/{message_id}/expire',
+    method: 'post',
+    contractTested: false,
+    successStatus: 200,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/channels/${f.channelId}/polls/${f.messageId}/expire`,
+      init: { method: 'POST' },
+    }),
+  },
+  {
+    specPath: '/webhooks/{webhook_id}/{webhook_token}/github',
+    method: 'post',
+    contractTested: false,
+    successStatus: 204,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/github`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sender: { login: 'octocat' } }),
+      },
+    }),
+  },
+  {
+    specPath: '/webhooks/{webhook_id}/{webhook_token}/slack',
+    method: 'post',
+    contractTested: false,
+    successStatus: 200,
+    request: (f: ContractFixture) => ({
+      path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/slack`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: 'contract test' }),
+      },
+    }),
+  },
 ]
 
 /**
