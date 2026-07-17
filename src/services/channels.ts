@@ -88,6 +88,84 @@ export interface ChannelObject {
   parent_id: string | null
   permission_overwrites: ChannelOverwriteObject[]
   voice_status?: string | null
+  recipients?: ChannelRecipientUser[]
+}
+
+/** Recipient user object embedded in a DM/group-DM channel response */
+export interface ChannelRecipientUser {
+  id: string
+  username: string
+  discriminator: string
+  avatar: string | null
+  bot: boolean
+}
+
+/** DB record type for a channel recipient's joined user row */
+interface ChannelRecipientRow {
+  id: string
+  username: string
+  discriminator: string
+  avatar: string | null
+  bot: number
+}
+
+/**
+ * Retrieves the recipient users of a DM or group-DM channel.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Array of recipient user objects
+ */
+export function getChannelRecipientUsers(
+  db: Database,
+  channelId: string
+): ChannelRecipientUser[] {
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.username, u.discriminator, u.avatar, u.bot
+       FROM channel_recipients cr
+       JOIN users u ON u.id = cr.user_id
+       WHERE cr.channel_id = ?`
+    )
+    .all(channelId) as ChannelRecipientRow[]
+  return rows.map((row) => ({
+    id: row.id,
+    username: row.username,
+    discriminator: row.discriminator,
+    avatar: row.avatar,
+    bot: row.bot === 1,
+  }))
+}
+
+/**
+ * Adds a user as a recipient of a group-DM channel (idempotent).
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param userId - User ID to add
+ */
+export function addChannelRecipient(
+  db: Database,
+  channelId: string,
+  userId: string
+): void {
+  db.prepare(
+    'INSERT OR IGNORE INTO channel_recipients (channel_id, user_id) VALUES (?, ?)'
+  ).run(channelId, userId)
+}
+
+/**
+ * Removes a user from a group-DM channel's recipients (idempotent).
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param userId - User ID to remove
+ */
+export function removeChannelRecipient(
+  db: Database,
+  channelId: string,
+  userId: string
+): void {
+  db.prepare(
+    'DELETE FROM channel_recipients WHERE channel_id = ? AND user_id = ?'
+  ).run(channelId, userId)
 }
 
 /** DB record type for a channel permission overwrite */
@@ -200,7 +278,8 @@ export function deleteChannelOverwrite(
  */
 function toChannelObject(
   row: ChannelRow,
-  overwrites: ChannelOverwriteObject[]
+  overwrites: ChannelOverwriteObject[],
+  recipients: ChannelRecipientUser[] = []
 ): ChannelObject {
   const obj: ChannelObject = {
     id: row.id,
@@ -221,6 +300,10 @@ function toChannelObject(
     obj.voice_status = row.voice_status
   }
 
+  if (row.type === 1 || row.type === 3) {
+    obj.recipients = recipients
+  }
+
   return obj
 }
 
@@ -237,7 +320,10 @@ export function getChannel(
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
-  return row ? toChannelObject(row, getChannelOverwrites(db, row.id)) : null
+  if (!row) return null
+  const recipients =
+    row.type === 1 || row.type === 3 ? getChannelRecipientUsers(db, row.id) : []
+  return toChannelObject(row, getChannelOverwrites(db, row.id), recipients)
 }
 
 /**

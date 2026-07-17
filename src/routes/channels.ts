@@ -28,6 +28,7 @@ import { createChannelPermissionRoutes } from './channel-permissions'
 import { createChannelThreadRoutes } from './channel-threads'
 import { createChannelFollowRoutes } from './channel-follow'
 import { createChannelVoiceStatusRoutes } from './channel-voice-status'
+import { createChannelRecipientRoutes } from './channel-recipients'
 
 /**
  * Creates the channels API routes.
@@ -113,6 +114,7 @@ export function createChannelRoutes(
   app.route('/', createChannelPermissionRoutes(db))
   app.route('/', createChannelFollowRoutes(db))
   app.route('/', createChannelVoiceStatusRoutes(db))
+  app.route('/', createChannelRecipientRoutes(db))
 
   return app
 }

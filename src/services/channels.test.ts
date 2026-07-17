@@ -5,6 +5,7 @@ import {
   seedGuild,
   seedChannel,
   seedVoiceChannel,
+  seedGroupDmChannel,
 } from '../test-helpers'
 import {
   createGuildChannel,
@@ -15,7 +16,11 @@ import {
   getChannelOverwritesForChannels,
   deleteChannelOverwrite,
   setVoiceStatus,
+  addChannelRecipient,
+  removeChannelRecipient,
+  getChannelRecipientUsers,
 } from './channels'
+import { createTestUser } from './test-control'
 import type { Database } from '../db'
 
 describe('createGuildChannel', () => {
@@ -185,5 +190,48 @@ describe('setVoiceStatus', () => {
   it('returns null for an unknown channel', () => {
     const result = setVoiceStatus(db, '999999999999999999', 'x')
     expect(result).toBeNull()
+  })
+})
+
+describe('channel recipients', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('adds and lists recipients on a group DM channel', () => {
+    const channel = seedGroupDmChannel(db)
+    const userId = createTestUser(db, { username: 'Alice' }).id
+
+    addChannelRecipient(db, channel, userId)
+    const recipients = getChannelRecipientUsers(db, channel)
+
+    expect(recipients).toHaveLength(1)
+    expect(recipients[0].id).toBe(userId)
+    expect(recipients[0].username).toBe('Alice')
+  })
+
+  it('removes a recipient', () => {
+    const channel = seedGroupDmChannel(db)
+    const userId = createTestUser(db, { username: 'Bob' }).id
+
+    addChannelRecipient(db, channel, userId)
+    removeChannelRecipient(db, channel, userId)
+
+    expect(getChannelRecipientUsers(db, channel)).toHaveLength(0)
+  })
+
+  it('surfaces recipients on getChannel for a group DM', () => {
+    const channel = seedGroupDmChannel(db)
+    const userId = createTestUser(db, { username: 'Carol' }).id
+    addChannelRecipient(db, channel, userId)
+
+    const fetched = getChannel(db, channel)
+    expect(fetched?.recipients).toHaveLength(1)
   })
 })
