@@ -27,6 +27,7 @@ import { createChannelInviteRoutes } from './channel-invites'
 import { createChannelPermissionRoutes } from './channel-permissions'
 import { createChannelThreadRoutes } from './channel-threads'
 import { createChannelFollowRoutes } from './channel-follow'
+import { createChannelVoiceStatusRoutes } from './channel-voice-status'
 
 /**
  * Creates the channels API routes.
@@ -111,6 +112,7 @@ export function createChannelRoutes(
   app.route('/', createChannelInviteRoutes(db))
   app.route('/', createChannelPermissionRoutes(db))
   app.route('/', createChannelFollowRoutes(db))
+  app.route('/', createChannelVoiceStatusRoutes(db))
 
   return app
 }

@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import {
+  seedBot,
+  seedGuild,
+  seedChannel,
+  seedVoiceChannel,
+} from '../test-helpers'
 import {
   createGuildChannel,
   getChannel,
@@ -9,6 +14,7 @@ import {
   getChannelOverwrites,
   getChannelOverwritesForChannels,
   deleteChannelOverwrite,
+  setVoiceStatus,
 } from './channels'
 import type { Database } from '../db'
 
@@ -138,5 +144,46 @@ describe('channel permission overwrites service', () => {
       { id: '444444444444444444', type: 0, allow: '8', deny: '0' },
     ])
     expect(b?.permission_overwrites).toEqual([])
+  })
+})
+
+describe('setVoiceStatus', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('sets and surfaces the voice_status field on the channel', () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const guild = seedGuild(db, bot)
+    const channel = seedVoiceChannel(db, guild)
+
+    const updated = setVoiceStatus(db, channel, 'now playing music')
+    expect(updated?.voice_status).toBe('now playing music')
+
+    const fetched = getChannel(db, channel)
+    expect(fetched?.voice_status).toBe('now playing music')
+  })
+
+  it('clears voice_status when set to null', () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const guild = seedGuild(db, bot)
+    const channel = seedVoiceChannel(db, guild)
+
+    setVoiceStatus(db, channel, 'temp')
+    setVoiceStatus(db, channel, null)
+
+    const fetched = getChannel(db, channel)
+    expect(fetched?.voice_status).toBeUndefined()
+  })
+
+  it('returns null for an unknown channel', () => {
+    const result = setVoiceStatus(db, '999999999999999999', 'x')
+    expect(result).toBeNull()
   })
 })

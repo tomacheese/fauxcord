@@ -3,6 +3,7 @@ import {
   validatePermissionOverwrite,
   normalizePermissionOverwrite,
   validateChannelUpdate,
+  validateVoiceStatus,
 } from './channel'
 
 describe('validatePermissionOverwrite', () => {
@@ -90,5 +91,27 @@ describe('validateChannelUpdate', () => {
   it('accepts nsfw omitted or null', () => {
     expect(Object.keys(validateChannelUpdate({}))).toHaveLength(0)
     expect(Object.keys(validateChannelUpdate({ nsfw: null }))).toHaveLength(0)
+  })
+})
+
+describe('validateVoiceStatus', () => {
+  it('accepts a valid status string', () => {
+    const errors = validateVoiceStatus({ status: 'now playing' })
+    expect(Object.keys(errors)).toHaveLength(0)
+  })
+
+  it('accepts null (clearing the status)', () => {
+    const errors = validateVoiceStatus({ status: null })
+    expect(Object.keys(errors)).toHaveLength(0)
+  })
+
+  it('rejects a status longer than 500 characters', () => {
+    const errors = validateVoiceStatus({ status: 'a'.repeat(501) })
+    expect(errors.status).toBeDefined()
+  })
+
+  it('rejects a non-string status', () => {
+    const errors = validateVoiceStatus({ status: 123 })
+    expect(errors.status).toBeDefined()
   })
 })

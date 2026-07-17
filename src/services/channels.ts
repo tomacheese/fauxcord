@@ -57,6 +57,7 @@ interface ChannelRow {
   rate_limit_per_user: number
   parent_id: string | null
   last_message_id: string | null
+  voice_status: string | null
 }
 
 /** Channel permission overwrite object for API responses */
@@ -86,6 +87,7 @@ export interface ChannelObject {
   rate_limit_per_user: number
   parent_id: string | null
   permission_overwrites: ChannelOverwriteObject[]
+  voice_status?: string | null
 }
 
 /** DB record type for a channel permission overwrite */
@@ -200,7 +202,7 @@ function toChannelObject(
   row: ChannelRow,
   overwrites: ChannelOverwriteObject[]
 ): ChannelObject {
-  return {
+  const obj: ChannelObject = {
     id: row.id,
     type: row.type,
     flags: 0,
@@ -214,6 +216,12 @@ function toChannelObject(
     parent_id: row.parent_id,
     permission_overwrites: overwrites,
   }
+
+  if (row.voice_status !== null) {
+    obj.voice_status = row.voice_status
+  }
+
+  return obj
 }
 
 /**
@@ -230,6 +238,34 @@ export function getChannel(
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
   return row ? toChannelObject(row, getChannelOverwrites(db, row.id)) : null
+}
+
+/**
+ * Sets a voice/stage channel's status text.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param status - Status text, or null to clear it
+ * @returns Updated channel object, or null if the channel does not exist
+ */
+export function setVoiceStatus(
+  db: Database,
+  channelId: string,
+  status: string | null
+): ChannelObject | null {
+  const row = db
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow | undefined
+  if (!row) return null
+
+  db.prepare('UPDATE channels SET voice_status = ? WHERE id = ?').run(
+    status,
+    channelId
+  )
+
+  const updated = db
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow
+  return toChannelObject(updated, getChannelOverwrites(db, updated.id))
 }
 
 /** Channel update request type */
