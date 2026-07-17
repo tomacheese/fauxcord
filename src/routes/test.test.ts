@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createTestRoutes } from './test'
 import { initializeDatabase, closeDatabase } from '../db'
+import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
+import { createTestUser } from '../services/test-control'
+import { createPoll } from '../services/polls'
 import type { Database } from '../db'
 
 const BASE_URL = 'http://localhost:3000'
@@ -393,6 +396,45 @@ describe('Test Control API', () => {
         }),
       })
       expect(res.status).toBe(404)
+    })
+  })
+
+  describe('POST /_test/polls/:messageId/votes', () => {
+    it('injects a vote and returns 204', async () => {
+      const bot = seedBot(db, 'Bot testtoken')
+      const guild = seedGuild(db, bot)
+      const channel = seedChannel(db, guild)
+      const message = seedMessage(db, channel, '111111111111111111', bot)
+      createPoll(db, message, { question: 'Q', answers: [{ text: 'A' }] })
+      const user = createTestUser(db, { username: 'Mallory' })
+
+      const res = await app.request(`/_test/polls/${message}/votes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer_id: 1, user_id: user.id }),
+      })
+
+      expect(res.status).toBe(204)
+    })
+
+    it('returns 404 for an unknown message', async () => {
+      const res = await app.request('/_test/polls/999999999999999999/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer_id: 1, user_id: '111' }),
+      })
+
+      expect(res.status).toBe(404)
+    })
+
+    it('returns 400 when answer_id or user_id is missing', async () => {
+      const res = await app.request('/_test/polls/999999999999999999/votes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+
+      expect(res.status).toBe(400)
     })
   })
 })

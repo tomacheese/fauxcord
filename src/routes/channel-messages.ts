@@ -16,12 +16,16 @@ import {
   updateMessage,
   deleteMessage,
   isTooOldForBulkDelete,
+  MESSAGE_FLAGS,
 } from '../services/messages'
 import {
   validateMessageCreate,
   isEmptyMessage,
+  validatePollCreate,
   type MessageCreatePayload,
+  type PollCreatePayloadField,
 } from '../validators/message'
+import { createPoll, getPollForMessage } from '../services/polls'
 import type { AppEnv, BotRecord } from '../middleware/auth'
 import {
   requireEntity,
@@ -144,8 +148,9 @@ export function createChannelMessageRoutes(
     }
 
     const hasAttachments = attachmentFiles.length > 0
+    const hasPoll = payload.poll !== undefined && payload.poll !== null
 
-    if (isEmptyMessage(payload, hasAttachments)) {
+    if (!hasPoll && isEmptyMessage(payload, hasAttachments)) {
       const err = discordError(
         DiscordErrorCode.EMPTY_MESSAGE,
         'Cannot send an empty message',
@@ -155,6 +160,12 @@ export function createChannelMessageRoutes(
     }
 
     const errors = validateMessageCreate(payload, hasAttachments)
+    if (hasPoll) {
+      Object.assign(
+        errors,
+        validatePollCreate(payload.poll as PollCreatePayloadField)
+      )
+    }
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
     }
@@ -203,6 +214,21 @@ export function createChannelMessageRoutes(
           throw err
         }
       }
+    }
+
+    if (hasPoll) {
+      const pollField = payload.poll as PollCreatePayloadField
+      createPoll(db, msg.id, {
+        question: pollField.question.text,
+        answers: pollField.answers.map((a) => ({
+          text: a.poll_media.text,
+          emoji: a.poll_media.emoji ?? undefined,
+        })),
+        allowMultiselect: pollField.allow_multiselect,
+        durationHours: pollField.duration,
+      })
+      const poll = getPollForMessage(db, msg.id)
+      return c.json({ ...msg, poll })
     }
 
     return c.json(msg)
@@ -302,6 +328,44 @@ export function createChannelMessageRoutes(
     }
 
     return c.body(null, 204)
+  })
+
+  // POST /channels/:channelId/messages/:messageId/crosspost — Crosspost an announcement channel message
+  app.post('/channels/:channelId/messages/:messageId/crosspost', (c) => {
+    const { channelId, messageId } = c.req.param()
+
+    const channel = requireEntity(
+      c,
+      getChannel(db, channelId),
+      DiscordErrorCode.UNKNOWN_CHANNEL,
+      'Unknown Channel'
+    )
+    if (channel instanceof Response) return channel
+
+    const existing = requireEntity(
+      c,
+      getMessage(db, messageId, baseUrl),
+      DiscordErrorCode.UNKNOWN_MESSAGE,
+      'Unknown Message'
+    )
+    if (existing instanceof Response) return existing
+
+    if (channel.type !== 5) {
+      const err = discordError(
+        DiscordErrorCode.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE,
+        'Cannot execute action on this channel type',
+        400
+      )
+      return c.json(err.body, 400)
+    }
+
+    const updated = updateMessage(
+      db,
+      messageId,
+      { flags: existing.flags | MESSAGE_FLAGS.CROSSPOSTED },
+      baseUrl
+    )
+    return c.json(updated)
   })
 
   return app

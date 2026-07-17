@@ -254,3 +254,38 @@ export function normalizePermissionOverwrite(
     deny: bitfieldToString(payload.deny),
   }
 }
+
+/** Voice channel status limit (from the Discord spec) */
+export const VOICE_STATUS_LIMITS = {
+  STATUS_MAX: 500,
+} as const
+
+/** Voice channel status update payload (unknown fields until validated) */
+export interface VoiceStatusPayload {
+  status?: unknown
+}
+
+/**
+ * Validates a voice channel status update payload. `status`, when present
+ * and non-null, must be a string of at most
+ * `VOICE_STATUS_LIMITS.STATUS_MAX` characters.
+ * @param payload - Payload to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validateVoiceStatus(
+  payload: VoiceStatusPayload
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (payload.status !== undefined && payload.status !== null) {
+    if (typeof payload.status !== 'string') {
+      errors.status = { _errors: [typeError('string')] }
+    } else if (payload.status.length > VOICE_STATUS_LIMITS.STATUS_MAX) {
+      errors.status = {
+        _errors: [maxLengthError(VOICE_STATUS_LIMITS.STATUS_MAX)],
+      }
+    }
+  }
+
+  return errors
+}

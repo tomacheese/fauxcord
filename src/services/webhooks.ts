@@ -293,3 +293,52 @@ export function executeWebhook(
     baseUrl
   )
 }
+
+/** Minimal shape of a GitHub webhook delivery payload the mock understands */
+export interface GithubWebhookPayload {
+  action?: string
+  head_commit?: { message: string; id: string }
+  repository?: { full_name: string }
+  issue?: { title: string; html_url: string }
+  comment?: { html_url: string }
+  sender?: { login: string }
+}
+
+/**
+ * Builds a single Discord embed from a GitHub webhook delivery, following
+ * the representative payload shapes documented in spec Issue #136 (push,
+ * issues). Unknown shapes fall back to a minimal sender-only embed rather
+ * than rejecting the request, matching real Discord's tolerance of
+ * unrecognized GitHub event types.
+ * @param payload - Parsed GitHub webhook payload
+ * @returns A single embed object
+ */
+export function buildGithubEmbed(payload: GithubWebhookPayload): {
+  title: string
+  description?: string
+  url?: string
+  author?: { name: string }
+} {
+  const sender = payload.sender?.login ?? 'unknown'
+
+  if (payload.head_commit) {
+    return {
+      title: `[${payload.repository?.full_name ?? 'unknown'}] New commit`,
+      description: payload.head_commit.message,
+      author: { name: sender },
+    }
+  }
+
+  if (payload.issue) {
+    return {
+      title: `${payload.action ?? 'updated'}: ${payload.issue.title}`,
+      url: payload.issue.html_url,
+      author: { name: sender },
+    }
+  }
+
+  return {
+    title: 'GitHub event',
+    author: { name: sender },
+  }
+}

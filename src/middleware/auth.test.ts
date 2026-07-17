@@ -140,4 +140,28 @@ describe('createAuthMiddleware', () => {
     // through.
     expect(res.status).toBe(200)
   })
+
+  it('allows unauthenticated access to /webhooks/:id/:token/github', async () => {
+    const app = new Hono()
+    app.use('*', createAuthMiddleware(db, false))
+    app.post('/webhooks/:id/:token/github', (c) => c.text('ok'))
+
+    const res = await app.request('/webhooks/123/abcxyz/github', {
+      method: 'POST',
+    })
+
+    expect(res.status).toBe(200)
+  })
+
+  it('allows unauthenticated access to /webhooks/:id/:token/slack', async () => {
+    const app = new Hono()
+    app.use('*', createAuthMiddleware(db, false))
+    app.post('/webhooks/:id/:token/slack', (c) => c.text('ok'))
+
+    const res = await app.request('/webhooks/123/abcxyz/slack', {
+      method: 'POST',
+    })
+
+    expect(res.status).toBe(200)
+  })
 })

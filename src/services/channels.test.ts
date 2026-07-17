@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import {
+  seedBot,
+  seedGuild,
+  seedChannel,
+  seedVoiceChannel,
+  seedGroupDmChannel,
+} from '../test-helpers'
 import {
   createGuildChannel,
   getChannel,
@@ -9,7 +15,14 @@ import {
   getChannelOverwrites,
   getChannelOverwritesForChannels,
   deleteChannelOverwrite,
+  setVoiceStatus,
+  addChannelRecipient,
+  removeChannelRecipient,
+  getChannelRecipientUsers,
+  getOrCreateDmChannel,
+  createGroupDmChannel,
 } from './channels'
+import { createTestUser } from './test-control'
 import type { Database } from '../db'
 
 describe('createGuildChannel', () => {
@@ -138,5 +151,150 @@ describe('channel permission overwrites service', () => {
       { id: '444444444444444444', type: 0, allow: '8', deny: '0' },
     ])
     expect(b?.permission_overwrites).toEqual([])
+  })
+})
+
+describe('setVoiceStatus', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('sets and surfaces the voice_status field on the channel', () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const guild = seedGuild(db, bot)
+    const channel = seedVoiceChannel(db, guild)
+
+    const updated = setVoiceStatus(db, channel, 'now playing music')
+    expect(updated?.voice_status).toBe('now playing music')
+
+    const fetched = getChannel(db, channel)
+    expect(fetched?.voice_status).toBe('now playing music')
+  })
+
+  it('clears voice_status when set to null', () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const guild = seedGuild(db, bot)
+    const channel = seedVoiceChannel(db, guild)
+
+    setVoiceStatus(db, channel, 'temp')
+    setVoiceStatus(db, channel, null)
+
+    const fetched = getChannel(db, channel)
+    expect(fetched?.voice_status).toBeUndefined()
+  })
+
+  it('returns null for an unknown channel', () => {
+    const result = setVoiceStatus(db, '999999999999999999', 'x')
+    expect(result).toBeNull()
+  })
+})
+
+describe('channel recipients', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('adds and lists recipients on a group DM channel', () => {
+    const channel = seedGroupDmChannel(db)
+    const userId = createTestUser(db, { username: 'Alice' }).id
+
+    addChannelRecipient(db, channel, userId)
+    const recipients = getChannelRecipientUsers(db, channel)
+
+    expect(recipients).toHaveLength(1)
+    expect(recipients[0].id).toBe(userId)
+    expect(recipients[0].username).toBe('Alice')
+  })
+
+  it('removes a recipient', () => {
+    const channel = seedGroupDmChannel(db)
+    const userId = createTestUser(db, { username: 'Bob' }).id
+
+    addChannelRecipient(db, channel, userId)
+    removeChannelRecipient(db, channel, userId)
+
+    expect(getChannelRecipientUsers(db, channel)).toHaveLength(0)
+  })
+
+  it('surfaces recipients on getChannel for a group DM', () => {
+    const channel = seedGroupDmChannel(db)
+    const userId = createTestUser(db, { username: 'Carol' }).id
+    addChannelRecipient(db, channel, userId)
+
+    const fetched = getChannel(db, channel)
+    expect(fetched?.recipients).toHaveLength(1)
+  })
+})
+
+describe('getOrCreateDmChannel', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('creates a new DM channel with the bot and recipient as recipients', () => {
+    const botUserId = '111111111111111111'
+    seedBot(db, 'Bot testtoken', botUserId)
+    const recipient = createTestUser(db, { username: 'Grace' }).id
+
+    const channel = getOrCreateDmChannel(db, botUserId, recipient)
+
+    expect(channel.type).toBe(1)
+    const sortIds = (ids: string[]) =>
+      ids.toSorted((a, b) => a.localeCompare(b))
+    expect(sortIds(channel.recipients?.map((r) => r.id) ?? [])).toEqual(
+      sortIds([botUserId, recipient])
+    )
+  })
+
+  it('returns the same DM channel on a repeated call', () => {
+    const botUserId = '111111111111111111'
+    seedBot(db, 'Bot testtoken', botUserId)
+    const recipient = createTestUser(db, { username: 'Heidi' }).id
+
+    const first = getOrCreateDmChannel(db, botUserId, recipient)
+    const second = getOrCreateDmChannel(db, botUserId, recipient)
+
+    expect(second.id).toBe(first.id)
+  })
+})
+
+describe('createGroupDmChannel', () => {
+  let db: Database
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('creates a group-DM channel with only the bot as a recipient', () => {
+    const botUserId = '111111111111111111'
+    seedBot(db, 'Bot testtoken', botUserId)
+
+    const channel = createGroupDmChannel(db, botUserId)
+
+    expect(channel.type).toBe(3)
+    expect(channel.recipients).toHaveLength(1)
+    expect(channel.recipients?.[0].id).toBe(botUserId)
   })
 })

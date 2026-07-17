@@ -14,6 +14,8 @@ import {
   updateWebhook,
   deleteWebhook,
   executeWebhook,
+  buildGithubEmbed,
+  type GithubWebhookPayload,
 } from '../services/webhooks'
 import {
   getMessage,
@@ -28,6 +30,7 @@ import {
   validateWebhookUpdate,
 } from '../validators/webhook'
 import { isEmptyMessage } from '../validators/message'
+import { parseGithubBody, parseSlackBody } from '../lib/route-helpers'
 
 /**
  * Creates either a webhook-authored message (real webhook) or an
@@ -132,6 +135,70 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       avatar: webhook.avatar,
     }
     return c.json(webhookWithoutToken)
+  })
+
+  // POST /webhooks/:webhookId/:token/github — GitHub webhook integration
+  app.post('/webhooks/:webhookId/:token/github', async (c) => {
+    const { webhookId, token } = c.req.param()
+    const webhook = getWebhookByToken(db, webhookId, token)
+    if (!webhook) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_WEBHOOK,
+        'Unknown Webhook',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    const payload = await parseGithubBody<GithubWebhookPayload>(c)
+    const embed = buildGithubEmbed(payload)
+    const messageId = generateSnowflake()
+
+    executeWebhook(
+      db,
+      {
+        messageId,
+        channelId: webhook.channel_id,
+        webhookId: webhook.id,
+        webhookName: webhook.name,
+        embeds: [embed],
+      },
+      baseUrl
+    )
+
+    return c.body(null, 204)
+  })
+
+  // POST /webhooks/:webhookId/:token/slack — Slack webhook integration
+  app.post('/webhooks/:webhookId/:token/slack', async (c) => {
+    const { webhookId, token } = c.req.param()
+    const webhook = getWebhookByToken(db, webhookId, token)
+    if (!webhook) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_WEBHOOK,
+        'Unknown Webhook',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+
+    const slackBody = await parseSlackBody(c)
+    const messageId = generateSnowflake()
+
+    executeWebhook(
+      db,
+      {
+        messageId,
+        channelId: webhook.channel_id,
+        webhookId: webhook.id,
+        webhookName: webhook.name,
+        content: slackBody.text,
+        username: slackBody.username,
+      },
+      baseUrl
+    )
+
+    return c.json(null, 200)
   })
 
   // PATCH /webhooks/:webhookId — Update webhook information

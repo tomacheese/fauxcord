@@ -25,9 +25,11 @@ const AUTH_EXEMPT_PREFIXES = ['/_mock/health', '/_mock/attachments', '/_test/']
  * - GET  /webhooks/{id}/{token}           - Get webhook (with token)
  * - DELETE /webhooks/{id}/{token}         - Delete webhook (with token)
  * - GET/PATCH/DELETE /webhooks/{id}/{token}/messages/{msgId}
+ * - POST /webhooks/{id}/{token}/github  - GitHub webhook integration
+ * - POST /webhooks/{id}/{token}/slack   - Slack webhook integration
  */
 const WEBHOOK_WITH_TOKEN_PATTERN =
-  /^\/(?:api\/(?:v10\/)?)?webhooks\/[^/]+\/[^/]+(?:\/messages\/[^/]+)?$/
+  /^\/(?:api\/(?:v10\/)?)?webhooks\/[^/]+\/[^/]+(?:\/messages\/[^/]+|\/github|\/slack)?$/
 
 /**
  * Public gateway endpoint pattern (no authentication required)

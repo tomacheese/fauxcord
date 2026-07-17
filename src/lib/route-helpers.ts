@@ -68,3 +68,77 @@ export async function parseJsonBody(
     ? (parsed as Record<string, unknown>)
     : {}
 }
+
+/** Fields the mock reads from a Slack-compatible webhook payload */
+export interface SlackWebhookBody {
+  text?: string
+  username?: string
+  icon_url?: string
+}
+
+/**
+ * Parses a Slack-compatible webhook request body. Slack's legacy webhook
+ * format is historically sent as `application/json`,
+ * `application/x-www-form-urlencoded` (with the JSON payload itself in a
+ * `payload` field), or `multipart/form-data` with the same `payload`
+ * field — unlike every other endpoint in the mock, which only needs to
+ * accept JSON.
+ * @param c - Hono context
+ * @returns Parsed Slack webhook fields (empty object if the body is absent or unparsable)
+ */
+export async function parseSlackBody(c: Context): Promise<SlackWebhookBody> {
+  const contentType = c.req.header('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    return parseJsonBody(c)
+  }
+
+  if (
+    contentType.includes('application/x-www-form-urlencoded') ||
+    contentType.includes('multipart/form-data')
+  ) {
+    const formData = await c.req.formData()
+    const raw = formData.get('payload')
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw) as SlackWebhookBody
+      } catch {
+        return {}
+      }
+    }
+    return {}
+  }
+
+  return parseJsonBody(c)
+}
+
+/**
+ * Parses a GitHub-compatible webhook request body. Real GitHub webhooks can
+ * be configured to deliver as `application/json` or
+ * `application/x-www-form-urlencoded` (with the JSON payload itself in a
+ * `payload` field), mirroring Slack's legacy webhook format handled by
+ * `parseSlackBody` above.
+ * @param c - Hono context
+ * @returns Parsed GitHub webhook payload (empty object if the body is absent or unparsable)
+ */
+export async function parseGithubBody<T>(c: Context): Promise<T> {
+  const contentType = c.req.header('content-type') ?? ''
+
+  if (
+    contentType.includes('application/x-www-form-urlencoded') ||
+    contentType.includes('multipart/form-data')
+  ) {
+    const formData = await c.req.formData()
+    const raw = formData.get('payload')
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw) as T
+      } catch {
+        return {} as T
+      }
+    }
+    return {} as T
+  }
+
+  return (await parseJsonBody(c)) as unknown as T
+}

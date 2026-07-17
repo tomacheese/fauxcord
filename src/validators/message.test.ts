@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validateMessageCreate,
   isEmptyMessage,
+  validatePollCreate,
   MESSAGE_LIMITS,
 } from './message'
 
@@ -100,5 +101,61 @@ describe('isEmptyMessage', () => {
 
   it('is false when attachments are present', () => {
     expect(isEmptyMessage({}, true)).toBe(false)
+  })
+})
+
+describe('validatePollCreate', () => {
+  it('accepts a valid poll payload', () => {
+    const errors = validatePollCreate({
+      question: { text: 'Favorite color?' },
+      answers: [
+        { poll_media: { text: 'Red' } },
+        { poll_media: { text: 'Blue' } },
+      ],
+    })
+    expect(Object.keys(errors)).toHaveLength(0)
+  })
+
+  it('rejects a missing question text', () => {
+    const errors = validatePollCreate({
+      question: { text: '' },
+      answers: [{ poll_media: { text: 'Red' } }],
+    })
+    expect(errors['poll.question.text']).toBeDefined()
+  })
+
+  it('rejects zero answers', () => {
+    const errors = validatePollCreate({
+      question: { text: 'Q' },
+      answers: [],
+    })
+    expect(errors['poll.answers']).toBeDefined()
+  })
+
+  it('rejects more than 10 answers', () => {
+    const errors = validatePollCreate({
+      question: { text: 'Q' },
+      answers: Array.from({ length: 11 }, (_, i) => ({
+        poll_media: { text: `A${i}` },
+      })),
+    })
+    expect(errors['poll.answers']).toBeDefined()
+  })
+
+  it('rejects an answer text longer than 55 characters', () => {
+    const errors = validatePollCreate({
+      question: { text: 'Q' },
+      answers: [{ poll_media: { text: 'a'.repeat(56) } }],
+    })
+    expect(errors['poll.answers.0.poll_media.text']).toBeDefined()
+  })
+
+  it('rejects a duration outside 1-768', () => {
+    const errors = validatePollCreate({
+      question: { text: 'Q' },
+      answers: [{ poll_media: { text: 'A' } }],
+      duration: 1000,
+    })
+    expect(errors['poll.duration']).toBeDefined()
   })
 })

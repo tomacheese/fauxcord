@@ -4,7 +4,7 @@
  * Provides validation conforming to Discord API v10 message limits.
  */
 
-import { maxLengthError, type ValidationErrors } from './common'
+import { maxLengthError, requiredError, type ValidationErrors } from './common'
 
 /** Message creation request type */
 export interface MessageCreatePayload {
@@ -16,6 +16,7 @@ export interface MessageCreatePayload {
   components?: unknown[]
   flags?: number
   attachments?: unknown[]
+  poll?: PollCreatePayloadField
 }
 
 /** Embed type */
@@ -145,4 +146,105 @@ export function isEmptyMessage(
   const hasContent = payload.content && payload.content.length > 0
   const hasEmbeds = Array.isArray(payload.embeds) && payload.embeds.length > 0
   return !hasContent && !hasEmbeds && !hasAttachments
+}
+
+/** Poll answer payload (a single option in a poll) */
+export interface PollAnswerPayload {
+  poll_media: {
+    text: string
+    emoji?: { id?: string | null; name?: string } | null
+  }
+}
+
+/** `poll` field payload of a message-create request */
+export interface PollCreatePayloadField {
+  question: { text: string }
+  answers: PollAnswerPayload[]
+  duration?: number
+  allow_multiselect?: boolean
+}
+
+/** Poll limit values (from the Discord spec) */
+export const POLL_LIMITS = {
+  QUESTION_MAX: 300,
+  ANSWER_TEXT_MAX: 55,
+  ANSWERS_MIN: 1,
+  ANSWERS_MAX: 10,
+  DURATION_MAX: 768,
+} as const
+
+/**
+ * `poll` field shape as seen by the validator: every nested field is
+ * declared optional/unknown, since the caller casts an untrusted JSON body
+ * to this type before validation — the guards below must not assume any
+ * field actually conforms to `PollCreatePayloadField` at runtime.
+ */
+interface PollCreateValidationInput {
+  question?: { text?: unknown }
+  answers?: { poll_media?: { text?: unknown } }[]
+  duration?: unknown
+}
+
+/**
+ * Validates a message creation `poll` field.
+ * @param payload - The `poll` field to validate
+ * @returns Validation error map (empty when valid)
+ */
+export function validatePollCreate(
+  payload: PollCreateValidationInput
+): ValidationErrors {
+  const errors: ValidationErrors = {}
+
+  if (
+    typeof payload.question?.text !== 'string' ||
+    payload.question.text.length === 0
+  ) {
+    errors['poll.question.text'] = { _errors: [requiredError()] }
+  } else if (payload.question.text.length > POLL_LIMITS.QUESTION_MAX) {
+    errors['poll.question.text'] = {
+      _errors: [maxLengthError(POLL_LIMITS.QUESTION_MAX)],
+    }
+  }
+
+  if (
+    !Array.isArray(payload.answers) ||
+    payload.answers.length < POLL_LIMITS.ANSWERS_MIN
+  ) {
+    errors['poll.answers'] = { _errors: [requiredError()] }
+  } else if (payload.answers.length > POLL_LIMITS.ANSWERS_MAX) {
+    errors['poll.answers'] = {
+      _errors: [maxLengthError(POLL_LIMITS.ANSWERS_MAX)],
+    }
+  } else {
+    for (const [i, answer] of payload.answers.entries()) {
+      const text = answer.poll_media?.text
+      if (typeof text !== 'string' || text.length === 0) {
+        errors[`poll.answers.${i}.poll_media.text`] = {
+          _errors: [requiredError()],
+        }
+      } else if (text.length > POLL_LIMITS.ANSWER_TEXT_MAX) {
+        errors[`poll.answers.${i}.poll_media.text`] = {
+          _errors: [maxLengthError(POLL_LIMITS.ANSWER_TEXT_MAX)],
+        }
+      }
+    }
+  }
+
+  if (
+    payload.duration !== undefined &&
+    (typeof payload.duration !== 'number' ||
+      payload.duration <= 0 ||
+      payload.duration > POLL_LIMITS.DURATION_MAX)
+  ) {
+    errors['poll.duration'] = {
+      _errors: [
+        {
+          code: 'NUMBER_TYPE_MAX',
+          message: `Must be an integer between 1 and ${POLL_LIMITS.DURATION_MAX}.`,
+        },
+      ],
+    }
+  }
+
+  return errors
 }

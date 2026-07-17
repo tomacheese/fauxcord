@@ -234,6 +234,29 @@ when `command_name` does not match any registered command in scope.
 
 ---
 
+## `POST /_test/polls/:messageId/votes` — Inject a poll vote
+
+Registers a vote from a pre-registered user (typically one created via
+`POST /_test/users`) on an existing poll's answer, for verifying your
+bot's poll-vote handling without a real Discord client casting the vote.
+
+```bash
+curl -X POST http://localhost:3000/_test/polls/1513052391153471489/votes \
+  -H "Content-Type: application/json" \
+  -d '{"answer_id": 1, "user_id": "555555555555555555"}'
+```
+
+**Fields**
+
+| Field       | Required | Description                                                        |
+| ----------- | -------- | ------------------------------------------------------------------ |
+| `answer_id` | ✅       | ID of an existing poll answer (from the message's `poll.answers`). |
+| `user_id`   | ✅       | ID of a user already registered via `POST /_test/users` (or any other existing user). |
+
+**Response**: `204 No Content` on success. `404` (`{"message": "404: Not Found", "code": 0}`) when the message has no poll, or the answer ID does not exist on it. `400` (`{"message": "400: Bad Request", "code": 0}`) when `answer_id` or `user_id` is missing.
+
+---
+
 ## `GET /_mock/health` — Check server status
 
 ```bash

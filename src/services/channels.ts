@@ -57,6 +57,7 @@ interface ChannelRow {
   rate_limit_per_user: number
   parent_id: string | null
   last_message_id: string | null
+  voice_status: string | null
 }
 
 /** Channel permission overwrite object for API responses */
@@ -86,6 +87,85 @@ export interface ChannelObject {
   rate_limit_per_user: number
   parent_id: string | null
   permission_overwrites: ChannelOverwriteObject[]
+  voice_status?: string | null
+  recipients?: ChannelRecipientUser[]
+}
+
+/** Recipient user object embedded in a DM/group-DM channel response */
+export interface ChannelRecipientUser {
+  id: string
+  username: string
+  discriminator: string
+  avatar: string | null
+  bot: boolean
+}
+
+/** DB record type for a channel recipient's joined user row */
+interface ChannelRecipientRow {
+  id: string
+  username: string
+  discriminator: string
+  avatar: string | null
+  bot: number
+}
+
+/**
+ * Retrieves the recipient users of a DM or group-DM channel.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @returns Array of recipient user objects
+ */
+export function getChannelRecipientUsers(
+  db: Database,
+  channelId: string
+): ChannelRecipientUser[] {
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.username, u.discriminator, u.avatar, u.bot
+       FROM channel_recipients cr
+       JOIN users u ON u.id = cr.user_id
+       WHERE cr.channel_id = ?`
+    )
+    .all(channelId) as ChannelRecipientRow[]
+  return rows.map((row) => ({
+    id: row.id,
+    username: row.username,
+    discriminator: row.discriminator,
+    avatar: row.avatar,
+    bot: row.bot === 1,
+  }))
+}
+
+/**
+ * Adds a user as a recipient of a group-DM channel (idempotent).
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param userId - User ID to add
+ */
+export function addChannelRecipient(
+  db: Database,
+  channelId: string,
+  userId: string
+): void {
+  db.prepare(
+    'INSERT OR IGNORE INTO channel_recipients (channel_id, user_id) VALUES (?, ?)'
+  ).run(channelId, userId)
+}
+
+/**
+ * Removes a user from a group-DM channel's recipients (idempotent).
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param userId - User ID to remove
+ */
+export function removeChannelRecipient(
+  db: Database,
+  channelId: string,
+  userId: string
+): void {
+  db.prepare(
+    'DELETE FROM channel_recipients WHERE channel_id = ? AND user_id = ?'
+  ).run(channelId, userId)
 }
 
 /** DB record type for a channel permission overwrite */
@@ -198,9 +278,10 @@ export function deleteChannelOverwrite(
  */
 function toChannelObject(
   row: ChannelRow,
-  overwrites: ChannelOverwriteObject[]
+  overwrites: ChannelOverwriteObject[],
+  recipients: ChannelRecipientUser[] = []
 ): ChannelObject {
-  return {
+  const obj: ChannelObject = {
     id: row.id,
     type: row.type,
     flags: 0,
@@ -214,6 +295,16 @@ function toChannelObject(
     parent_id: row.parent_id,
     permission_overwrites: overwrites,
   }
+
+  if (row.voice_status !== null) {
+    obj.voice_status = row.voice_status
+  }
+
+  if (row.type === 1 || row.type === 3) {
+    obj.recipients = recipients
+  }
+
+  return obj
 }
 
 /**
@@ -229,7 +320,38 @@ export function getChannel(
   const row = db
     .prepare('SELECT * FROM channels WHERE id = ?')
     .get(channelId) as ChannelRow | undefined
-  return row ? toChannelObject(row, getChannelOverwrites(db, row.id)) : null
+  if (!row) return null
+  const recipients =
+    row.type === 1 || row.type === 3 ? getChannelRecipientUsers(db, row.id) : []
+  return toChannelObject(row, getChannelOverwrites(db, row.id), recipients)
+}
+
+/**
+ * Sets a voice/stage channel's status text.
+ * @param db - Database
+ * @param channelId - Channel ID
+ * @param status - Status text, or null to clear it
+ * @returns Updated channel object, or null if the channel does not exist
+ */
+export function setVoiceStatus(
+  db: Database,
+  channelId: string,
+  status: string | null
+): ChannelObject | null {
+  const row = db
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow | undefined
+  if (!row) return null
+
+  db.prepare('UPDATE channels SET voice_status = ? WHERE id = ?').run(
+    status,
+    channelId
+  )
+
+  const updated = db
+    .prepare('SELECT * FROM channels WHERE id = ?')
+    .get(channelId) as ChannelRow
+  return toChannelObject(updated, getChannelOverwrites(db, updated.id))
 }
 
 /** Channel update request type */
@@ -389,4 +511,85 @@ export function createGuildChannel(
   })
 
   return result
+}
+
+/**
+ * Finds or creates a 1:1 DM channel between the bot and a recipient user.
+ * Reuses an existing DM channel with the same recipient (matching real
+ * Discord's `POST /users/@me/channels` idempotency), scoping the lookup to
+ * channels with exactly the bot and the recipient as recipients — both the
+ * calling bot and the target recipient are required, so a DM previously
+ * created between the same recipient and a *different* bot is never reused
+ * across bots, and a stale group-DM containing the same user is also not
+ * confused with a 1:1 DM.
+ * @param db - Database
+ * @param botUserId - Bot's own user ID (also stored as a recipient row so
+ * `getChannelRecipientUsers` reflects both parties)
+ * @param recipientId - Recipient user ID
+ * @returns The existing or newly created DM channel object
+ */
+export function getOrCreateDmChannel(
+  db: Database,
+  botUserId: string,
+  recipientId: string
+): ChannelObject {
+  const existing = db
+    .prepare(
+      `SELECT c.id FROM channels c
+       WHERE c.type = 1
+         AND c.guild_id IS NULL
+         AND EXISTS (
+           SELECT 1 FROM channel_recipients cr
+           WHERE cr.channel_id = c.id AND cr.user_id = ?
+         )
+         AND EXISTS (
+           SELECT 1 FROM channel_recipients cr3
+           WHERE cr3.channel_id = c.id AND cr3.user_id = ?
+         )
+         AND (
+           SELECT COUNT(*) FROM channel_recipients cr2
+           WHERE cr2.channel_id = c.id
+         ) = 2`
+    )
+    .get(recipientId, botUserId) as { id: string } | undefined
+
+  if (existing) {
+    const channel = getChannel(db, existing.id)
+    if (channel) return channel
+  }
+
+  const channelId = generateSnowflake()
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type) VALUES (?, NULL, 1)'
+  ).run(channelId)
+  addChannelRecipient(db, channelId, botUserId)
+  addChannelRecipient(db, channelId, recipientId)
+
+  const channel = getChannel(db, channelId)
+  if (!channel) throw new Error('Failed to create DM channel')
+  return channel
+}
+
+/**
+ * Creates a group-DM channel. `access_tokens` in the real API resolve to
+ * distinct OAuth2 users; the mock does not perform token resolution, so
+ * the created channel's only recipient is the calling bot itself (see
+ * spec Issue #136 for this deliberate scope limitation).
+ * @param db - Database
+ * @param botUserId - Bot's own user ID, added as the sole recipient
+ * @returns The newly created group-DM channel object
+ */
+export function createGroupDmChannel(
+  db: Database,
+  botUserId: string
+): ChannelObject {
+  const channelId = generateSnowflake()
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type) VALUES (?, NULL, 3)'
+  ).run(channelId)
+  addChannelRecipient(db, channelId, botUserId)
+
+  const channel = getChannel(db, channelId)
+  if (!channel) throw new Error('Failed to create group DM channel')
+  return channel
 }
