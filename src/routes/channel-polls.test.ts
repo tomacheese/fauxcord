@@ -66,3 +66,56 @@ describe('GET /channels/:channelId/polls/:messageId/answers/:answerId', () => {
     expect(body.users).toHaveLength(0)
   })
 })
+
+describe('POST /channels/:channelId/polls/:messageId/expire', () => {
+  it('finalizes the poll and returns the message with poll.results.is_finalized true', async () => {
+    const bot = seedBot(db, 'Bot testtoken', botUserId)
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+    const message = seedMessage(db, channel, botUserId, bot)
+    createPoll(db, message, { question: 'Q', answers: [{ text: 'A' }] })
+
+    const res = await app.request(
+      `/channels/${channel}/polls/${message}/expire`,
+      { method: 'POST' }
+    )
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      poll: { results: { is_finalized: boolean } }
+    }
+    expect(body.poll.results.is_finalized).toBe(true)
+  })
+
+  it('returns 404 for a message with no poll', async () => {
+    const bot = seedBot(db, 'Bot testtoken', botUserId)
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+    const message = seedMessage(db, channel, botUserId, bot)
+
+    const res = await app.request(
+      `/channels/${channel}/polls/${message}/expire`,
+      { method: 'POST' }
+    )
+
+    expect(res.status).toBe(404)
+  })
+
+  it('is idempotent when called on an already-finalized poll', async () => {
+    const bot = seedBot(db, 'Bot testtoken', botUserId)
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+    const message = seedMessage(db, channel, botUserId, bot)
+    createPoll(db, message, { question: 'Q', answers: [{ text: 'A' }] })
+
+    await app.request(`/channels/${channel}/polls/${message}/expire`, {
+      method: 'POST',
+    })
+    const res = await app.request(
+      `/channels/${channel}/polls/${message}/expire`,
+      { method: 'POST' }
+    )
+
+    expect(res.status).toBe(200)
+  })
+})
