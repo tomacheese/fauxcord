@@ -362,3 +362,67 @@ describe('Channel Messages API', () => {
     })
   })
 })
+
+describe('POST /channels/:channelId/messages with poll', () => {
+  let db: Database
+  let app: Hono<AppEnv>
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono<AppEnv>()
+    app.route('/', createChannelMessageRoutes(db, BASE_URL))
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('creates a message with an attached poll', async () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+
+    const res = await app.request(`/channels/${channel}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        poll: {
+          question: { text: 'Best pizza?' },
+          answers: [
+            { poll_media: { text: 'Margherita' } },
+            { poll_media: { text: 'Pepperoni' } },
+          ],
+        },
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      poll: { question: { text: string }; answers: unknown[] }
+    }
+    expect(body.poll.question.text).toBe('Best pizza?')
+    expect(body.poll.answers).toHaveLength(2)
+  })
+
+  it('returns 400 for an invalid poll payload', async () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+
+    const res = await app.request(`/channels/${channel}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bot testtoken',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        poll: { question: { text: '' }, answers: [] },
+      }),
+    })
+
+    expect(res.status).toBe(400)
+  })
+})

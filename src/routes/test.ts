@@ -17,6 +17,7 @@ import {
 } from '../services/test-control'
 import type { TestInteractionRequest } from '../services/test-control'
 import { getChannelWebhooks } from '../services/webhooks'
+import { injectPollVote } from '../services/polls'
 
 /**
  * Creates the test control API routes.
@@ -156,6 +157,31 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
       return c.json({ message: '404: Not Found', code: 0 }, 404)
     }
     return c.json(result.interaction, 201)
+  })
+
+  // POST /_test/polls/:messageId/votes — Inject a poll vote for testing
+  app.post('/_test/polls/:messageId/votes', async (c) => {
+    const { messageId } = c.req.param()
+    const payload = await c.req.json<{
+      answer_id?: number
+      user_id?: string
+    }>()
+
+    if (payload.answer_id === undefined || !payload.user_id) {
+      return c.json({ message: '400: Bad Request', code: 0 }, 400)
+    }
+
+    const result = injectPollVote(
+      db,
+      messageId,
+      payload.answer_id,
+      payload.user_id
+    )
+    if (result === 'UNKNOWN_MESSAGE' || result === 'UNKNOWN_ANSWER') {
+      return c.json({ message: '404: Not Found', code: 0 }, 404)
+    }
+
+    return c.body(null, 204)
   })
 
   return app
