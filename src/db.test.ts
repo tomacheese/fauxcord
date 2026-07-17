@@ -115,6 +115,27 @@ describe('initializeDatabase', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('creates the voice_status column and poll/recipient tables', () => {
+    const db = initializeDatabase(':memory:')
+
+    const channelCols = (
+      db.prepare('PRAGMA table_info(channels)').all() as { name: string }[]
+    ).map((c) => c.name)
+    expect(channelCols).toContain('voice_status')
+
+    const tables = (
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all() as { name: string }[]
+    ).map((t) => t.name)
+    expect(tables).toContain('channel_recipients')
+    expect(tables).toContain('polls')
+    expect(tables).toContain('poll_answers')
+    expect(tables).toContain('poll_votes')
+
+    db.close()
+  })
 })
 
 describe('application commands / interactions tables', () => {

@@ -241,6 +241,58 @@ export function seedChannel(
 }
 
 /**
+ * Seeds a voice channel (type 2) into a guild.
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param channelId - Channel ID (default: a fixed test ID)
+ * @returns The seeded channel's ID
+ */
+export function seedVoiceChannel(
+  db: Database,
+  guildId: string,
+  channelId = '555555555555555555'
+): string {
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type, name) VALUES (?, ?, 2, ?)'
+  ).run(channelId, guildId, 'voice-channel')
+  return channelId
+}
+
+/**
+ * Seeds an announcement channel (type 5) into a guild.
+ * @param db - Database
+ * @param guildId - Guild ID
+ * @param channelId - Channel ID (default: a fixed test ID)
+ * @returns The seeded channel's ID
+ */
+export function seedAnnouncementChannel(
+  db: Database,
+  guildId: string,
+  channelId = '666666666666666666'
+): string {
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type, name) VALUES (?, ?, 5, ?)'
+  ).run(channelId, guildId, 'announcements')
+  return channelId
+}
+
+/**
+ * Seeds a group-DM channel (type 3, no guild).
+ * @param db - Database
+ * @param channelId - Channel ID (default: a fixed test ID)
+ * @returns The seeded channel's ID
+ */
+export function seedGroupDmChannel(
+  db: Database,
+  channelId = '777777777777777777'
+): string {
+  db.prepare(
+    'INSERT INTO channels (id, guild_id, type) VALUES (?, NULL, 3)'
+  ).run(channelId)
+  return channelId
+}
+
+/**
  * Inserts a message into the DB for testing.
  * @param db - Database
  * @param channelId - Channel ID

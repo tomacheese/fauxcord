@@ -37,6 +37,31 @@ function migrateChannelsThreadColumns(db: Database): void {
   }
 }
 
+/** Additional channel feature columns (voice status), independent of thread support. */
+const CHANNELS_FEATURE_COLUMNS: Record<string, string> = {
+  voice_status: 'TEXT',
+}
+
+/**
+ * Adds channel feature columns (currently just voice_status) to an
+ * existing `channels` table when missing. Kept separate from
+ * migrateChannelsThreadColumns so voice-related migrations stay
+ * independent of thread-support semantics.
+ * @param db - Database instance
+ */
+function migrateChannelsFeatureColumns(db: Database): void {
+  const existing = new Set(
+    (db.prepare('PRAGMA table_info(channels)').all() as { name: string }[]).map(
+      (col) => col.name
+    )
+  )
+  for (const [name, ddl] of Object.entries(CHANNELS_FEATURE_COLUMNS)) {
+    if (!existing.has(name)) {
+      db.exec(`ALTER TABLE channels ADD COLUMN ${name} ${ddl}`)
+    }
+  }
+}
+
 /**
  * Initializes the database and creates tables.
  * @param dbPath - SQLite file path (":memory:" for an in-memory DB)
@@ -101,10 +126,51 @@ export function initializeDatabase(dbPath: string): Database {
       locked                INTEGER NOT NULL DEFAULT 0,
       invitable             INTEGER NOT NULL DEFAULT 1,
       archive_timestamp     TEXT,
+      voice_status          TEXT,
       created_at            TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_channels_guild ON channels(guild_id);
+
+    CREATE TABLE IF NOT EXISTS channel_recipients (
+      channel_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      PRIMARY KEY (channel_id, user_id),
+      FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_channel_recipients_channel ON channel_recipients(channel_id);
+
+    CREATE TABLE IF NOT EXISTS polls (
+      message_id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      allow_multiselect INTEGER NOT NULL DEFAULT 0,
+      expiry TEXT,
+      finalized INTEGER NOT NULL DEFAULT 0,
+      layout_type INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS poll_answers (
+      id INTEGER NOT NULL,
+      message_id TEXT NOT NULL,
+      text TEXT NOT NULL,
+      emoji TEXT,
+      PRIMARY KEY (message_id, id),
+      FOREIGN KEY (message_id) REFERENCES polls(message_id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS poll_votes (
+      message_id TEXT NOT NULL,
+      answer_id INTEGER NOT NULL,
+      user_id TEXT NOT NULL,
+      PRIMARY KEY (message_id, answer_id, user_id),
+      FOREIGN KEY (message_id) REFERENCES polls(message_id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_poll_votes_message ON poll_votes(message_id);
 
     CREATE TABLE IF NOT EXISTS channel_overwrites (
       channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
@@ -359,6 +425,7 @@ export function initializeDatabase(dbPath: string): Database {
   `)
 
   migrateChannelsThreadColumns(db)
+  migrateChannelsFeatureColumns(db)
 
   return db
 }
