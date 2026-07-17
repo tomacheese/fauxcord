@@ -277,6 +277,38 @@ describe('Webhooks API (with token)', () => {
       expect(res.status).not.toBe(400)
     })
   })
+
+  describe('POST /webhooks/:webhookId/:token/github', () => {
+    it('creates a message from a GitHub push payload', async () => {
+      const res = await app.request(
+        `/webhooks/${WEBHOOK_ID}/${WEBHOOK_TOKEN}/github`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            head_commit: { message: 'fix: bug', id: 'abc' },
+            repository: { full_name: 'owner/repo' },
+            sender: { login: 'octocat' },
+          }),
+        }
+      )
+
+      expect(res.status).toBe(204)
+    })
+
+    it('returns 404 for an unknown webhook token', async () => {
+      const res = await app.request(
+        '/webhooks/999999999999999999/badtoken/github',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }
+      )
+
+      expect(res.status).toBe(404)
+    })
+  })
 })
 
 describe('Channel Webhooks API', () => {
