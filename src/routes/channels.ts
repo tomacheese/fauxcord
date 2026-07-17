@@ -29,6 +29,7 @@ import { createChannelThreadRoutes } from './channel-threads'
 import { createChannelFollowRoutes } from './channel-follow'
 import { createChannelVoiceStatusRoutes } from './channel-voice-status'
 import { createChannelRecipientRoutes } from './channel-recipients'
+import { createChannelPollRoutes } from './channel-polls'
 
 /**
  * Creates the channels API routes.
@@ -115,6 +116,7 @@ export function createChannelRoutes(
   app.route('/', createChannelFollowRoutes(db))
   app.route('/', createChannelVoiceStatusRoutes(db))
   app.route('/', createChannelRecipientRoutes(db))
+  app.route('/', createChannelPollRoutes(db, baseUrl))
 
   return app
 }
