@@ -328,7 +328,7 @@ describe('Channel Messages API', () => {
       )
 
       expect(res.status).toBe(200)
-      const body = await res.json()
+      const body = (await res.json()) as Record<string, number>
       expect(body.flags & 2).toBe(2)
     })
 
@@ -344,7 +344,7 @@ describe('Channel Messages API', () => {
       )
 
       expect(res.status).toBe(400)
-      const body = await res.json()
+      const body = (await res.json()) as Record<string, unknown>
       expect(body.code).toBe(50_024)
     })
 
