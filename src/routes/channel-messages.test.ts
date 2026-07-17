@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createChannelMessageRoutes } from './channel-messages'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
+import {
+  seedBot,
+  seedGuild,
+  seedChannel,
+  seedMessage,
+  seedAnnouncementChannel,
+} from '../test-helpers'
 import type { Database } from '../db'
 import type { AppEnv } from '../middleware/auth'
 
@@ -306,6 +312,53 @@ describe('Channel Messages API', () => {
         { headers: { Authorization: token } }
       )
       expect(survivor.status).toBe(200)
+    })
+  })
+
+  describe('POST /channels/:channelId/messages/:messageId/crosspost', () => {
+    it('sets the CROSSPOSTED flag on an announcement channel message', async () => {
+      const bot = seedBot(db, 'Bot testtoken')
+      const guild = seedGuild(db, bot)
+      const channel = seedAnnouncementChannel(db, guild)
+      const message = seedMessage(db, channel, '111111111111111111', bot)
+
+      const res = await app.request(
+        `/channels/${channel}/messages/${message}/crosspost`,
+        { method: 'POST', headers: { Authorization: 'Bot testtoken' } }
+      )
+
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.flags & 2).toBe(2)
+    })
+
+    it('returns 400 CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE for a text channel', async () => {
+      const bot = seedBot(db, 'Bot testtoken')
+      const guild = seedGuild(db, bot)
+      const channel = seedChannel(db, guild)
+      const message = seedMessage(db, channel, '111111111111111111', bot)
+
+      const res = await app.request(
+        `/channels/${channel}/messages/${message}/crosspost`,
+        { method: 'POST', headers: { Authorization: 'Bot testtoken' } }
+      )
+
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.code).toBe(50_024)
+    })
+
+    it('returns 404 for an unknown message', async () => {
+      const bot = seedBot(db, 'Bot testtoken')
+      const guild = seedGuild(db, bot)
+      const channel = seedAnnouncementChannel(db, guild)
+
+      const res = await app.request(
+        `/channels/${channel}/messages/999999999999999999/crosspost`,
+        { method: 'POST', headers: { Authorization: 'Bot testtoken' } }
+      )
+
+      expect(res.status).toBe(404)
     })
   })
 })

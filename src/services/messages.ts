@@ -451,6 +451,12 @@ function dispatchMemberFor(
   )
 }
 
+/** Message flag bit values (Discord API MESSAGE_FLAGS) */
+export const MESSAGE_FLAGS = {
+  /** Set when a message has been published to subscribed channels via crosspost */
+  CROSSPOSTED: 1 << 1,
+} as const
+
 /**
  * Creates a message.
  * @param db - Database
@@ -517,7 +523,7 @@ export function createMessage(
 export function updateMessage(
   db: Database,
   messageId: string,
-  payload: { content?: string; embeds?: unknown[] | null },
+  payload: { content?: string; embeds?: unknown[] | null; flags?: number },
   baseUrl: string
 ): MessageObject | null {
   const row = db
@@ -542,6 +548,13 @@ export function updateMessage(
     }
   }
 
+  if (payload.flags !== undefined) {
+    db.prepare('UPDATE messages SET flags = ? WHERE id = ?').run(
+      payload.flags,
+      messageId
+    )
+  }
+
   const updated = getMessage(db, messageId, baseUrl)
   if (updated) {
     const guildId = getGuildIdForChannel(db, row.channel_id)
@@ -553,6 +566,23 @@ export function updateMessage(
     })
   }
   return updated
+}
+
+/**
+ * Public wrapper around the private dispatchMemberFor, for reuse by
+ * services outside this module (e.g. polls) that need to attach a
+ * Gateway dispatch's `member` field.
+ * @param db - Database
+ * @param guildId - Guild ID the relevant channel belongs to, if any
+ * @param authorId - User ID to resolve as a guild member
+ * @returns Guild member object, or undefined when not applicable
+ */
+export function getDispatchMember(
+  db: Database,
+  guildId: string | undefined,
+  authorId: string
+): Record<string, unknown> | undefined {
+  return dispatchMemberFor(db, guildId, authorId)
 }
 
 /**

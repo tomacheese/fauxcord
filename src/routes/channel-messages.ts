@@ -16,6 +16,7 @@ import {
   updateMessage,
   deleteMessage,
   isTooOldForBulkDelete,
+  MESSAGE_FLAGS,
 } from '../services/messages'
 import {
   validateMessageCreate,
@@ -302,6 +303,44 @@ export function createChannelMessageRoutes(
     }
 
     return c.body(null, 204)
+  })
+
+  // POST /channels/:channelId/messages/:messageId/crosspost — Crosspost an announcement channel message
+  app.post('/channels/:channelId/messages/:messageId/crosspost', (c) => {
+    const { channelId, messageId } = c.req.param()
+
+    const channel = requireEntity(
+      c,
+      getChannel(db, channelId),
+      DiscordErrorCode.UNKNOWN_CHANNEL,
+      'Unknown Channel'
+    )
+    if (channel instanceof Response) return channel
+
+    const existing = requireEntity(
+      c,
+      getMessage(db, messageId, baseUrl),
+      DiscordErrorCode.UNKNOWN_MESSAGE,
+      'Unknown Message'
+    )
+    if (existing instanceof Response) return existing
+
+    if (channel.type !== 5) {
+      const err = discordError(
+        DiscordErrorCode.CANNOT_EXECUTE_ON_THIS_CHANNEL_TYPE,
+        'Cannot execute action on this channel type',
+        400
+      )
+      return c.json(err.body, 400)
+    }
+
+    const updated = updateMessage(
+      db,
+      messageId,
+      { flags: existing.flags | MESSAGE_FLAGS.CROSSPOSTED },
+      baseUrl
+    )
+    return c.json(updated)
   })
 
   return app
