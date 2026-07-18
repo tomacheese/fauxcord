@@ -4,6 +4,6 @@
   "type": "module",
   "dependencies": {
     "@discordjs/rest": "2.6.2",
-    "discord.js": "14.26.5"
+    "discord.js": "14.27.0"
   }
 }
