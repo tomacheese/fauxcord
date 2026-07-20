@@ -218,6 +218,13 @@ export function getApplication(
   approximate_user_authorization_count: number
   explicit_content_filter: number
   team: null
+  /**
+   * Scopes the application is eligible to request via OAuth2. Fauxcord does
+   * not track real OAuth2 scope eligibility, so this is always an empty
+   * array (schema-valid: the upstream spec places no `minItems` constraint
+   * on this field).
+   */
+  eligible_oauth2_scopes: string[]
 } | null {
   const bot = db.prepare('SELECT * FROM bots WHERE token = ?').get(botToken) as
     BotRow | undefined
@@ -255,5 +262,6 @@ export function getApplication(
     approximate_user_authorization_count: 0,
     explicit_content_filter: 0,
     team: null,
+    eligible_oauth2_scopes: [],
   }
 }

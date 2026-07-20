@@ -245,6 +245,16 @@ describe('Users GET endpoints', () => {
     expect(body.summary).toBe('')
   })
 
+  it('GET /applications/@me includes `eligible_oauth2_scopes` as an empty array (required by the upstream Discord spec)', async () => {
+    const res = await app.request('/api/v10/applications/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { eligible_oauth2_scopes?: unknown }
+    expect(Array.isArray(body.eligible_oauth2_scopes)).toBe(true)
+    expect(body.eligible_oauth2_scopes).toEqual([])
+  })
+
   it('GET /oauth2/applications/@me returns application info (Discord.Net alias)', async () => {
     const res = await app.request('/api/v10/oauth2/applications/@me', {
       headers: { Authorization: token },
@@ -278,6 +288,16 @@ describe('GET /oauth2/applications/@me', () => {
     const body = (await res.json()) as Record<string, unknown>
     expect(typeof body.verify_key).toBe('string')
     expect((body.verify_key as string).length).toBeGreaterThan(0)
+  })
+
+  it('includes `eligible_oauth2_scopes` as an empty array (required by the upstream Discord spec)', async () => {
+    const res = await app.request('/api/v10/oauth2/applications/@me', {
+      headers: { Authorization: token },
+    })
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as { eligible_oauth2_scopes?: unknown }
+    expect(Array.isArray(body.eligible_oauth2_scopes)).toBe(true)
+    expect(body.eligible_oauth2_scopes).toEqual([])
   })
 })
 

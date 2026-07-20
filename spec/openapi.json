@@ -6613,26 +6613,6 @@
               }
             }
           },
-          "204": {
-            "description": "204 response for bulk_ban_users_from_guild",
-            "headers": {
-              "X-RateLimit-Limit": {
-                "$ref": "#/components/headers/X-RateLimit-Limit"
-              },
-              "X-RateLimit-Remaining": {
-                "$ref": "#/components/headers/X-RateLimit-Remaining"
-              },
-              "X-RateLimit-Reset": {
-                "$ref": "#/components/headers/X-RateLimit-Reset"
-              },
-              "X-RateLimit-Reset-After": {
-                "$ref": "#/components/headers/X-RateLimit-Reset-After"
-              },
-              "X-RateLimit-Bucket": {
-                "$ref": "#/components/headers/X-RateLimit-Bucket"
-              }
-            }
-          },
           "429": {
             "$ref": "#/components/responses/ClientRatelimitedResponse"
           },
@@ -13138,6 +13118,14 @@
                         ]
                       }
                     ]
+                  },
+                  "additional_name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 80
                   }
                 }
               }
@@ -13870,6 +13858,7 @@
                   },
                   "external_auth_token": {
                     "type": "string",
+                    "minLength": 1,
                     "maxLength": 10240
                   },
                   "external_auth_type": {
@@ -13933,6 +13922,7 @@
                 "properties": {
                   "external_user_id": {
                     "type": "string",
+                    "minLength": 1,
                     "maxLength": 1024
                   }
                 },
@@ -14000,6 +13990,7 @@
                   },
                   "external_auth_token": {
                     "type": "string",
+                    "minLength": 1,
                     "maxLength": 10240
                   },
                   "external_auth_type": {
@@ -21924,6 +21915,9 @@
             "items": {
               "$ref": "#/components/schemas/MessageSnapshotResponse"
             }
+          },
+          "lobby_member": {
+            "$ref": "#/components/schemas/MessageLobbyMemberResponse"
           }
         },
         "required": [
@@ -22174,6 +22168,14 @@
               "boolean",
               "null"
             ]
+          },
+          "additional_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 80
           }
         },
         "required": [
@@ -27156,6 +27158,16 @@
           "target_message_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
+          "liveliness": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GuildLivelinessResponse"
+              }
+            ]
+          },
           "uses": {
             "type": "integer",
             "format": "int32"
@@ -27336,6 +27348,28 @@
             }
           }
         }
+      },
+      "GuildLivelinessResponse": {
+        "type": "object",
+        "properties": {
+          "msg_activity_bins": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "last_updated_ts": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "msg_activity_bins"
+        ]
       },
       "GuildMFALevel": {
         "type": "integer",
@@ -31109,6 +31143,9 @@
           "flags": {
             "type": "integer",
             "format": "int32"
+          },
+          "additional_name": {
+            "type": "string"
           }
         },
         "required": [
@@ -31137,6 +31174,9 @@
           },
           "author": {
             "$ref": "#/components/schemas/UserResponse"
+          },
+          "lobby_member": {
+            "$ref": "#/components/schemas/MessageLobbyMemberResponse"
           },
           "metadata": {
             "type": "object",
@@ -32214,6 +32254,7 @@
               "string",
               "null"
             ],
+            "minLength": 1,
             "maxLength": 1024
           },
           "description": {
@@ -33002,6 +33043,17 @@
           "name"
         ]
       },
+      "MessageLobbyMemberResponse": {
+        "type": "object",
+        "properties": {
+          "additional_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "additional_name"
+        ]
+      },
       "MessageMentionChannelResponse": {
         "type": "object",
         "properties": {
@@ -33380,6 +33432,9 @@
             "items": {
               "$ref": "#/components/schemas/MessageSnapshotResponse"
             }
+          },
+          "lobby_member": {
+            "$ref": "#/components/schemas/MessageLobbyMemberResponse"
           },
           "reactions": {
             "type": "array",
@@ -35373,6 +35428,12 @@
                 "$ref": "#/components/schemas/TeamResponse"
               }
             ]
+          },
+          "eligible_oauth2_scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OAuth2Scopes"
+            }
           }
         },
         "required": [
@@ -35392,7 +35453,8 @@
           "approximate_user_install_count",
           "approximate_user_authorization_count",
           "explicit_content_filter",
-          "team"
+          "team",
+          "eligible_oauth2_scopes"
         ]
       },
       "PrivateChannelLocation": {
@@ -37585,6 +37647,9 @@
               "$ref": "#/components/schemas/MessageSnapshotResponse"
             }
           },
+          "lobby_member": {
+            "$ref": "#/components/schemas/MessageLobbyMemberResponse"
+          },
           "reactions": {
             "type": "array",
             "items": {
@@ -37603,6 +37668,10 @@
           },
           "hit": {
             "type": "boolean"
+          },
+          "restriction_count": {
+            "type": "integer",
+            "format": "int32"
           }
         },
         "required": [
