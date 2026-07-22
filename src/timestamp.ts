@@ -18,7 +18,7 @@
  * (e.g. `2021-01-01T01:01:01.010000+00:00`)
  */
 export function toDiscordTimestamp(date: Date): string {
-  const [base, fraction] = date.toISOString().split('.')
+  const [base, fraction] = date.toISOString().split('.', 2)
   // toISOString() always yields exactly 3 fractional digits (milliseconds)
   // followed by "Z"; pad to 6 digits (microseconds) since JS Date has no
   // finer resolution to offer.
