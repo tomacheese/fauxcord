@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@discordjs/rest": "2.6.2",
+    "@discordjs/rest": "2.6.3",
     "discord.js": "14.27.0"
   }
 }
