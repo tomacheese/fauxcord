@@ -611,7 +611,7 @@ export function deleteMessage(
           .prepare('DELETE FROM messages WHERE id = ? AND channel_id = ?')
           .run(messageId, channelId)
 
-  if (result.changes > 0 && target) {
+  if (target && result.changes > 0) {
     gatewayBus.emit('message.delete', {
       guildId: getGuildIdForChannel(db, target.channel_id),
       channelId: target.channel_id,
