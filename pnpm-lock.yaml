@@ -28,8 +28,8 @@ importers:
         version: 8.21.1
     devDependencies:
       '@book000/eslint-config':
-        specifier: 1.16.14
-        version: 1.16.14(eslint@10.7.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+        specifier: 1.16.15
+        version: 1.16.15(eslint@10.7.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       '@types/better-sqlite3':
         specifier: 7.6.13
         version: 7.6.13
@@ -87,8 +87,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@book000/eslint-config@1.16.14':
-    resolution: {integrity: sha512-AOFqqnI+a22VbLhgp1gUpJJq4dcknQ0yGJk2xLZHnstE2DpfdtJzytnuDQzpatFyetT81DGxBxDfqivyXvafNg==}
+  '@book000/eslint-config@1.16.15':
+    resolution: {integrity: sha512-ecjfBCGNY2w0pifLzhJP+kmJTeb+4nDPlu+9XftXsjCV6A+2oQMtWtu6u9r5gdAAkmCiLOSititYytP1qBc47A==}
     peerDependencies:
       eslint: 10.7.0
 
@@ -2082,7 +2082,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@book000/eslint-config@1.16.14(eslint@10.7.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
+  '@book000/eslint-config@1.16.15(eslint@10.7.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/parser': 8.64.0(eslint@10.7.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       eslint: 10.7.0(supports-color@7.2.0)

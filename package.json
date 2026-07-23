@@ -23,7 +23,7 @@
     "spec:update": "tsx scripts/spec-fetch.ts spec/openapi.json"
   },
   "devDependencies": {
-    "@book000/eslint-config": "1.16.14",
+    "@book000/eslint-config": "1.16.15",
     "@types/better-sqlite3": "7.6.13",
     "@types/node": "25.9.5",
     "@types/ws": "8.18.1",
