@@ -12,8 +12,8 @@ importers:
         specifier: 2.0.11
         version: 2.0.11(hono@4.12.31)
       better-sqlite3:
-        specifier: 13.0.0
-        version: 13.0.0
+        specifier: 13.0.1
+        version: 13.0.1
       discord-api-types:
         specifier: 0.38.50
         version: 0.38.50
@@ -712,8 +712,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-sqlite3@13.0.0:
-    resolution: {integrity: sha512-EV1zoFJkJyZ6XziOyrL+yjs6WsvFbkG1U9SZ6489WBZ+I73YewvZUwHa7//qDueS8aY1LDp7i2j1SeZH3r0boA==}
+  better-sqlite3@13.0.1:
+    resolution: {integrity: sha512-LYpmOXdkpQYf4wmlxkdzW01XGlOXNIbjLg45yNkh0FQ4814VbK9PdOFmhZpYbej+EZtR/i3FDdhEG98HqZdgnA==}
     engines: {node: '>=22'}
 
   brace-expansion@1.1.16:
@@ -2652,7 +2652,7 @@ snapshots:
 
   baseline-browser-mapping@2.10.43: {}
 
-  better-sqlite3@13.0.0:
+  better-sqlite3@13.0.1:
     dependencies:
       node-addon-api: 8.9.0
 
