@@ -9,5 +9,5 @@
 # Version pin confidence: py-cord 2.6.1 was a real, current stable release as
 # of this verifier's authoring; if it has since been superseded,
 # `pip install py-cord~=2.6` is a safe fallback.
-py-cord==2.8.0
+py-cord==2.8.1
 aiohttp
