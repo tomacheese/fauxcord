@@ -31,7 +31,7 @@
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "eslint": "10.8.0",
-    "npm-run-all2": "9.0.2",
+    "npm-run-all2": "9.0.3",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
