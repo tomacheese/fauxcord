@@ -7,6 +7,9 @@
  */
 
 import { Hono } from 'hono'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { serveWithGateway } from './http-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
@@ -30,6 +33,7 @@ import { buildApp } from './app'
 import { createCommand } from './services/application-commands'
 import { createInteraction } from './services/interactions'
 import type { SessionManager } from './gateway/session'
+import type { ContractFixture } from '../spec/manifest'
 
 const TEST_BASE_URL = 'http://localhost:3000'
 const TEST_UPLOAD_PATH = '/tmp/fauxcord-test-uploads'
@@ -46,6 +50,14 @@ export interface FullTestContext {
   db: Database
   app: Hono<AppEnv>
   cleanup: () => void
+}
+
+/** Real HTTP server context for network contract tests. */
+export interface RealServerContext {
+  db: Database
+  baseUrl: string
+  sessionManager: SessionManager
+  close: () => Promise<void>
 }
 
 /**
@@ -116,6 +128,165 @@ export function createFullTestApp(): FullTestContext {
     app,
     cleanup: () => {
       closeDatabase(db)
+    },
+  }
+}
+
+/** Seeds the complete operation-contract fixture in a test database. */
+/* eslint-disable @typescript-eslint/no-use-before-define -- Public seed helpers are grouped below the app factories. */
+export function createContractFixture(db: Database): ContractFixture {
+  const token = 'Bot contract-test-token'
+  const userId = '555555555555555555'
+  seedBot(db, token, userId)
+  const guildId = seedGuild(db, token, '666666666666666666')
+  db.prepare(
+    `INSERT OR IGNORE INTO roles
+       (id, guild_id, name, permissions, position, color, hoist, mentionable)
+     VALUES (?, ?, '@everyone', '1071698660929', 0, 0, 0, 0)`
+  ).run(guildId, guildId)
+  const channelId = seedChannel(db, guildId, '777777777777777777')
+  const { webhookId, webhookToken } = seedWebhook(db, channelId, guildId)
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'WebhookUser', '0000', 1)"
+  ).run(webhookId)
+  const messageId = seedMessage(db, channelId, userId, token)
+  const deletableMessageId = seedMessage(db, channelId, userId, token)
+  const webhookMessageId = seedMessage(db, channelId, webhookId, 'webhook')
+  const deletableOriginalWebhookMessageId = seedMessage(
+    db,
+    channelId,
+    webhookId,
+    'webhook'
+  )
+  const roleId = seedRole(db, guildId)
+  db.prepare(
+    'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+  ).run(guildId, userId)
+  const memberId = seedMember(db, guildId)
+  const emojiId = seedEmoji(db, guildId, userId)
+  const inviteCode = seedInvite(db, channelId, guildId, userId, 'contractcode')
+  const deletableInviteCode = seedInvite(
+    db,
+    channelId,
+    guildId,
+    userId,
+    'deletablecode'
+  )
+  const bannedUserId = seedBan(db, guildId, undefined, 'Contract test ban')
+  const threadId = '888888888888888888'
+  db.prepare(
+    `INSERT INTO channels
+       (id, guild_id, type, name, parent_id, owner_id, archived,
+        auto_archive_duration, archive_timestamp)
+     VALUES (?, ?, 11, 'contract-thread', ?, ?, 1, 1440, datetime('now'))`
+  ).run(threadId, guildId, channelId, userId)
+  db.prepare(
+    'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
+  ).run(threadId, userId)
+  const commandId = seedApplicationCommand(db, userId, null, 'contractcmd')
+  const guildCommandId = seedApplicationCommand(
+    db,
+    userId,
+    guildId,
+    'guildcontractcmd'
+  )
+  const { interactionId, interactionToken } = seedInteraction(
+    db,
+    userId,
+    channelId,
+    memberId,
+    guildCommandId
+  )
+
+  return {
+    token,
+    userId,
+    guildId,
+    channelId,
+    messageId,
+    deletableMessageId,
+    webhookMessageId,
+    deletableOriginalWebhookMessageId,
+    webhookId,
+    webhookToken,
+    roleId,
+    memberId,
+    emojiId,
+    inviteCode,
+    deletableInviteCode,
+    bannedUserId,
+    threadId,
+    commandId,
+    guildCommandId,
+    interactionId,
+    interactionToken,
+    deletableEntitlementId: '999999999999999991',
+    deletableLobbyId: '999999999999999992',
+  }
+}
+/* eslint-enable @typescript-eslint/no-use-before-define */
+
+/**
+ * Starts the production application assembly on an OS-assigned HTTP port.
+ * @returns Real server context and deterministic teardown.
+ */
+export async function createRealServer(): Promise<RealServerContext> {
+  const uploadPath = await mkdtemp(path.join(tmpdir(), 'fauxcord-contract-'))
+  const db = initializeDatabase(':memory:')
+  const { app, wss, sessionManager, unsubscribeGateway } = buildApp(db, {
+    baseUrl: 'http://127.0.0.1:0',
+    uploadPath,
+    disableAuth: false,
+    latencyMs: 0,
+  })
+
+  const server = await new Promise<ReturnType<typeof serveWithGateway>>(
+    (resolve) => {
+      const startedServer = serveWithGateway(
+        {
+          fetch: app.fetch,
+          port: 0,
+          hostname: '127.0.0.1',
+          wss,
+        },
+        () => {
+          resolve(startedServer)
+        }
+      )
+    }
+  )
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    unsubscribeGateway()
+    server.close()
+    closeDatabase(db)
+    await rm(uploadPath, { recursive: true, force: true })
+    throw new Error('Real HTTP test server did not expose a TCP address')
+  }
+
+  let closed = false
+  return {
+    db,
+    baseUrl: `http://127.0.0.1:${address.port}`,
+    sessionManager,
+    close: async () => {
+      if (closed) return
+      closed = true
+      unsubscribeGateway()
+      for (const client of wss.clients) {
+        client.terminate()
+      }
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+          resolve()
+        })
+      })
+      closeDatabase(db)
+      await rm(uploadPath, { recursive: true, force: true })
     },
   }
 }

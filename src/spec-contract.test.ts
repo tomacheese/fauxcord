@@ -32,7 +32,6 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { Ajv2020 } from 'ajv/dist/2020.js'
 import { createRequire } from 'node:module'
-import type { ValidateFunction } from 'ajv'
 
 // ajv-formats exports a CJS function via module.exports; use createRequire for
 // NodeNext-compatible interop without type errors.
@@ -57,11 +56,15 @@ import {
   seedInteraction,
 } from './test-helpers'
 import { getContractTestedEntries, MANIFEST } from '../spec/manifest'
-import type { ContractFixture, SpecEndpoint } from '../spec/manifest'
-import { SKIP_LIST } from '../spec/skip'
+import type {
+  ContractFixture,
+  SpecEndpoint,
+  SpecSuccessBranch,
+} from '../spec/manifest'
 import type { Database } from './db'
 import type { Hono } from 'hono'
 import type { AppEnv } from './middleware/auth'
+import '../spec/manifest.test'
 
 // ── Ajv setup ────────────────────────────────────────────────────────────────
 
@@ -86,27 +89,6 @@ addFormats(ajv)
 // a separate dereference step. Ajv resolves "#/components/schemas/Foo" automatically.
 ajv.addSchema(spec, 'https://discord.com/spec')
 
-/** Cache of compiled validators keyed by schema name */
-const validatorCache = new Map<string, ValidateFunction>()
-
-/**
- * Returns a compiled Ajv validator for a named schema component.
- * Results are cached so each schema is compiled only once.
- * @param schemaName - Component schema name (e.g. "MessageResponse").
- * @returns Compiled validator function.
- */
-function getValidator(schemaName: string): ValidateFunction {
-  const cached = validatorCache.get(schemaName)
-  if (cached) {
-    return cached
-  }
-  const validate = ajv.compile({
-    $ref: `https://discord.com/spec#/components/schemas/${schemaName}`,
-  })
-  validatorCache.set(schemaName, validate)
-  return validate
-}
-
 /**
  * Derives the response schema name from the spec for a given path and method.
  * Returns the `responseSchemaOverride` from the manifest entry if set,
@@ -114,12 +96,10 @@ function getValidator(schemaName: string): ValidateFunction {
  * @param entry - Manifest entry.
  * @returns Schema name, or null if no schema is found.
  */
-function getResponseSchemaName(entry: SpecEndpoint): string | null {
-  if (entry.responseSchemaOverride) {
-    return entry.responseSchemaOverride
-  }
-
-  // Derive from spec paths
+function getResponseSchema(
+  entry: SpecEndpoint,
+  branch: SpecSuccessBranch
+): unknown {
   interface OperationType {
     responses?: Record<
       string,
@@ -140,77 +120,16 @@ function getResponseSchemaName(entry: SpecEndpoint): string | null {
   const operation = pathObj[entry.method] as OperationType | undefined
   if (!operation) return null
 
-  for (const status of ['200', '201']) {
-    const schema =
-      operation.responses?.[status]?.content?.['application/json']?.schema
-    if (!schema) continue
-    if (schema.$ref) {
-      return schema.$ref.split('/').pop() ?? null
-    }
-    // Array responses: validate each item
-    if (schema.items?.$ref) {
-      return schema.items.$ref.split('/').pop() ?? null
-    }
+  const schema =
+    operation.responses?.[String(branch.status)]?.content?.['application/json']
+      ?.schema
+  if (!schema) return null
+  const escapedPath = entry.specPath.replaceAll('~', '~0').replaceAll('/', '~1')
+  return {
+    $ref:
+      `https://discord.com/spec#/paths/${escapedPath}/${entry.method}` +
+      `/responses/${branch.status}/content/application~1json/schema`,
   }
-  return null
-}
-
-/**
- * Determines whether a response body is an array type in the spec.
- * @param entry - Manifest entry.
- * @returns true if the spec declares the success response as an array.
- */
-function isArrayResponse(entry: SpecEndpoint): boolean {
-  // These overrides are for items of an array response
-  const arrayOverrides = new Set([
-    // channels/guilds that return arrays validated per-item
-    'GuildChannelResponse', // array of channels
-    'MyGuildResponse', // array of guilds
-    'UserResponse', // reactions list
-    'GuildMemberResponse', // members list (when used as override)
-  ])
-
-  if (
-    entry.responseSchemaOverride &&
-    arrayOverrides.has(entry.responseSchemaOverride)
-  ) {
-    // Only treat as array for endpoints that actually return arrays
-    const arrayEndpoints = new Set([
-      '/guilds/{guild_id}/channels|get',
-      '/users/@me/guilds|get',
-      '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}|get',
-      '/guilds/{guild_id}/members|get',
-    ])
-    return arrayEndpoints.has(`${entry.specPath}|${entry.method}`)
-  }
-
-  // Check spec directly
-  interface ArrayCheckOperation {
-    responses?: Record<
-      string,
-      { content?: Record<string, { schema?: { type?: string | string[] } }> }
-    >
-  }
-  const specPaths2 = spec.paths as Record<
-    string,
-    Record<string, ArrayCheckOperation> | undefined
-  >
-  const pathObj2 = specPaths2[entry.specPath]
-  if (!pathObj2) return false
-  const operation = pathObj2[entry.method] as ArrayCheckOperation | undefined
-  if (!operation) return false
-
-  for (const status of ['200', '201']) {
-    const schema =
-      operation.responses?.[status]?.content?.['application/json']?.schema
-    if (schema) {
-      const t = schema.type
-      if (t === 'array' || (Array.isArray(t) && t.includes('array'))) {
-        return true
-      }
-    }
-  }
-  return false
 }
 
 // ── Test fixture ─────────────────────────────────────────────────────────────
@@ -331,6 +250,10 @@ beforeAll(() => {
     guildCommandId,
     interactionId,
     interactionToken,
+    deletableMessageId: messageId,
+    deletableOriginalWebhookMessageId: webhookMessageId,
+    deletableEntitlementId: '999999999999999991',
+    deletableLobbyId: '999999999999999992',
   }
 })
 
@@ -340,30 +263,15 @@ afterAll(() => {
 
 // ── Contract tests ────────────────────────────────────────────────────────────
 
-/**
- * Checks whether an entry is in the skip list.
- * @param entry - Manifest entry to check.
- * @returns true if the entry should be skipped.
- */
-function isSkipped(entry: SpecEndpoint): boolean {
-  return SKIP_LIST.some(
-    (s) => s.specPath === entry.specPath && s.method === entry.method
-  )
-}
-
 describe('Discord spec contract tests', () => {
   const contractEntries = getContractTestedEntries()
 
   for (const entry of contractEntries) {
     const label = `${entry.method.toUpperCase()} ${entry.specPath}`
+    const branch = entry.successBranches[0]
 
     it(label, async () => {
-      if (isSkipped(entry)) {
-        console.log(`[SKIP] ${label} — see spec/skip.ts`)
-        return
-      }
-
-      const { path, init } = entry.request(fixture)
+      const { path, init } = branch.request(fixture)
       const headers: Record<string, string> = {
         Authorization: fixture.token,
         ...(init?.headers as Record<string, string> | undefined),
@@ -372,48 +280,25 @@ describe('Discord spec contract tests', () => {
 
       expect(
         res.status,
-        `Expected ${entry.successStatus} but got ${res.status} for ${label}`
-      ).toBe(entry.successStatus)
+        `Expected ${branch.status} but got ${res.status} for ${label}`
+      ).toBe(branch.status)
 
-      // 204 responses have no body — nothing to validate
-      if (entry.successStatus === 204) return
+      if (branch.body !== 'json') return
 
-      const schemaName = getResponseSchemaName(entry)
+      const responseSchema = getResponseSchema(entry, branch)
       expect(
-        schemaName,
-        `No schema name found for ${label}. Add responseSchemaOverride to the manifest entry.`
+        responseSchema,
+        `No response schema found for ${label}.`
       ).toBeTruthy()
-      // Early return narrows schemaName to string for TypeScript (the expect above throws on null).
-      if (!schemaName) return
+      if (!responseSchema) return
 
       const body: unknown = await res.json()
-
-      const validate = getValidator(schemaName)
-      const isArray = isArrayResponse(entry)
-
-      if (isArray) {
-        // Validate each item in the array individually
-        expect(
-          Array.isArray(body),
-          `Expected array response for ${label}`
-        ).toBe(true)
-        for (const [i, item] of (body as unknown[]).entries()) {
-          const valid = validate(item)
-          if (!valid) {
-            throw new Error(
-              `Schema validation failed for ${label} item[${i}]:\n` +
-                JSON.stringify(validate.errors, null, 2)
-            )
-          }
-        }
-      } else {
-        const valid = validate(body)
-        if (!valid) {
-          throw new Error(
-            `Schema validation failed for ${label}:\n` +
-              JSON.stringify(validate.errors, null, 2)
-          )
-        }
+      const validate = ajv.compile(responseSchema)
+      if (!validate(body)) {
+        throw new Error(
+          `Schema validation failed for ${label}:\n` +
+            JSON.stringify(validate.errors, null, 2)
+        )
       }
     })
   }

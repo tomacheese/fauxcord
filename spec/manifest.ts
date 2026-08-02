@@ -66,11 +66,15 @@ export interface ContractFixture {
    * Used for GET/PATCH on channel message endpoints where the bot must own the message.
    */
   messageId: string
+  /** Message reserved for destructive request branches. */
+  deletableMessageId: string
   /**
    * Seeded webhook message ID — authored by the webhook user.
    * Used for GET/PATCH on webhook message endpoints.
    */
   webhookMessageId: string
+  /** Original webhook message reserved for destructive request branches. */
+  deletableOriginalWebhookMessageId: string
   /** Seeded webhook ID */
   webhookId: string
   /** Seeded webhook token */
@@ -101,9 +105,47 @@ export interface ContractFixture {
   interactionId: string
   /** Seeded interaction token */
   interactionToken: string
+  /** Entitlement ID reserved for a destructive branch once seeded. */
+  deletableEntitlementId: string
+  /** Lobby ID reserved for a destructive branch once seeded. */
+  deletableLobbyId: string
 }
 
-/** A single entry in the endpoint manifest. */
+/** Authentication mechanism required by an operation. */
+export type ContractAuthentication = 'bot' | 'bearer' | 'webhook' | 'public'
+
+/** Response body handling used by contract and network tests. */
+export type ContractBodyMode = 'json' | 'empty' | 'png' | 'csv'
+
+/** Concrete HTTP request produced for a success branch. */
+export interface ContractRequest {
+  path: string
+  init?: RequestInit
+}
+
+/** Factory supplied by a contract runner for isolated operation state. */
+export interface ContractFixtureFactory {
+  create: () => Promise<ContractFixture>
+}
+
+/** Context supplied after a real HTTP request finishes. */
+export interface NetworkAssertionContext {
+  baseUrl: string
+  fixture: ContractFixture
+  response: Response
+}
+
+/** One OpenAPI success response branch for an operation. */
+export interface SpecSuccessBranch {
+  status: number
+  contentType: string | null
+  body: ContractBodyMode
+  responseSchemaOverride?: string
+  request: (fixture: ContractFixture) => ContractRequest
+  assert: (context: NetworkAssertionContext) => Promise<void>
+}
+
+/** A single unique OpenAPI operation entry. */
 export interface SpecEndpoint {
   /**
    * The spec path template, using `{param}` notation.
@@ -112,34 +154,24 @@ export interface SpecEndpoint {
   specPath: string
   /** HTTP method (lowercase). */
   method: 'get' | 'post' | 'patch' | 'put' | 'delete'
-  /**
-   * Whether this entry has an Ajv contract test in src/spec-contract.test.ts.
-   * Set to false for 204 responses, complex OAuth2 flows, or endpoints where
-   * the response schema is too permissive or impractical to seed.
-   */
+  authentication: ContractAuthentication
+  createFixture: (
+    factory: ContractFixtureFactory
+  ) => Promise<ContractFixture>
+  successBranches: SpecSuccessBranch[]
+}
+
+interface LegacySpecEndpoint {
+  specPath: string
+  method: SpecEndpoint['method']
   contractTested: boolean
-  /**
-   * The HTTP status code the mock returns for the happy path.
-   * Used by contract tests to assert the correct status before validating the body.
-   */
   successStatus: number
-  /**
-   * Optional override for the response schema to validate against.
-   * When set to a `components/schemas/<Name>` key, the contract test validates
-   * against that schema directly instead of deriving it from the spec path/method.
-   * Use this to pin a specific `oneOf` branch.
-   */
   responseSchemaOverride?: string
-  /**
-   * Builds the HTTP request for the contract test.
-   * @param fixture - Seeded test data
-   * @returns Object with `path` (under /api/v10) and optional `init` (RequestInit)
-   */
-  request: (fixture: ContractFixture) => { path: string; init?: RequestInit }
+  request: (fixture: ContractFixture) => ContractRequest
 }
 
 /** All implemented Fauxcord endpoints mapped to their spec paths. */
-export const MANIFEST: SpecEndpoint[] = [
+const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   // ─── Channels ───────────────────────────────────────────────────────────────
 
   {
@@ -1510,10 +1542,159 @@ export const MANIFEST: SpecEndpoint[] = [
   },
 ]
 
-/**
- * Returns only the manifest entries that should be contract-tested
- * (i.e. have a non-empty response body and a mapped schema to validate against).
- */
+const MULTI_SUCCESS_STATUSES: Readonly<Record<string, readonly number[]>> = {
+  'post /channels/{channel_id}/typing': [204, 200],
+  'post /channels/{channel_id}/invites': [200, 204],
+  'patch /guilds/{guild_id}/members/{user_id}': [200, 204],
+  'post /webhooks/{webhook_id}/{webhook_token}': [200, 204],
+  'post /applications/{application_id}/commands': [201, 200],
+  'post /applications/{application_id}/guilds/{guild_id}/commands': [201, 200],
+  'post /interactions/{interaction_id}/{interaction_token}/callback': [204, 200],
+  'get /channels/{channel_id}/threads/search': [200, 202],
+  'put /channels/{channel_id}/recipients/{user_id}': [204, 201],
+}
+
+function authenticationFor(entry: LegacySpecEndpoint): ContractAuthentication {
+  if (entry.specPath === '/gateway') return 'public'
+  if (entry.specPath === '/oauth2/@me') return 'bearer'
+  if (
+    entry.specPath.startsWith('/webhooks/{webhook_id}/{webhook_token}') ||
+    entry.specPath ===
+      '/interactions/{interaction_id}/{interaction_token}/callback'
+  ) {
+    return 'webhook'
+  }
+  return 'bot'
+}
+
+function responseContract(
+  entry: LegacySpecEndpoint,
+  status: number
+): Pick<SpecSuccessBranch, 'body' | 'contentType'> {
+  if (status === 204) return { body: 'empty', contentType: null }
+  if (entry.specPath.endsWith('/widget.png')) {
+    return { body: 'png', contentType: 'image/png' }
+  }
+  if (entry.specPath.endsWith('/target-users')) {
+    return { body: 'csv', contentType: 'text/csv' }
+  }
+  return { body: 'json', contentType: 'application/json' }
+}
+
+function alternateRequest(
+  entry: LegacySpecEndpoint,
+  status: number,
+  fixture: ContractFixture
+): ContractRequest {
+  const request = entry.request(fixture)
+  const key = `${entry.method} ${entry.specPath}`
+  if (key === 'post /webhooks/{webhook_id}/{webhook_token}' && status === 204) {
+    return { ...request, path: request.path.replace('?wait=true', '') }
+  }
+  if (key === 'post /channels/{channel_id}/typing' && status === 200) {
+    return { ...request, path: `${request.path}?with_response=true` }
+  }
+  if (key === 'post /channels/{channel_id}/invites' && status === 204) {
+    return {
+      ...request,
+      init: {
+        ...request.init,
+        body: JSON.stringify({ max_age: 3600, unique: false }),
+      },
+    }
+  }
+  if (
+    key === 'patch /guilds/{guild_id}/members/{user_id}' &&
+    status === 204
+  ) {
+    return {
+      ...request,
+      init: { ...request.init, body: JSON.stringify({ roles: [] }) },
+    }
+  }
+  if (
+    key === 'post /interactions/{interaction_id}/{interaction_token}/callback' &&
+    status === 200
+  ) {
+    return { ...request, path: `${request.path}?with_response=true` }
+  }
+  if (key === 'get /channels/{channel_id}/threads/search' && status === 202) {
+    return { ...request, path: `${request.path}?index=building` }
+  }
+  if (
+    key === 'put /channels/{channel_id}/recipients/{user_id}' &&
+    status === 201
+  ) {
+    return { ...request, path: `${request.path}?with_response=true` }
+  }
+  if (
+    (key === 'post /applications/{application_id}/commands' ||
+      key ===
+        'post /applications/{application_id}/guilds/{guild_id}/commands') &&
+    status === 200
+  ) {
+    return {
+      ...request,
+      init: {
+        ...request.init,
+        body: JSON.stringify({
+          name:
+            key === 'post /applications/{application_id}/commands'
+              ? 'contractcmd'
+              : 'guildcontractcmd',
+          description: 'updated',
+        }),
+      },
+    }
+  }
+  return request
+}
+
+async function assertNetworkIsAvailable({
+  baseUrl,
+}: NetworkAssertionContext): Promise<void> {
+  const response = await fetch(`${baseUrl}/_mock/health`)
+  if (!response.ok) {
+    throw new Error(`Post-request network assertion failed: ${response.status}`)
+  }
+}
+
+const uniqueLegacyEntries = new Map<string, LegacySpecEndpoint>()
+for (const entry of LEGACY_MANIFEST) {
+  const key = `${entry.method} ${entry.specPath}`
+  if (!uniqueLegacyEntries.has(key)) uniqueLegacyEntries.set(key, entry)
+}
+
+/** All currently implemented Fauxcord operations in unique OpenAPI-key form. */
+export const MANIFEST: SpecEndpoint[] = [...uniqueLegacyEntries.values()].map(
+  (entry) => {
+    const key = `${entry.method} ${entry.specPath}`
+    const statuses = MULTI_SUCCESS_STATUSES[key] ?? [entry.successStatus]
+    return {
+      specPath: entry.specPath,
+      method: entry.method,
+      authentication: authenticationFor(entry),
+      createFixture: (factory) => factory.create(),
+      successBranches: statuses.map((status) => ({
+        status,
+        ...responseContract(entry, status),
+        responseSchemaOverride: entry.responseSchemaOverride,
+        request: (fixture) => alternateRequest(entry, status, fixture),
+        assert: assertNetworkIsAvailable,
+      })),
+    }
+  }
+)
+
+const JSON_CONTRACT_KEYS = new Set(
+  LEGACY_MANIFEST.filter((entry) => entry.contractTested).map(
+    (entry) => `${entry.method} ${entry.specPath}`
+  )
+)
+
+/** Existing response contracts retained while the full inventory is implemented. */
 export function getContractTestedEntries(): SpecEndpoint[] {
-  return MANIFEST.filter((e) => e.contractTested)
+  return MANIFEST.filter((entry) =>
+    JSON_CONTRACT_KEYS.has(`${entry.method} ${entry.specPath}`)
+  )
 }
