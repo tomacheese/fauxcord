@@ -28,8 +28,8 @@ importers:
         version: 8.21.1
     devDependencies:
       '@book000/eslint-config':
-        specifier: 1.16.26
-        version: 1.16.26(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+        specifier: 1.16.27
+        version: 1.16.27(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       '@types/better-sqlite3':
         specifier: 9.6.0
         version: 9.6.0
@@ -87,8 +87,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@book000/eslint-config@1.16.26':
-    resolution: {integrity: sha512-SB5hzd7fRDa+eK/zAY9JsCY30Ui8dtLzWJQ9Urrap1mDkTJ+mOyhA2QZV8RgHIDNIzTubfhf7xW5XuqAwD64Fg==}
+  '@book000/eslint-config@1.16.27':
+    resolution: {integrity: sha512-ErQU88JEMWVZuBT8D3YelIPI66M2+cEEtOrsFSfhcfKqy2Et0v33esmHZgLRHOg8NBziwIwwxe5XO7pjIgZJCQ==}
     peerDependencies:
       eslint: 10.8.0
 
@@ -1025,6 +1025,10 @@ packages:
 
   globals@17.8.0:
     resolution: {integrity: sha512-Zz/LMDZScFmkakeL2cTHzf+PbWKdpU3uclqkZT7TjDG58j5WPt0PpA+n9uPI24fZtlw07q0OtEi84K+umsRzqQ==}
+    engines: {node: '>=18'}
+
+  globals@17.9.0:
+    resolution: {integrity: sha512-m/MvAW61QVU5VDNF1Vj8axt016h8w7L5TU1e9zlab7XIttAT2YAlCwl75K1fOqvMM9apmD7lbCIRhpfkhmxhCg==}
     engines: {node: '>=18'}
 
   globalthis@1.0.4:
@@ -1969,13 +1973,13 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@book000/eslint-config@1.16.26(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
+  '@book000/eslint-config@1.16.27(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/parser': 8.65.0(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       eslint: 10.8.0(supports-color@7.2.0)
       eslint-config-prettier: 10.1.8(eslint@10.8.0(supports-color@7.2.0))
       eslint-plugin-unicorn: 72.0.0(eslint@10.8.0(supports-color@7.2.0))
-      globals: 17.8.0
+      globals: 17.9.0
       neostandard: 0.13.0(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
       typescript-eslint: 8.65.0(eslint@10.8.0(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
     transitivePeerDependencies:
@@ -3025,6 +3029,8 @@ snapshots:
   globals@15.15.0: {}
 
   globals@17.8.0: {}
+
+  globals@17.9.0: {}
 
   globalthis@1.0.4:
     dependencies:
