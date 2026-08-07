@@ -37,7 +37,7 @@
     "vitest": "4.1.10"
   },
   "dependencies": {
-    "@hono/node-server": "2.0.12",
+    "@hono/node-server": "2.1.0",
     "better-sqlite3": "13.0.2",
     "discord-api-types": "0.38.52",
     "hono": "4.13.0",
