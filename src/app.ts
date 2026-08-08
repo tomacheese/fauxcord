@@ -23,6 +23,7 @@ import { createSoundboardRoutes } from './routes/soundboard'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createInviteRoutes } from './routes/invites'
 import { createApplicationCommandRoutes } from './routes/application-commands'
+import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
 import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
@@ -138,6 +139,10 @@ export function buildApp(
     // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
     app.route(prefix, createWebhookRoutes(db, config.baseUrl))
     app.route(prefix, createInviteRoutes(db))
+    app.route(
+      prefix,
+      createApplicationRoutes(db, config.baseUrl, config.uploadPath)
+    )
     app.route(prefix, createApplicationCommandRoutes(db))
     app.route(prefix, createInteractionRoutes(db, config.baseUrl))
   }

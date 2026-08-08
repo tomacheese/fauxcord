@@ -28,6 +28,7 @@ import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { createApplicationCommandRoutes } from './routes/application-commands'
+import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
 import { generateSnowflake } from './snowflake'
 import { buildApp } from './app'
@@ -128,6 +129,10 @@ export function createFullTestApp(): FullTestContext {
     app.route(prefix, createSoundboardRoutes())
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
     app.route(prefix, createInviteRoutes(db))
+    app.route(
+      prefix,
+      createApplicationRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH)
+    )
     app.route(prefix, createApplicationCommandRoutes(db))
     app.route(prefix, createInteractionRoutes(db, TEST_BASE_URL))
   }
@@ -154,8 +159,54 @@ export function createContractFixture(db: Database): ContractFixture {
   db.prepare(
     `INSERT INTO oauth2_access_tokens
        (token, client_id, user_id, scope, expires_at)
-     VALUES (?, ?, ?, 'identify applications.commands', datetime('now', '+1 hour'))`
+     VALUES (?, ?, ?, 'identify openid applications.commands applications.entitlements', datetime('now', '+1 hour'))`
   ).run(bearerToken, userId, userId)
+  const applicationId = userId
+  const activityInstanceId = 'contract-activity-instance'
+  db.prepare(
+    `INSERT INTO applications (id, owner_id, name, verify_key)
+     VALUES (?, ?, 'Contract Application', ?)`
+  ).run(applicationId, userId, `verify_${applicationId}`)
+  const applicationEmojiId = generateSnowflake()
+  const deletableApplicationEmojiId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO application_emojis (id, application_id, name, user_id)
+     VALUES (?, ?, 'contract_emoji', ?),
+            (?, ?, 'deletable_emoji', ?)`
+  ).run(
+    applicationEmojiId,
+    applicationId,
+    userId,
+    deletableApplicationEmojiId,
+    applicationId,
+    userId
+  )
+  const skuId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO skus (id, application_id, name, slug)
+     VALUES (?, ?, 'Contract SKU', ?)`
+  ).run(skuId, applicationId, `contract-sku-${skuId}`)
+  const entitlementId = generateSnowflake()
+  const deletableEntitlementId = generateSnowflake()
+  const consumableEntitlementId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO entitlements
+       (id, sku_id, application_id, user_id, type)
+     VALUES (?, ?, ?, ?, 8), (?, ?, ?, ?, 8), (?, ?, ?, ?, 8)`
+  ).run(
+    entitlementId,
+    skuId,
+    applicationId,
+    userId,
+    deletableEntitlementId,
+    skuId,
+    applicationId,
+    userId,
+    consumableEntitlementId,
+    skuId,
+    applicationId,
+    userId
+  )
   const guildId = seedGuild(db, token, '666666666666666666')
   db.prepare(
     `INSERT OR IGNORE INTO roles
@@ -289,6 +340,14 @@ export function createContractFixture(db: Database): ContractFixture {
     token,
     userId,
     bearerToken,
+    applicationId,
+    activityInstanceId,
+    applicationEmojiId,
+    deletableApplicationEmojiId,
+    skuId,
+    entitlementId,
+    deletableEntitlementId,
+    consumableEntitlementId,
     guildId,
     channelId,
     unindexedChannelId,

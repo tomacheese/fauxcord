@@ -240,6 +240,39 @@ describe('Application Commands routes (guild-scoped)', () => {
     expect(body).toHaveLength(1)
   })
 
+  it('keeps global and guild command lists distinct after bulk overwrite', async () => {
+    const headers = {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    }
+    await app.request(`/applications/${applicationId}/commands`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'global', description: 'global command' }),
+    })
+    await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify([
+          { name: 'guild-only', description: 'guild command' },
+        ]),
+      }
+    )
+
+    const global = await app.request(
+      `/applications/${applicationId}/commands`,
+      { headers: { Authorization: token } }
+    )
+    const guild = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      { headers: { Authorization: token } }
+    )
+    expect(await global.json()).toMatchObject([{ name: 'global' }])
+    expect(await guild.json()).toMatchObject([{ name: 'guild-only' }])
+  })
+
   it('rejects a bulk-overwrite payload with a duplicate name/type with 400', async () => {
     const res = await app.request(
       `/applications/${applicationId}/guilds/${guildId}/commands`,

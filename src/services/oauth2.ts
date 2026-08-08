@@ -44,8 +44,65 @@ export interface OAuth2MeResponse {
   }
 }
 
+/** JSON Web Key Set returned by the local discovery endpoint. */
+export interface OAuth2KeysResponse {
+  keys: {
+    kty: string
+    use: string
+    kid: string
+    n: string
+    e: string
+    alg: string
+  }[]
+}
+
+/** OpenID Connect user information returned for a local Bearer token. */
+export interface OpenIdUserInfoResponse {
+  sub: string
+  preferred_username: string
+}
+
 /** Token expiration (7 days, in seconds) */
 const TOKEN_EXPIRES_IN = 604_800
+
+/** Returns the deterministic local public signing key description. */
+export function getPublicKeys(): OAuth2KeysResponse {
+  return {
+    keys: [
+      {
+        kty: 'RSA',
+        use: 'sig',
+        kid: 'fauxcord-local-key',
+        n: 'ZmF1eGNvcmQtbG9jYWwtbW9kdWx1cw',
+        e: 'AQAB',
+        alg: 'RS256',
+      },
+    ],
+  }
+}
+
+/** Retrieves OpenID identity for an unexpired token carrying `openid`. */
+export function getOpenIdUserInfo(
+  db: Database,
+  token: string
+): OpenIdUserInfoResponse | null {
+  const accessToken = db
+    .prepare(
+      `SELECT user_id, scope FROM oauth2_access_tokens
+       WHERE token = ? AND datetime(expires_at) > datetime('now')`
+    )
+    .get(token) as { user_id: string | null; scope: string } | undefined
+  if (
+    !accessToken?.user_id ||
+    !accessToken.scope.split(' ').includes('openid')
+  ) {
+    return null
+  }
+  const user = db
+    .prepare('SELECT id, username FROM users WHERE id = ?')
+    .get(accessToken.user_id) as { id: string; username: string } | undefined
+  return user ? { sub: user.id, preferred_username: user.username } : null
+}
 
 /**
  * Generates a random token string.

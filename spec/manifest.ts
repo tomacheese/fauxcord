@@ -59,6 +59,22 @@ export interface ContractFixture {
   userId: string
   /** Local OAuth2 Bearer token without the scheme prefix. */
   bearerToken: string
+  /** Seeded application ID (equal to the bot user ID in Fauxcord). */
+  applicationId: string
+  /** Seeded application activity instance ID. */
+  activityInstanceId: string
+  /** Seeded application emoji ID. */
+  applicationEmojiId: string
+  /** Application emoji reserved for destructive request branches. */
+  deletableApplicationEmojiId: string
+  /** Seeded application SKU ID. */
+  skuId: string
+  /** Seeded stable application entitlement ID. */
+  entitlementId: string
+  /** Application entitlement reserved for deletion. */
+  deletableEntitlementId: string
+  /** Application entitlement reserved for consumption. */
+  consumableEntitlementId: string
   /** Seeded guild ID */
   guildId: string
   /** Seeded text channel ID */
@@ -876,6 +892,220 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     request: () => ({ path: '/api/v10/applications/@me' }),
   },
   {
+    specPath: '/applications/@me',
+    method: 'patch',
+    successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
+    request: () => ({
+      path: '/api/v10/applications/@me',
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: { default: 'Updated current application' },
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}',
+    method: 'get',
+    successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}',
+    method: 'patch',
+    successStatus: 200,
+    responseSchemaOverride: 'PrivateApplicationResponse',
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: { default: 'Updated application by ID' },
+        }),
+      },
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/activity-instances/{instance_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/activity-instances/${f.activityInstanceId}`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/attachment',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => {
+      const form = new FormData()
+      form.set(
+        'file',
+        new File(['contract application attachment'], 'contract.txt', {
+          type: 'text/plain',
+        })
+      )
+      return {
+        path: `/api/v10/applications/${f.applicationId}/attachment`,
+        init: { method: 'POST', body: form },
+      }
+    },
+  },
+  {
+    specPath: '/applications/{application_id}/emojis',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/emojis`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/emojis',
+    method: 'post',
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/emojis`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'created_emoji',
+          image: 'data:image/png;base64,aGVsbG8=',
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/emojis/{emoji_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/emojis/${f.applicationEmojiId}`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/emojis/{emoji_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/emojis/${f.applicationEmojiId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'renamed_emoji' }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/emojis/{emoji_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/emojis/${f.deletableApplicationEmojiId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/entitlements',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/entitlements?user_id=${f.userId}&sku_ids=${f.skuId}`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/entitlements',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/entitlements`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sku_id: f.skuId,
+          owner_id: f.userId,
+          owner_type: 2,
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/entitlements/{entitlement_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/entitlements/${f.entitlementId}`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/entitlements/{entitlement_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/entitlements/${f.deletableEntitlementId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath:
+      '/applications/{application_id}/entitlements/{entitlement_id}/consume',
+    method: 'post',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/entitlements/${f.consumableEntitlementId}/consume`,
+      init: { method: 'POST' },
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/role-connections/metadata',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/role-connections/metadata`,
+    }),
+  },
+  {
+    specPath: '/applications/{application_id}/role-connections/metadata',
+    method: 'put',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/applications/${f.applicationId}/role-connections/metadata`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([
+          {
+            type: 2,
+            key: 'score',
+            name: 'Score',
+            description: 'Contract score',
+          },
+        ]),
+      },
+    }),
+  },
+  {
+    specPath: '/oauth2/keys',
+    method: 'get',
+    successStatus: 200,
+    request: () => ({ path: '/api/v10/oauth2/keys' }),
+  },
+  {
+    specPath: '/oauth2/userinfo',
+    method: 'get',
+    successStatus: 200,
+    request: () => ({ path: '/api/v10/oauth2/userinfo' }),
+  },
+  {
     specPath: '/oauth2/@me',
     method: 'get',
     // Requires a full OAuth2 Authorization Code flow to obtain a Bearer token.
@@ -1457,8 +1687,15 @@ const MULTI_SUCCESS_STATUSES: Readonly<Record<string, readonly number[]>> = {
 }
 
 function authenticationFor(entry: LegacySpecEndpoint): ContractAuthentication {
-  if (entry.specPath === '/gateway') return 'public'
-  if (entry.specPath === '/oauth2/@me') return 'bearer'
+  if (entry.specPath === '/gateway' || entry.specPath === '/oauth2/keys') {
+    return 'public'
+  }
+  if (
+    entry.specPath === '/oauth2/@me' ||
+    entry.specPath === '/oauth2/userinfo'
+  ) {
+    return 'bearer'
+  }
   if (
     entry.specPath.startsWith('/webhooks/{webhook_id}/{webhook_token}') ||
     entry.specPath ===
@@ -1709,7 +1946,12 @@ function captureMutationEffect(
   status: number,
   fixture: ContractFixture
 ): void {
-  if (entry.method === 'get') return
+  if (
+    entry.method === 'get' ||
+    entry.specPath === '/applications/{application_id}/attachment'
+  ) {
+    return
+  }
   const key = `${entry.method} ${entry.specPath} ${status}`
   // eslint-disable-next-line @typescript-eslint/no-use-before-define -- Capture setup stays before the exhaustive effect catalog.
   const effect = mutationEffectFor(key, fixture)
@@ -2057,6 +2299,100 @@ function mutationEffectFor(
          FROM bots b JOIN users u ON u.id = b.user_id WHERE b.token = ?`,
         [f.token],
         { bot_username: 'UpdatedBot', user_username: 'UpdatedBot' }
+      )
+    }
+    case 'patch /applications/@me 200': {
+      return rowEffect(
+        f,
+        'current application description to equal the requested value',
+        'SELECT description FROM applications WHERE id = ?',
+        [f.applicationId],
+        { description: 'Updated current application' }
+      )
+    }
+    case 'patch /applications/{application_id} 200': {
+      return rowEffect(
+        f,
+        'target application description to equal the requested value',
+        'SELECT description FROM applications WHERE id = ?',
+        [f.applicationId],
+        { description: 'Updated application by ID' }
+      )
+    }
+    case 'post /applications/{application_id}/emojis 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'an application emoji with the requested name to be created',
+        `SELECT COUNT(*) AS count FROM application_emojis
+         WHERE application_id = ? AND name = ?`,
+        [f.applicationId, 'created_emoji']
+      )
+    }
+    case 'patch /applications/{application_id}/emojis/{emoji_id} 200': {
+      return rowEffect(
+        f,
+        'target application emoji name to equal renamed_emoji',
+        `SELECT name FROM application_emojis
+         WHERE application_id = ? AND id = ?`,
+        [f.applicationId, f.applicationEmojiId],
+        { name: 'renamed_emoji' }
+      )
+    }
+    case 'delete /applications/{application_id}/emojis/{emoji_id} 204': {
+      return rowEffect(
+        f,
+        'target application emoji to be absent',
+        `SELECT id FROM application_emojis
+         WHERE application_id = ? AND id = ?`,
+        [f.applicationId, f.deletableApplicationEmojiId],
+        null
+      )
+    }
+    case 'post /applications/{application_id}/entitlements 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'an application entitlement for the requested SKU and user to be created',
+        `SELECT COUNT(*) AS count FROM entitlements
+         WHERE application_id = ? AND sku_id = ? AND user_id = ?`,
+        [f.applicationId, f.skuId, f.userId]
+      )
+    }
+    case 'delete /applications/{application_id}/entitlements/{entitlement_id} 204': {
+      return rowEffect(
+        f,
+        'target application entitlement to be absent',
+        `SELECT id FROM entitlements
+         WHERE application_id = ? AND id = ?`,
+        [f.applicationId, f.deletableEntitlementId],
+        null
+      )
+    }
+    case 'post /applications/{application_id}/entitlements/{entitlement_id}/consume 204': {
+      return rowEffect(
+        f,
+        'target application entitlement to be consumed with a consumption record',
+        `SELECT e.consumed,
+                EXISTS(SELECT 1 FROM entitlement_consumptions c
+                       WHERE c.entitlement_id = e.id) AS consumption_exists
+         FROM entitlements e WHERE e.application_id = ? AND e.id = ?`,
+        [f.applicationId, f.consumableEntitlementId],
+        { consumed: 1, consumption_exists: 1 }
+      )
+    }
+    case 'put /applications/{application_id}/role-connections/metadata 200': {
+      return rowEffect(
+        f,
+        'application role connection metadata to equal the replacement item',
+        `SELECT type, key, name, description
+         FROM application_role_connection_metadata
+         WHERE application_id = ?`,
+        [f.applicationId],
+        {
+          type: 2,
+          key: 'score',
+          name: 'Score',
+          description: 'Contract score',
+        }
       )
     }
     case 'patch /webhooks/{webhook_id} 200': {
@@ -2423,6 +2759,27 @@ function createOperationAssertion(
     }
     if (new URL(response.url).origin !== baseUrl) {
       throw new Error(`${label} did not use the real contract server`)
+    }
+
+    if (entry.specPath === '/applications/{application_id}/attachment') {
+      const body = (await response.json()) as {
+        attachment?: { url?: unknown }
+      }
+      if (typeof body.attachment?.url !== 'string') {
+        throw new Error(`${label} did not return an attachment URL`)
+      }
+      const assetUrl = new URL(body.attachment.url)
+      if (assetUrl.origin !== baseUrl) {
+        throw new Error(`${label} returned an attachment outside the test server`)
+      }
+      const asset = await fetch(assetUrl)
+      if (
+        asset.status !== 200 ||
+        (await asset.text()) !== 'contract application attachment'
+      ) {
+        throw new Error(`${label} did not persist the uploaded attachment`)
+      }
+      return
     }
 
     if (entry.method === 'get') return
