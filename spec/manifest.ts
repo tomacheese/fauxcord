@@ -30,10 +30,6 @@
  *   `GET/POST /oauth2/authorize`) — These are documented separately from the main
  *   OpenAPI spec and are not present in `specs/openapi.json`.
  *
- * - `GET /oauth2/@me` — Requires a full OAuth2 Authorization Code flow to obtain a valid
- *   Bearer token; impractical to exercise in an isolated unit test without significant
- *   test harness work.
- *
  * ## Now contract-tested (previously excluded)
  *
  * `GET /guilds/{guild_id}`, `PATCH /guilds/{guild_id}`, `GET /applications/@me`,
@@ -57,10 +53,20 @@ export interface ContractFixture {
   token: string
   /** Bot user ID */
   userId: string
+  /** Local OAuth2 Bearer token without the scheme prefix. */
+  bearerToken: string
   /** Seeded guild ID */
   guildId: string
   /** Seeded text channel ID */
   channelId: string
+  /** Seeded announcement channel ID. */
+  announcementChannelId: string
+  /** Seeded announcement-channel message ID. */
+  announcementMessageId: string
+  /** Seeded voice channel ID. */
+  voiceChannelId: string
+  /** Seeded group-DM channel ID. */
+  groupDmChannelId: string
   /**
    * Seeded message ID — authored by the bot user.
    * Used for GET/PATCH on channel message endpoints where the bot must own the message.
@@ -68,13 +74,13 @@ export interface ContractFixture {
   messageId: string
   /** Message reserved for destructive request branches. */
   deletableMessageId: string
+  /** Message containing a seeded poll. */
+  pollMessageId: string
   /**
    * Seeded webhook message ID — authored by the webhook user.
    * Used for GET/PATCH on webhook message endpoints.
    */
   webhookMessageId: string
-  /** Original webhook message reserved for destructive request branches. */
-  deletableOriginalWebhookMessageId: string
   /** Seeded webhook ID */
   webhookId: string
   /** Seeded webhook token */
@@ -105,10 +111,10 @@ export interface ContractFixture {
   interactionId: string
   /** Seeded interaction token */
   interactionToken: string
-  /** Entitlement ID reserved for a destructive branch once seeded. */
-  deletableEntitlementId: string
-  /** Lobby ID reserved for a destructive branch once seeded. */
-  deletableLobbyId: string
+  /** Interaction ID with an existing original response. */
+  originalInteractionId: string
+  /** Interaction token with an existing original response. */
+  originalInteractionToken: string
 }
 
 /** Authentication mechanism required by an operation. */
@@ -164,7 +170,6 @@ export interface SpecEndpoint {
 interface LegacySpecEndpoint {
   specPath: string
   method: SpecEndpoint['method']
-  contractTested: boolean
   successStatus: number
   responseSchemaOverride?: string
   request: (fixture: ContractFixture) => ContractRequest
@@ -177,7 +182,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildChannelResponse',
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}` }),
@@ -185,7 +189,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildChannelResponse',
     request: (f) => ({
@@ -198,12 +201,8 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    // DELETE returns the deleted channel (200), but is excluded from contract tests
-    // because it is destructive: deleting the shared fixture channel cascades to delete
-    // all messages and webhooks in that channel, breaking subsequent tests in the same run.
     specPath: '/channels/{channel_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 200,
     responseSchemaOverride: 'GuildChannelResponse',
     request: (f) => ({
@@ -214,14 +213,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/messages` }),
   },
   {
     specPath: '/channels/{channel_id}/messages',
     method: 'post',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages`,
@@ -235,7 +232,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}`,
@@ -244,7 +240,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}`,
@@ -258,31 +253,30 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}`,
+      path: `/api/v10/channels/${f.channelId}/messages/${f.deletableMessageId}`,
       init: { method: 'DELETE' },
     }),
   },
   {
     specPath: '/channels/{channel_id}/messages/bulk-delete',
     method: 'post',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/bulk-delete`,
       init: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [f.messageId] }),
+        body: JSON.stringify({
+          messages: [f.messageId, f.deletableMessageId],
+        }),
       },
     }),
   },
   {
     specPath: '/channels/{channel_id}/messages/pins',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/pins`,
@@ -291,7 +285,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/typing',
     method: 'post',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/typing`,
@@ -301,7 +294,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/pins/{message_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/pins/${f.messageId}`,
@@ -311,7 +303,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/pins/{message_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/pins/${f.messageId}`,
@@ -321,7 +312,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions/%F0%9F%91%8D`,
@@ -330,7 +320,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions/%F0%9F%91%8D/@me`,
@@ -340,7 +329,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions/%F0%9F%91%8D/@me`,
@@ -350,7 +338,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions/%F0%9F%91%8D/${f.userId}`,
@@ -360,7 +347,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/reactions',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions`,
@@ -370,14 +356,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/pins',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/pins` }),
   },
   {
     specPath: '/channels/{channel_id}/pins/{message_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/pins/${f.messageId}`,
@@ -387,7 +371,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/pins/{message_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/pins/${f.messageId}`,
@@ -397,7 +380,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/webhooks',
     method: 'get',
-    contractTested: true,
     // Response is an array of oneOf webhook types; the mock only ever returns
     // the incoming-webhook branch, so pin the schema to validate each item.
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
@@ -407,7 +389,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/webhooks',
     method: 'post',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
     request: (f) => ({
@@ -423,7 +404,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // 204 response, nothing to validate against the schema.
     specPath: '/channels/{channel_id}/permissions/{overwrite_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/permissions/${f.roleId}`,
@@ -438,7 +418,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // 204 response, nothing to validate against the schema.
     specPath: '/channels/{channel_id}/permissions/{overwrite_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/permissions/${f.roleId}`,
@@ -450,7 +429,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // the guild-invite branch, so pin the schema to validate each item.
     specPath: '/channels/{channel_id}/invites',
     method: 'get',
-    contractTested: true,
     responseSchemaOverride: 'GuildInviteResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/channels/${f.channelId}/invites` }),
@@ -458,7 +436,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/invites',
     method: 'post',
-    contractTested: true,
     successStatus: 200,
     // The spec response is a oneOf; the mock always returns the guild-invite
     // branch, so pin the schema to GuildInviteResponse.
@@ -478,7 +455,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/invites/{code}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildInviteResponse',
     request: (f) => ({ path: `/api/v10/invites/${f.inviteCode}` }),
@@ -489,7 +465,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // contract test that runs against the shared inviteCode fixture.
     specPath: '/invites/{code}',
     method: 'delete',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildInviteResponse',
     request: (f) => ({
@@ -503,7 +478,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // pattern as the existing /channels/{channel_id}/invites entry above).
     specPath: '/guilds/{guild_id}/invites',
     method: 'get',
-    contractTested: true,
     responseSchemaOverride: 'GuildInviteResponse',
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/invites` }),
@@ -515,7 +489,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // the route-level tests in src/routes/invites.test.ts.
     specPath: '/invites/{code}/target-users',
     method: 'get',
-    contractTested: false,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/invites/${f.inviteCode}/target-users`,
@@ -525,7 +498,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // 204 response, only the status code is asserted.
     specPath: '/invites/{code}/target-users',
     method: 'put',
-    contractTested: true,
     successStatus: 204,
     request: (f) => {
       const formData = new FormData()
@@ -544,7 +516,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/invites/{code}/target-users/job-status',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/invites/${f.inviteCode}/target-users/job-status`,
@@ -556,14 +527,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}` }),
   },
   {
     specPath: '/guilds/{guild_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildResponse',
     request: (f) => ({
@@ -578,7 +547,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/channels',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildChannelResponse',
     // spec says array of GuildChannelResponse — validate each item
@@ -587,7 +555,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/channels',
     method: 'post',
-    contractTested: true,
     successStatus: 201,
     responseSchemaOverride: 'GuildChannelResponse',
     request: (f) => ({
@@ -602,14 +569,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/members',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/members` }),
   },
   {
     specPath: '/guilds/{guild_id}/members/{user_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}`,
@@ -618,7 +583,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/members/@me',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/members/@me`,
@@ -632,7 +596,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/members/{user_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}`,
@@ -646,7 +609,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/members/{user_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}`,
@@ -656,14 +618,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/roles',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/roles` }),
   },
   {
     specPath: '/guilds/{guild_id}/roles',
     method: 'post',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/roles`,
@@ -677,7 +637,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/roles/{role_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/roles/${f.roleId}`,
@@ -691,7 +650,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/roles/{role_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/roles/${f.roleId}`,
@@ -701,14 +659,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/emojis',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/emojis` }),
   },
   {
     specPath: '/guilds/{guild_id}/emojis',
     method: 'post',
-    contractTested: true,
     successStatus: 201,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/emojis`,
@@ -725,7 +681,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/emojis/{emoji_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
@@ -734,7 +689,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/emojis/{emoji_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
@@ -746,10 +700,8 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    // contractTested: false — 204 response, nothing to validate against the schema
     specPath: '/guilds/{guild_id}/emojis/{emoji_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/emojis/${f.emojiId}`,
@@ -759,7 +711,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/bans',
     method: 'get',
-    contractTested: true,
     // spec response is type ["array","null"] of GuildBanResponse — validated per-item
     successStatus: 200,
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/bans` }),
@@ -767,7 +718,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/bans/{user_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
@@ -776,7 +726,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/bans/{user_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
@@ -786,7 +735,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/bans/{user_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
@@ -794,11 +742,9 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    // contractTested: false — 204 response, nothing to validate against the schema
     // (consistent with the other 204 role endpoint above).
     specPath: '/guilds/{guild_id}/members/{user_id}/roles/{role_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
@@ -806,11 +752,9 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    // contractTested: false — 204 response, nothing to validate against the schema
     // (consistent with the other 204 role endpoint above).
     specPath: '/guilds/{guild_id}/members/{user_id}/roles/{role_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
@@ -820,7 +764,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/guilds/{guild_id}/webhooks',
     method: 'get',
-    contractTested: true,
     // Same as channel webhooks: mock returns only the incoming-webhook branch.
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
     successStatus: 200,
@@ -832,14 +775,12 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/gateway',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: () => ({ path: '/api/v10/gateway' }),
   },
   {
     specPath: '/gateway/bot',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: () => ({ path: '/api/v10/gateway/bot' }),
   },
@@ -849,7 +790,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/soundboard-default-sounds',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: () => ({ path: '/api/v10/soundboard-default-sounds' }),
   },
@@ -859,7 +799,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/users/@me',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'UserPIIResponse',
     request: () => ({ path: '/api/v10/users/@me' }),
@@ -867,7 +806,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/users/@me',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'UserPIIResponse',
     request: () => ({
@@ -882,7 +820,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/users/{user_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'UserResponse',
     request: (f) => ({ path: `/api/v10/users/${f.userId}` }),
@@ -890,7 +827,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/users/@me/guilds',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'MyGuildResponse',
     // Returns an array; each item validated against MyGuildResponse
@@ -902,7 +838,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/oauth2/applications/@me',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'PrivateApplicationResponse',
     request: () => ({ path: '/api/v10/oauth2/applications/@me' }),
@@ -912,7 +847,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // drift-detected and contract-tested (previously missing from the manifest).
     specPath: '/applications/@me',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'PrivateApplicationResponse',
     request: () => ({ path: '/api/v10/applications/@me' }),
@@ -920,7 +854,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/oauth2/@me',
     method: 'get',
-    contractTested: false,
     // Requires a full OAuth2 Authorization Code flow to obtain a Bearer token.
     successStatus: 200,
     request: () => ({ path: '/api/v10/oauth2/@me' }),
@@ -931,7 +864,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
     request: (f) => ({ path: `/api/v10/webhooks/${f.webhookId}` }),
@@ -939,7 +871,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
     request: (f) => ({
@@ -954,7 +885,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/webhooks/${f.webhookId}`,
@@ -964,7 +894,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
     request: (f) => ({
@@ -974,7 +903,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}',
     method: 'post',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'MessageResponse',
     request: (f) => ({
@@ -989,7 +917,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'GuildIncomingWebhookResponse',
     request: (f) => ({
@@ -1004,7 +931,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}`,
@@ -1014,7 +940,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'MessageResponse',
     // webhookMessageId is authored by the webhook user (required for webhook message routes)
@@ -1025,7 +950,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'MessageResponse',
     request: (f) => ({
@@ -1040,7 +964,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/messages/${f.webhookMessageId}`,
@@ -1052,7 +975,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/commands',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/commands`,
@@ -1061,7 +983,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/commands',
     method: 'post',
-    contractTested: true,
     successStatus: 201,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/commands`,
@@ -1075,7 +996,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/commands',
     method: 'put',
-    contractTested: false,
     // Bulk overwrite is destructive to fixture state shared across tests;
     // covered by src/routes/application-commands.test.ts instead.
     successStatus: 200,
@@ -1091,7 +1011,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/commands/{command_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/commands/${f.commandId}`,
@@ -1100,7 +1019,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/commands/{command_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/commands/${f.commandId}`,
@@ -1114,12 +1032,9 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/commands/{command_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
-    // Destructive; not run against the shared fixture command to avoid
-    // breaking other tests in this suite that rely on f.commandId existing.
     request: (f) => ({
-      path: `/api/v10/applications/${f.userId}/commands/nonexistent-for-contract`,
+      path: `/api/v10/applications/${f.userId}/commands/${f.commandId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -1127,7 +1042,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/guilds/{guild_id}/commands',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands`,
@@ -1136,7 +1050,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/guilds/{guild_id}/commands',
     method: 'post',
-    contractTested: true,
     successStatus: 201,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands`,
@@ -1150,7 +1063,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/applications/{application_id}/guilds/{guild_id}/commands',
     method: 'put',
-    contractTested: false,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands`,
@@ -1165,7 +1077,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     specPath:
       '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}`,
@@ -1175,7 +1086,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     specPath:
       '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}',
     method: 'patch',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}`,
@@ -1190,10 +1100,9 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     specPath:
       '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/nonexistent-for-contract`,
+      path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -1202,7 +1111,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     specPath:
       '/applications/{application_id}/guilds/{guild_id}/commands/permissions',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/permissions`,
@@ -1212,7 +1120,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     specPath:
       '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}/permissions`,
@@ -1222,7 +1129,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     specPath:
       '/applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions',
     method: 'put',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/applications/${f.userId}/guilds/${f.guildId}/commands/${f.guildCommandId}/permissions`,
@@ -1239,7 +1145,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/interactions/{interaction_id}/{interaction_token}/callback',
     method: 'post',
-    contractTested: false,
     // 204 No Content — no response body schema to validate.
     successStatus: 204,
     request: (f) => ({
@@ -1258,7 +1163,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     // execute entry above (there is no distinct openapi path for this).
     specPath: '/webhooks/{webhook_id}/{webhook_token}',
     method: 'post',
-    contractTested: true,
     successStatus: 200,
     responseSchemaOverride: 'MessageResponse',
     request: (f) => ({
@@ -1273,7 +1177,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}',
     method: 'get',
-    contractTested: false,
     // Depends on a message created by the followup POST above, whose ID is
     // not deterministic ahead of time within this fixture; covered by
     // src/routes/webhooks.test.ts instead.
@@ -1285,12 +1188,9 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/messages/@original',
     method: 'get',
-    contractTested: false,
-    // Requires a prior type-4 callback to populate initial_response_message_id;
-    // covered by src/routes/webhooks.test.ts instead.
     successStatus: 200,
     request: (f) => ({
-      path: `/api/v10/webhooks/${f.userId}/${f.interactionToken}/messages/@original`,
+      path: `/api/v10/webhooks/${f.userId}/${f.originalInteractionToken}/messages/@original`,
     }),
   },
 
@@ -1298,7 +1198,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/threads',
     method: 'post',
-    contractTested: true,
     successStatus: 201,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/threads`,
@@ -1312,7 +1211,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/threads',
     method: 'post',
-    contractTested: true,
     successStatus: 201,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/threads`,
@@ -1326,7 +1224,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/thread-members',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.threadId}/thread-members`,
@@ -1335,7 +1232,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/thread-members/{user_id}',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.threadId}/thread-members/${f.userId}`,
@@ -1344,7 +1240,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/thread-members/@me',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.threadId}/thread-members/@me`,
@@ -1354,7 +1249,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/thread-members/@me',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.threadId}/thread-members/@me`,
@@ -1364,7 +1258,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/thread-members/{user_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.threadId}/thread-members/${f.memberId}`,
@@ -1374,7 +1267,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/thread-members/{user_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f) => ({
       path: `/api/v10/channels/${f.threadId}/thread-members/${f.memberId}`,
@@ -1384,7 +1276,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/threads/archived/public',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/threads/archived/public`,
@@ -1393,7 +1284,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/threads/archived/private',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/threads/archived/private`,
@@ -1402,7 +1292,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/users/@me/threads/archived/private',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/users/@me/threads/archived/private`,
@@ -1411,7 +1300,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/threads/search',
     method: 'get',
-    contractTested: true,
     successStatus: 200,
     request: (f) => ({
       path: `/api/v10/channels/${f.channelId}/threads/search`,
@@ -1423,20 +1311,18 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/messages/{message_id}/crosspost',
     method: 'post',
-    contractTested: false,
     successStatus: 200,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/crosspost`,
+      path: `/api/v10/channels/${f.announcementChannelId}/messages/${f.announcementMessageId}/crosspost`,
       init: { method: 'POST' },
     }),
   },
   {
     specPath: '/channels/{channel_id}/followers',
     method: 'post',
-    contractTested: false,
     successStatus: 200,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/followers`,
+      path: `/api/v10/channels/${f.announcementChannelId}/followers`,
       init: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1447,10 +1333,9 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/voice-status',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/voice-status`,
+      path: `/api/v10/channels/${f.voiceChannelId}/voice-status`,
       init: {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -1461,27 +1346,24 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/recipients/{user_id}',
     method: 'put',
-    contractTested: false,
     successStatus: 204,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/recipients/${f.memberId}`,
+      path: `/api/v10/channels/${f.groupDmChannelId}/recipients/${f.memberId}`,
       init: { method: 'PUT' },
     }),
   },
   {
     specPath: '/channels/{channel_id}/recipients/{user_id}',
     method: 'delete',
-    contractTested: false,
     successStatus: 204,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/recipients/${f.memberId}`,
+      path: `/api/v10/channels/${f.groupDmChannelId}/recipients/${f.memberId}`,
       init: { method: 'DELETE' },
     }),
   },
   {
     specPath: '/users/@me/channels',
     method: 'post',
-    contractTested: false,
     successStatus: 200,
     request: (f: ContractFixture) => ({
       path: '/api/v10/users/@me/channels',
@@ -1495,27 +1377,24 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/channels/{channel_id}/polls/{message_id}/answers/{answer_id}',
     method: 'get',
-    contractTested: false,
     successStatus: 200,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/polls/${f.messageId}/answers/1`,
+      path: `/api/v10/channels/${f.channelId}/polls/${f.pollMessageId}/answers/1`,
       init: {},
     }),
   },
   {
     specPath: '/channels/{channel_id}/polls/{message_id}/expire',
     method: 'post',
-    contractTested: false,
     successStatus: 200,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.channelId}/polls/${f.messageId}/expire`,
+      path: `/api/v10/channels/${f.channelId}/polls/${f.pollMessageId}/expire`,
       init: { method: 'POST' },
     }),
   },
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/github',
     method: 'post',
-    contractTested: false,
     successStatus: 204,
     request: (f: ContractFixture) => ({
       path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/github`,
@@ -1529,7 +1408,6 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
   {
     specPath: '/webhooks/{webhook_id}/{webhook_token}/slack',
     method: 'post',
-    contractTested: false,
     successStatus: 200,
     request: (f: ContractFixture) => ({
       path: `/api/v10/webhooks/${f.webhookId}/${f.webhookToken}/slack`,
@@ -1543,15 +1421,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
 ]
 
 const MULTI_SUCCESS_STATUSES: Readonly<Record<string, readonly number[]>> = {
-  'post /channels/{channel_id}/typing': [204, 200],
-  'post /channels/{channel_id}/invites': [200, 204],
-  'patch /guilds/{guild_id}/members/{user_id}': [200, 204],
   'post /webhooks/{webhook_id}/{webhook_token}': [200, 204],
-  'post /applications/{application_id}/commands': [201, 200],
-  'post /applications/{application_id}/guilds/{guild_id}/commands': [201, 200],
-  'post /interactions/{interaction_id}/{interaction_token}/callback': [204, 200],
-  'get /channels/{channel_id}/threads/search': [200, 202],
-  'put /channels/{channel_id}/recipients/{user_id}': [204, 201],
 }
 
 function authenticationFor(entry: LegacySpecEndpoint): ContractAuthentication {
@@ -1591,71 +1461,52 @@ function alternateRequest(
   if (key === 'post /webhooks/{webhook_id}/{webhook_token}' && status === 204) {
     return { ...request, path: request.path.replace('?wait=true', '') }
   }
-  if (key === 'post /channels/{channel_id}/typing' && status === 200) {
-    return { ...request, path: `${request.path}?with_response=true` }
-  }
-  if (key === 'post /channels/{channel_id}/invites' && status === 204) {
-    return {
-      ...request,
-      init: {
-        ...request.init,
-        body: JSON.stringify({ max_age: 3600, unique: false }),
-      },
-    }
-  }
-  if (
-    key === 'patch /guilds/{guild_id}/members/{user_id}' &&
-    status === 204
-  ) {
-    return {
-      ...request,
-      init: { ...request.init, body: JSON.stringify({ roles: [] }) },
-    }
-  }
-  if (
-    key === 'post /interactions/{interaction_id}/{interaction_token}/callback' &&
-    status === 200
-  ) {
-    return { ...request, path: `${request.path}?with_response=true` }
-  }
-  if (key === 'get /channels/{channel_id}/threads/search' && status === 202) {
-    return { ...request, path: `${request.path}?index=building` }
-  }
-  if (
-    key === 'put /channels/{channel_id}/recipients/{user_id}' &&
-    status === 201
-  ) {
-    return { ...request, path: `${request.path}?with_response=true` }
-  }
-  if (
-    (key === 'post /applications/{application_id}/commands' ||
-      key ===
-        'post /applications/{application_id}/guilds/{guild_id}/commands') &&
-    status === 200
-  ) {
-    return {
-      ...request,
-      init: {
-        ...request.init,
-        body: JSON.stringify({
-          name:
-            key === 'post /applications/{application_id}/commands'
-              ? 'contractcmd'
-              : 'guildcontractcmd',
-          description: 'updated',
-        }),
-      },
-    }
-  }
   return request
 }
 
-async function assertNetworkIsAvailable({
-  baseUrl,
-}: NetworkAssertionContext): Promise<void> {
-  const response = await fetch(`${baseUrl}/_mock/health`)
-  if (!response.ok) {
-    throw new Error(`Post-request network assertion failed: ${response.status}`)
+function requestHeaders(
+  entry: LegacySpecEndpoint,
+  fixture: ContractFixture,
+  init?: RequestInit
+): Headers {
+  const headers = new Headers(init?.headers)
+  const authentication = authenticationFor(entry)
+  if (authentication === 'bot') headers.set('Authorization', fixture.token)
+  if (authentication === 'bearer') {
+    headers.set('Authorization', `Bearer ${fixture.bearerToken}`)
+  }
+  return headers
+}
+
+function createOperationAssertion(
+  entry: LegacySpecEndpoint,
+  status: number
+): SpecSuccessBranch['assert'] {
+  return async ({ baseUrl, fixture, response }) => {
+    const request = alternateRequest(entry, status, fixture)
+    const label = `${entry.method.toUpperCase()} ${entry.specPath} ${status}`
+    if (response.status !== status) {
+      throw new Error(`${label} returned ${response.status}`)
+    }
+    if (new URL(response.url).origin !== baseUrl) {
+      throw new Error(`${label} did not use the real contract server`)
+    }
+
+    const pairedGet = uniqueLegacyEntries.has(`get ${entry.specPath}`)
+    if (!pairedGet || entry.method === 'get') return
+
+    const observation = await fetch(`${baseUrl}${request.path}`, {
+      headers: requestHeaders(entry, fixture),
+    })
+    if (entry.method === 'delete') {
+      if (observation.status !== 404) {
+        throw new Error(`${label} did not remove its target resource`)
+      }
+      return
+    }
+    if (!observation.ok) {
+      throw new Error(`${label} mutation was not observable through GET`)
+    }
   }
 }
 
@@ -1680,21 +1531,8 @@ export const MANIFEST: SpecEndpoint[] = [...uniqueLegacyEntries.values()].map(
         ...responseContract(entry, status),
         responseSchemaOverride: entry.responseSchemaOverride,
         request: (fixture) => alternateRequest(entry, status, fixture),
-        assert: assertNetworkIsAvailable,
+        assert: createOperationAssertion(entry, status),
       })),
     }
   }
 )
-
-const JSON_CONTRACT_KEYS = new Set(
-  LEGACY_MANIFEST.filter((entry) => entry.contractTested).map(
-    (entry) => `${entry.method} ${entry.specPath}`
-  )
-)
-
-/** Existing response contracts retained while the full inventory is implemented. */
-export function getContractTestedEntries(): SpecEndpoint[] {
-  return MANIFEST.filter((entry) =>
-    JSON_CONTRACT_KEYS.has(`${entry.method} ${entry.specPath}`)
-  )
-}

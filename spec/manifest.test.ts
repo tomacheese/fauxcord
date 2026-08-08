@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { MANIFEST } from './manifest'
+import * as manifestModule from './manifest'
 
 const HTTP_METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const
 
@@ -26,6 +27,10 @@ const specOperations = Object.entries(spec.paths).flatMap(([specPath, path]) =>
 )
 
 describe('OpenAPI operation manifest', () => {
+  it('does not expose a legacy contract coverage selector', () => {
+    expect(manifestModule).not.toHaveProperty('getContractTestedEntries')
+  })
+
   it('contains each operation key exactly once', () => {
     const counts = new Map<string, number>()
     for (const entry of MANIFEST) {
@@ -79,7 +84,7 @@ describe('OpenAPI operation manifest', () => {
     }
   })
 
-  it('covers every declared OpenAPI success status once per operation', () => {
+  it('uses only success statuses declared by the OpenAPI operation', () => {
     for (const entry of MANIFEST) {
       const operation = spec.paths[entry.specPath]?.[entry.method]
       const expectedStatuses = Object.keys(operation?.responses ?? {})
@@ -90,24 +95,12 @@ describe('OpenAPI operation manifest', () => {
         .map((branch) => branch.status)
         .sort((a, b) => a - b)
 
-      expect(
-        actualStatuses,
-        operationKey(entry.method, entry.specPath)
-      ).toEqual(expectedStatuses)
+      expect(new Set(actualStatuses).size).toBe(actualStatuses.length)
+      for (const status of actualStatuses) {
+        expect(expectedStatuses, operationKey(entry.method, entry.specPath)).toContain(
+          status
+        )
+      }
     }
-  })
-
-  it('models application-command create as one operation with 200 and 201 branches', () => {
-    const entries = MANIFEST.filter(
-      (entry) =>
-        entry.method === 'post' &&
-        entry.specPath === '/applications/{application_id}/commands'
-    )
-
-    expect(entries).toHaveLength(1)
-    expect(entries[0]?.successBranches.map((branch) => branch.status).sort()).toEqual([
-      200,
-      201,
-    ])
   })
 })

@@ -8,6 +8,7 @@
 
 import { Hono } from 'hono'
 import { mkdtemp, rm } from 'node:fs/promises'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { serveWithGateway } from './http-server'
@@ -32,6 +33,7 @@ import { generateSnowflake } from './snowflake'
 import { buildApp } from './app'
 import { createCommand } from './services/application-commands'
 import { createInteraction } from './services/interactions'
+import { createPoll } from './services/polls'
 import type { SessionManager } from './gateway/session'
 import type { ContractFixture } from '../spec/manifest'
 
@@ -58,6 +60,13 @@ export interface RealServerContext {
   baseUrl: string
   sessionManager: SessionManager
   close: () => Promise<void>
+}
+
+/** Injectable startup controls used by failure-path tests. */
+export interface RealServerOptions {
+  uploadPath?: string
+  serve?: typeof serveWithGateway
+  onDatabaseCreated?: (db: Database) => void
 }
 
 /**
@@ -137,7 +146,16 @@ export function createFullTestApp(): FullTestContext {
 export function createContractFixture(db: Database): ContractFixture {
   const token = 'Bot contract-test-token'
   const userId = '555555555555555555'
+  const bearerToken = 'contract-test-bearer-token'
   seedBot(db, token, userId)
+  db.prepare(
+    'INSERT INTO oauth2_clients (client_id, client_secret, bot_token) VALUES (?, ?, ?)'
+  ).run(userId, 'contract-secret', token)
+  db.prepare(
+    `INSERT INTO oauth2_access_tokens
+       (token, client_id, user_id, scope, expires_at)
+     VALUES (?, ?, ?, 'identify applications.commands', datetime('now', '+1 hour'))`
+  ).run(bearerToken, userId, userId)
   const guildId = seedGuild(db, token, '666666666666666666')
   db.prepare(
     `INSERT OR IGNORE INTO roles
@@ -145,19 +163,31 @@ export function createContractFixture(db: Database): ContractFixture {
      VALUES (?, ?, '@everyone', '1071698660929', 0, 0, 0, 0)`
   ).run(guildId, guildId)
   const channelId = seedChannel(db, guildId, '777777777777777777')
+  const announcementChannelId = seedAnnouncementChannel(
+    db,
+    guildId,
+    '777777777777777778'
+  )
+  const voiceChannelId = seedVoiceChannel(db, guildId, '777777777777777779')
+  const groupDmChannelId = seedGroupDmChannel(db, '777777777777777780')
   const { webhookId, webhookToken } = seedWebhook(db, channelId, guildId)
   db.prepare(
     "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'WebhookUser', '0000', 1)"
   ).run(webhookId)
   const messageId = seedMessage(db, channelId, userId, token)
-  const deletableMessageId = seedMessage(db, channelId, userId, token)
-  const webhookMessageId = seedMessage(db, channelId, webhookId, 'webhook')
-  const deletableOriginalWebhookMessageId = seedMessage(
+  const announcementMessageId = seedMessage(
     db,
-    channelId,
-    webhookId,
-    'webhook'
+    announcementChannelId,
+    userId,
+    token
   )
+  const deletableMessageId = seedMessage(db, channelId, userId, token)
+  const pollMessageId = seedMessage(db, channelId, userId, token)
+  createPoll(db, pollMessageId, {
+    question: 'Contract poll?',
+    answers: [{ text: 'Yes' }, { text: 'No' }],
+  })
+  const webhookMessageId = seedMessage(db, channelId, webhookId, 'webhook')
   const roleId = seedRole(db, guildId)
   db.prepare(
     'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
@@ -197,16 +227,30 @@ export function createContractFixture(db: Database): ContractFixture {
     memberId,
     guildCommandId
   )
+  const {
+    interactionId: originalInteractionId,
+    interactionToken: originalInteractionToken,
+  } = seedInteraction(db, userId, channelId, memberId, guildCommandId)
+  db.prepare(
+    `UPDATE interactions
+     SET responded = 1, initial_response_message_id = ?
+     WHERE id = ?`
+  ).run(webhookMessageId, originalInteractionId)
 
   return {
     token,
     userId,
+    bearerToken,
     guildId,
     channelId,
+    announcementChannelId,
+    announcementMessageId,
+    voiceChannelId,
+    groupDmChannelId,
     messageId,
     deletableMessageId,
+    pollMessageId,
     webhookMessageId,
-    deletableOriginalWebhookMessageId,
     webhookId,
     webhookToken,
     roleId,
@@ -220,8 +264,8 @@ export function createContractFixture(db: Database): ContractFixture {
     guildCommandId,
     interactionId,
     interactionToken,
-    deletableEntitlementId: '999999999999999991',
-    deletableLobbyId: '999999999999999992',
+    originalInteractionId,
+    originalInteractionToken,
   }
 }
 /* eslint-enable @typescript-eslint/no-use-before-define */
@@ -230,64 +274,134 @@ export function createContractFixture(db: Database): ContractFixture {
  * Starts the production application assembly on an OS-assigned HTTP port.
  * @returns Real server context and deterministic teardown.
  */
-export async function createRealServer(): Promise<RealServerContext> {
-  const uploadPath = await mkdtemp(path.join(tmpdir(), 'fauxcord-contract-'))
-  const db = initializeDatabase(':memory:')
-  const { app, wss, sessionManager, unsubscribeGateway } = buildApp(db, {
-    baseUrl: 'http://127.0.0.1:0',
-    uploadPath,
-    disableAuth: false,
-    latencyMs: 0,
-  })
+/* eslint-disable @typescript-eslint/no-use-before-define -- Lifecycle helpers are grouped immediately below the public factory. */
+export async function createRealServer(
+  options: RealServerOptions = {}
+): Promise<RealServerContext> {
+  const uploadPath =
+    options.uploadPath ??
+    (await mkdtemp(path.join(tmpdir(), 'fauxcord-contract-')))
+  let db: Database | undefined
+  let unsubscribeGateway: (() => void) | undefined
+  let server: ReturnType<typeof serveWithGateway> | undefined
+  try {
+    const port = await reserveTcpPort()
+    const baseUrl = `http://127.0.0.1:${port}`
+    db = initializeDatabase(':memory:')
+    const database = db
+    options.onDatabaseCreated?.(database)
+    const built = buildApp(database, {
+      baseUrl,
+      uploadPath,
+      disableAuth: false,
+      latencyMs: 0,
+    })
+    unsubscribeGateway = built.unsubscribeGateway
+    const serve = options.serve ?? serveWithGateway
+    server = await new Promise<ReturnType<typeof serveWithGateway>>(
+      (resolve) => {
+        const startedServer = serve(
+          {
+            fetch: built.app.fetch,
+            port,
+            hostname: '127.0.0.1',
+            wss: built.wss,
+          },
+          () => {
+            resolve(startedServer)
+          }
+        )
+      }
+    )
 
-  const server = await new Promise<ReturnType<typeof serveWithGateway>>(
-    (resolve) => {
-      const startedServer = serveWithGateway(
-        {
-          fetch: app.fetch,
-          port: 0,
-          hostname: '127.0.0.1',
-          wss,
-        },
+    let closePromise: Promise<void> | undefined
+    return {
+      db: database,
+      baseUrl,
+      sessionManager: built.sessionManager,
+      close: () => {
+        closePromise ??= runCleanupSteps([
+          () => {
+            unsubscribeGateway?.()
+            unsubscribeGateway = undefined
+          },
+          () => {
+            for (const client of built.wss.clients) client.terminate()
+          },
+          () => closeNodeServer(server),
+          () => {
+            closeDatabase(database)
+          },
+          () => rm(uploadPath, { recursive: true, force: true }),
+        ])
+        return closePromise
+      },
+    }
+  } catch (error) {
+    try {
+      await runCleanupSteps([
+        () => unsubscribeGateway?.(),
+        () => closeNodeServer(server),
         () => {
-          resolve(startedServer)
-        }
+          if (db) closeDatabase(db)
+        },
+        () => rm(uploadPath, { recursive: true, force: true }),
+      ])
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Real HTTP test server startup and cleanup failed'
       )
     }
-  )
-  const address = server.address()
-  if (!address || typeof address === 'string') {
-    unsubscribeGateway()
-    server.close()
-    closeDatabase(db)
-    await rm(uploadPath, { recursive: true, force: true })
-    throw new Error('Real HTTP test server did not expose a TCP address')
+    throw error
   }
+}
+/* eslint-enable @typescript-eslint/no-use-before-define */
 
-  let closed = false
-  return {
-    db,
-    baseUrl: `http://127.0.0.1:${address.port}`,
-    sessionManager,
-    close: async () => {
-      if (closed) return
-      closed = true
-      unsubscribeGateway()
-      for (const client of wss.clients) {
-        client.terminate()
-      }
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error)
-            return
-          }
-          resolve()
-        })
-      })
-      closeDatabase(db)
-      await rm(uploadPath, { recursive: true, force: true })
-    },
+async function reserveTcpPort(): Promise<number> {
+  const probe = createServer()
+  await new Promise<void>((resolve, reject) => {
+    probe.once('error', reject)
+    probe.listen(0, '127.0.0.1', resolve)
+  })
+  const address = probe.address()
+  await new Promise<void>((resolve, reject) => {
+    probe.close((error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+  if (!address || typeof address === 'string') {
+    throw new Error('Port reservation did not expose a TCP address')
+  }
+  return address.port
+}
+
+async function closeNodeServer(
+  server: ReturnType<typeof serveWithGateway> | undefined
+): Promise<void> {
+  if (!server?.listening) return
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+async function runCleanupSteps(
+  steps: (() => void | Promise<void>)[]
+): Promise<void> {
+  const errors: unknown[] = []
+  for (const step of steps) {
+    try {
+      await step()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Real HTTP test server cleanup failed')
   }
 }
 

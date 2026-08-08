@@ -23,6 +23,10 @@ export interface OAuth2MeResponse {
     name: string
     icon: null
     description: string
+    type: null
+    verify_key: string
+    flags: number
+    flags_new: string
     bot_public: boolean
     bot_require_code_grant: boolean
   }
@@ -33,6 +37,10 @@ export interface OAuth2MeResponse {
     username: string
     discriminator: string
     avatar: string | null
+    public_flags: number
+    flags: number
+    global_name: null
+    primary_guild: null
   }
 }
 
@@ -236,6 +244,10 @@ export function getOAuth2Me(
       name: bot?.username ?? 'MockApp',
       icon: null,
       description: '',
+      type: null,
+      verify_key: 'fauxcord-contract-verify-key',
+      flags: 0,
+      flags_new: '0',
       bot_public: true,
       bot_require_code_grant: false,
     },
@@ -247,6 +259,10 @@ export function getOAuth2Me(
       username: user.username,
       discriminator: user.discriminator,
       avatar: user.avatar,
+      public_flags: 0,
+      flags: 0,
+      global_name: null,
+      primary_guild: null,
     },
   }
 }
