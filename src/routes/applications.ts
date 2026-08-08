@@ -30,6 +30,43 @@ import { parseJsonBody } from '../lib/route-helpers'
 const UNKNOWN_APPLICATION = 10_002
 const UNKNOWN_ENTITLEMENT = 10_029
 const SNOWFLAKE_PATTERN = /^(0|[1-9]\d*)$/
+const ATTACHMENT_OAUTH2_SCOPES = new Set([
+  'activities.invites.write',
+  'activities.read',
+  'activities.write',
+  'applications.builds.read',
+  'applications.builds.upload',
+  'applications.commands',
+  'applications.commands.permissions.update',
+  'applications.commands.update',
+  'applications.entitlements',
+  'applications.store.update',
+  'bot',
+  'connections',
+  'dm_channels.read',
+  'email',
+  'gdm.join',
+  'guilds',
+  'guilds.join',
+  'guilds.members.read',
+  'identify',
+  'messages.read',
+  'openid',
+  'relationships.read',
+  'role_connections.write',
+  'rpc',
+  'rpc.activities.write',
+  'rpc.notifications.read',
+  'rpc.screenshare.read',
+  'rpc.screenshare.write',
+  'rpc.video.read',
+  'rpc.video.write',
+  'rpc.voice.read',
+  'rpc.voice.write',
+  'voice',
+  'webhook.incoming',
+])
+const ENTITLEMENT_OAUTH2_SCOPES = new Set(['applications.entitlements'])
 
 /** Returns a validation error field entry. */
 function fieldError(message: string): {
@@ -83,21 +120,20 @@ function requireApplicationAccess(
   c: Context<AppEnv>,
   db: Database,
   applicationId: string,
-  requiredScope?: string
+  permittedOAuth2Scopes?: ReadonlySet<string>
 ): Response | undefined {
   const bot = c.get('bot')
   if (bot?.user_id === applicationId) return undefined
 
   const accessToken = c.get('accessToken')
-  if (accessToken) {
+  if (accessToken && permittedOAuth2Scopes) {
     const row = db
       .prepare('SELECT client_id FROM oauth2_access_tokens WHERE token = ?')
       .get(accessToken.token) as { client_id: string } | undefined
-    const scopes = new Set(accessToken.scope.split(' ').filter(Boolean))
-    if (
-      row?.client_id === applicationId &&
-      (!requiredScope || scopes.has(requiredScope))
-    ) {
+    const hasPermittedScope = accessToken.scope
+      .split(' ')
+      .some((scope) => permittedOAuth2Scopes.has(scope))
+    if (hasPermittedScope && row?.client_id === applicationId) {
       return undefined
     }
   }
@@ -237,6 +273,16 @@ export function createApplicationRoutes(
       const { applicationId, instanceId } = c.req.param()
       const invalid = validateSnowflake(c, 'application_id', applicationId)
       if (invalid) return invalid
+      if (instanceId.length > 152_133) {
+        return c.json(
+          validationError({
+            instance_id: fieldError(
+              'Instance ID must be at most 152133 characters.'
+            ),
+          }).body,
+          400
+        )
+      }
       const denied = requireApplicationAccess(c, db, applicationId)
       if (denied) return denied
       const instance = getActivityInstance(db, applicationId, instanceId)
@@ -248,7 +294,12 @@ export function createApplicationRoutes(
     const { applicationId } = c.req.param()
     const invalid = validateSnowflake(c, 'application_id', applicationId)
     if (invalid) return invalid
-    const denied = requireApplicationAccess(c, db, applicationId)
+    const denied = requireApplicationAccess(
+      c,
+      db,
+      applicationId,
+      ATTACHMENT_OAUTH2_SCOPES
+    )
     if (denied) return denied
     if (!getApplication(db, applicationId)) return unknownApplication(c)
     const contentType = c.req.header('content-type') ?? ''
@@ -382,7 +433,7 @@ export function createApplicationRoutes(
       c,
       db,
       applicationId,
-      'applications.entitlements'
+      ENTITLEMENT_OAUTH2_SCOPES
     )
     if (denied) return denied
     if (!getApplication(db, applicationId)) return unknownApplication(c)
@@ -498,7 +549,7 @@ export function createApplicationRoutes(
       c,
       db,
       applicationId,
-      'applications.entitlements'
+      ENTITLEMENT_OAUTH2_SCOPES
     )
     if (denied) return denied
     const entitlement = getEntitlement(db, applicationId, entitlementId)
@@ -517,7 +568,7 @@ export function createApplicationRoutes(
         c,
         db,
         applicationId,
-        'applications.entitlements'
+        ENTITLEMENT_OAUTH2_SCOPES
       )
       if (denied) return denied
       return deleteEntitlement(db, applicationId, entitlementId)
@@ -538,7 +589,7 @@ export function createApplicationRoutes(
         c,
         db,
         applicationId,
-        'applications.entitlements'
+        ENTITLEMENT_OAUTH2_SCOPES
       )
       if (denied) return denied
       return consumeEntitlement(db, applicationId, entitlementId)

@@ -2751,7 +2751,6 @@ function createOperationAssertion(
   entry: LegacySpecEndpoint,
   status: number
 ): SpecSuccessBranch['assert'] {
-  // eslint-disable-next-line @typescript-eslint/require-await -- A rejected promise is the assertion contract for synchronous state mismatches.
   return async ({ baseUrl, fixture, response }) => {
     const label = `${entry.method.toUpperCase()} ${entry.specPath} ${status}`
     if (response.status !== status) {
@@ -2766,7 +2765,7 @@ function createOperationAssertion(
         attachment?: { url?: unknown }
       }
       if (typeof body.attachment?.url !== 'string') {
-        throw new Error(`${label} did not return an attachment URL`)
+        throw new TypeError(`${label} did not return an attachment URL`)
       }
       const assetUrl = new URL(body.attachment.url)
       if (assetUrl.origin !== baseUrl) {

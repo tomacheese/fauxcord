@@ -10,6 +10,7 @@ import { createMockRoutes } from './mock'
 import {
   createFullTestApp,
   seedApplicationOwner,
+  seedBearerCredential,
   seedBot,
   seedSecondUser,
 } from '../test-helpers'
@@ -136,6 +137,91 @@ describe('application routes', () => {
     const fetched = await app.request(body.attachment.url)
     expect(fetched.status).toBe(200)
     expect(await fetched.text()).toBe('application asset')
+  })
+
+  it('rejects an activity instance ID longer than the OpenAPI maximum', async () => {
+    const instanceId = 'x'.repeat(152_134)
+    const response = await app.request(
+      `/applications/${applicationId}/activity-instances/${instanceId}`,
+      { headers: { Authorization: token } }
+    )
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({ code: 50_035 })
+  })
+
+  it('allows Bearer only on OpenAPI-permitted application operations', async () => {
+    const credential = seedBearerCredential(db, undefined, applicationId)
+    db.prepare(
+      "UPDATE oauth2_access_tokens SET scope = 'applications.entitlements' WHERE token = ?"
+    ).run(credential.bearerToken)
+    const authorization = `Bearer ${credential.bearerToken}`
+
+    const form = new FormData()
+    form.set('file', new File(['bearer asset'], 'bearer.txt'))
+    const attachment = await app.request(
+      `/applications/${applicationId}/attachment`,
+      {
+        method: 'POST',
+        headers: { Authorization: authorization },
+        body: form,
+      }
+    )
+    expect(attachment.status).toBe(200)
+    const entitlements = await app.request(
+      `/applications/${applicationId}/entitlements`,
+      { headers: { Authorization: authorization } }
+    )
+    expect(entitlements.status).toBe(200)
+
+    for (const request of [
+      { path: `/applications/${applicationId}`, method: 'GET' },
+      { path: `/applications/${applicationId}/emojis`, method: 'GET' },
+      {
+        path: `/applications/${applicationId}/role-connections/metadata`,
+        method: 'GET',
+      },
+      {
+        path: `/applications/${applicationId}/entitlements`,
+        method: 'POST',
+      },
+    ]) {
+      const response = await app.request(request.path, {
+        method: request.method,
+        headers: {
+          Authorization: authorization,
+          'Content-Type': 'application/json',
+        },
+        body:
+          request.method === 'POST'
+            ? JSON.stringify({
+                sku_id: '900000000000000001',
+                owner_id: ownerId,
+                owner_type: 2,
+              })
+            : undefined,
+      })
+      expect(response.status, `${request.method} ${request.path}`).toBe(403)
+    }
+  })
+
+  it('rejects an attachment Bearer token with an unlisted OAuth2 scope', async () => {
+    const credential = seedBearerCredential(db, undefined, applicationId)
+    db.prepare(
+      "UPDATE oauth2_access_tokens SET scope = 'unknown.scope' WHERE token = ?"
+    ).run(credential.bearerToken)
+    const form = new FormData()
+    form.set('file', new File(['denied'], 'denied.txt'))
+
+    const response = await app.request(
+      `/applications/${applicationId}/attachment`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${credential.bearerToken}` },
+        body: form,
+      }
+    )
+    expect(response.status).toBe(403)
   })
 
   it('rejects an attachment request without multipart file using 50035', async () => {
