@@ -30,6 +30,10 @@ import { createMockRoutes } from './routes/mock'
 import { createApplicationCommandRoutes } from './routes/application-commands'
 import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
+import { createLobbyRoutes } from './routes/lobbies'
+import { createStageInstanceRoutes } from './routes/stage-instances'
+import { createCatalogPublicRoutes, createCatalogRoutes } from './routes/catalog'
+import { createPartnerSdkPublicRoutes, createPartnerSdkRoutes } from './routes/partner-sdk'
 import {
   createGuildAdvancedPublicRoutes,
   createGuildAdvancedRoutes,
@@ -118,6 +122,8 @@ export function createFullTestApp(): FullTestContext {
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
     app.route(oauth2Prefix, createOAuth2Routes(db))
     app.route(oauth2Prefix, createGuildAdvancedPublicRoutes(db))
+    app.route(oauth2Prefix, createCatalogPublicRoutes(db))
+    app.route(oauth2Prefix, createPartnerSdkPublicRoutes(db))
   }
 
   // Authentication middleware
@@ -141,6 +147,10 @@ export function createFullTestApp(): FullTestContext {
     )
     app.route(prefix, createApplicationCommandRoutes(db))
     app.route(prefix, createInteractionRoutes(db, TEST_BASE_URL))
+    app.route(prefix, createLobbyRoutes(db))
+    app.route(prefix, createStageInstanceRoutes(db))
+    app.route(prefix, createCatalogRoutes(db))
+    app.route(prefix, createPartnerSdkRoutes(db))
   }
 
   return {
