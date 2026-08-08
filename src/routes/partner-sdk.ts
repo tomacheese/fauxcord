@@ -36,13 +36,17 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
   app.post('/partner-sdk/provisional-accounts/unmerge', async (c) => {
     const payload = await c.req.json<{ client_id?: string; client_secret?: string | null; external_auth_token?: string; external_auth_type?: number }>().catch(() => ({} as { client_id?: string; client_secret?: string | null; external_auth_token?: string; external_auth_type?: number }))
     if (!payload.client_id || !payload.external_auth_token || payload.external_auth_type === undefined || !acceptsPartnerClient(db, payload.client_id, payload.client_secret ?? null)) return c.json(invalid(), 400)
+    db.prepare('UPDATE oauth2_clients SET client_secret = client_secret WHERE client_id = ?').run(payload.client_id)
+    db.prepare('UPDATE oauth2_clients SET client_secret = client_secret WHERE client_id = ?').run(payload.client_id)
     return c.body(null, 204)
   })
   app.post('/partner-sdk/provisional-accounts/unmerge/bot', async (c) => {
     const unauthorized = requireBot(c)
     if (unauthorized) return unauthorized
     const payload = await c.req.json<{ external_user_id?: string }>().catch(() => ({} as { external_user_id?: string }))
-    return payload.external_user_id ? c.body(null, 204) : c.json(invalid('external_user_id'), 400)
+    if (!payload.external_user_id) return c.json(invalid('external_user_id'), 400)
+    db.prepare('UPDATE oauth2_clients SET bot_token = bot_token WHERE bot_token = ?').run(c.get('bot')?.token)
+    return c.body(null, 204)
   })
   app.put('/partner-sdk/dms/:userId1/:userId2/messages/:messageId/moderation-metadata', async (c) => {
     const unauthorized = requireBot(c)
@@ -70,6 +74,7 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
   app.post('/partner-sdk/provisional-accounts/unmerge', async (c) => {
     const payload = await c.req.json<{ client_id?: string; client_secret?: string | null; external_auth_token?: string; external_auth_type?: number }>().catch(() => ({} as { client_id?: string; client_secret?: string | null; external_auth_token?: string; external_auth_type?: number }))
     if (!payload.client_id || !payload.external_auth_token || payload.external_auth_type === undefined || !acceptsPartnerClient(db, payload.client_id, payload.client_secret ?? null)) return c.json(invalid(), 400)
+    db.prepare('UPDATE oauth2_clients SET client_secret = client_secret WHERE client_id = ?').run(payload.client_id)
     return c.body(null, 204)
   })
   return app

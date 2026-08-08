@@ -175,7 +175,7 @@ export function createContractFixture(db: Database): ContractFixture {
   db.prepare(
     `INSERT INTO oauth2_access_tokens
        (token, client_id, user_id, scope, expires_at)
-     VALUES (?, ?, ?, 'identify openid applications.commands applications.entitlements', datetime('now', '+1 hour'))`
+     VALUES (?, ?, ?, 'identify openid applications.commands applications.entitlements role_connections.write guilds.members.read', datetime('now', '+1 hour'))`
   ).run(bearerToken, userId, userId)
   const applicationId = userId
   const activityInstanceId = 'contract-activity-instance'
@@ -477,6 +477,23 @@ export function createContractFixture(db: Database): ContractFixture {
      SET responded = 1, initial_response_message_id = ?
      WHERE id = ?`
   ).run(webhookMessageId, originalInteractionId)
+  const { lobbyId } = seedLobby(db, applicationId, userId, channelId)
+  db.prepare(`INSERT INTO user_application_role_connections
+    (application_id, user_id, platform_name, metadata) VALUES (?, ?, 'Contract', '{}')`).run(applicationId, userId)
+  const lobbyMessageId = generateSnowflake()
+  db.prepare(`INSERT INTO lobby_messages (id, lobby_id, channel_id, author_id, application_id, content)
+    VALUES (?, ?, ?, ?, ?, 'Contract lobby message')`).run(lobbyMessageId, lobbyId, channelId, userId, applicationId)
+  const { stageChannelId } = seedStageChannel(db, guildId)
+  db.prepare(`INSERT INTO stage_instances (id, guild_id, channel_id, topic)
+    VALUES (?, ?, ?, 'Contract stage')`).run(generateSnowflake(), guildId, stageChannelId)
+  const newStageChannelId = generateSnowflake()
+  db.prepare(`INSERT INTO channels (id, guild_id, type, name)
+    VALUES (?, ?, 13, 'new-contract-stage')`).run(newStageChannelId, guildId)
+  const { skuId: subscriptionSkuId, subscriptionId } = seedSkuSubscription(db, applicationId, userId)
+  const stickerPackId = generateSnowflake()
+  const catalogStickerId = generateSnowflake()
+  db.prepare("INSERT INTO sticker_packs (id, sku_id, name) VALUES (?, ?, 'Contract Pack')").run(stickerPackId, skuId)
+  db.prepare("INSERT INTO stickers (id, name, tags, type, format_type, pack_id, sort_value) VALUES (?, 'Contract Sticker', 'contract', 1, 1, ?, 0)").run(catalogStickerId, stickerPackId)
 
   return {
     db,
@@ -535,6 +552,14 @@ export function createContractFixture(db: Database): ContractFixture {
     interactionToken,
     originalInteractionId,
     originalInteractionToken,
+    lobbyId,
+    stageChannelId,
+    subscriptionId,
+    subscriptionSkuId,
+    stickerPackId,
+    catalogStickerId,
+    lobbyMessageId,
+    newStageChannelId,
   }
 }
 /* eslint-enable @typescript-eslint/no-use-before-define */

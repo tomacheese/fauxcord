@@ -20,5 +20,8 @@ describe('catalog routes', () => {
     await expect(packs.json()).resolves.toMatchObject({ sticker_packs: [expect.objectContaining({ id: packId })] })
     const regions = await app.request('/voice/regions', { headers: { Authorization: token } })
     await expect(regions.json()).resolves.toContainEqual(expect.objectContaining({ id: 'us-west' }))
+    const subscriptions = await app.request(`/skus/${subscription.skuId}/subscriptions`, { headers: { Authorization: token } })
+    expect(subscriptions.status).toBe(200)
+    await expect(subscriptions.json()).resolves.toContainEqual(expect.objectContaining({ id: subscription.subscriptionId }))
   })
 })

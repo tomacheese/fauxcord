@@ -173,6 +173,14 @@ export interface ContractFixture {
   originalInteractionId: string
   /** Interaction token with an existing original response. */
   originalInteractionToken: string
+  lobbyId: string
+  stageChannelId: string
+  subscriptionId: string
+  subscriptionSkuId: string
+  stickerPackId: string
+  catalogStickerId: string
+  lobbyMessageId: string
+  newStageChannelId: string
 }
 
 /** Authentication mechanism required by an operation. */
@@ -3882,7 +3890,7 @@ for (const entry of LEGACY_MANIFEST) {
 }
 
 /** All currently implemented Fauxcord operations in unique OpenAPI-key form. */
-export const MANIFEST: SpecEndpoint[] = uniqueLegacyEntries
+const BASE_MANIFEST: SpecEndpoint[] = uniqueLegacyEntries
   .values()
   .map((entry: LegacySpecEndpoint) => {
     const key = `${entry.method} ${entry.specPath}`
@@ -3906,3 +3914,96 @@ export const MANIFEST: SpecEndpoint[] = uniqueLegacyEntries
     }
   })
   .toArray()
+
+function task5Entry(
+  specPath: string,
+  method: SpecEndpoint['method'],
+  authentication: ContractAuthentication,
+  status: number,
+  body: ContractBodyMode,
+  request: (fixture: ContractFixture) => ContractRequest
+): SpecEndpoint {
+  return {
+    specPath,
+    method,
+    authentication,
+    createFixture: (factory) => factory.create(),
+    successBranches: [{
+      status,
+      contentType: body === 'empty' ? null : 'application/json',
+      body,
+      request: (fixture) => {
+        if (method !== 'get') {
+          task5MutationSnapshots.set(
+            fixture.db,
+            (fixture.db.prepare('SELECT total_changes() AS changes').get() as {
+              changes: number
+            }).changes
+          )
+        }
+        return request(fixture)
+      },
+      assert: async ({ fixture }) => {
+        const before = task5MutationSnapshots.get(fixture.db)
+        if (
+          method !== 'get' &&
+          (before === undefined ||
+            (fixture.db.prepare('SELECT total_changes() AS changes').get() as {
+              changes: number
+            }).changes <= before)
+        ) {
+          throw new Error(
+            `${method.toUpperCase()} ${specPath} did not apply its expected operation effect`
+          )
+        }
+      },
+    }],
+  }
+}
+
+const task5Json = { headers: { 'Content-Type': 'application/json' } }
+const task5MutationSnapshots = new WeakMap<Database, number>()
+const TASK5_MANIFEST: SpecEndpoint[] = [
+  task5Entry('/lobbies', 'put', 'bot', 200, 'json', () => ({ path: '/api/v10/lobbies', init: { method: 'PUT', ...task5Json, body: JSON.stringify({ secret: 'contract' }) } })),
+  task5Entry('/lobbies', 'post', 'bot', 201, 'json', (f) => ({ path: '/api/v10/lobbies', init: { method: 'POST', ...task5Json, body: JSON.stringify({ channel_id: f.channelId, metadata: { mode: 'contract' } }) } })),
+  task5Entry('/lobbies/{lobby_id}', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}` })),
+  task5Entry('/lobbies/{lobby_id}', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}`, init: { method: 'DELETE' } })),
+  task5Entry('/lobbies/{lobby_id}', 'patch', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ metadata: { mode: 'updated' } }) } })),
+  task5Entry('/lobbies/{lobby_id}/channel-linking', 'patch', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/channel-linking`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ channel_id: f.channelId }) } })),
+  task5Entry('/lobbies/{lobby_id}/members/@me', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/@me`, init: { method: 'DELETE' } })),
+  task5Entry('/lobbies/{lobby_id}/members/@me/invites', 'post', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/@me/invites`, init: { method: 'POST' } })),
+  task5Entry('/lobbies/{lobby_id}/members/bulk', 'post', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/bulk`, init: { method: 'POST', ...task5Json, body: JSON.stringify([{ user_id: f.memberId }]) } })),
+  task5Entry('/lobbies/{lobby_id}/members/{user_id}', 'put', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/${f.memberId}`, init: { method: 'PUT', ...task5Json, body: JSON.stringify({}) } })),
+  task5Entry('/lobbies/{lobby_id}/members/{user_id}', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/${f.userId}`, init: { method: 'DELETE' } })),
+  task5Entry('/lobbies/{lobby_id}/members/{user_id}/invites', 'post', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/${f.userId}/invites`, init: { method: 'POST' } })),
+  task5Entry('/lobbies/{lobby_id}/messages', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/messages` })),
+  task5Entry('/lobbies/{lobby_id}/messages', 'post', 'bot', 201, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/messages`, init: { method: 'POST', ...task5Json, body: JSON.stringify({ content: 'lobby contract' }) } })),
+  task5Entry('/lobbies/{lobby_id}/messages/{message_id}/moderation-metadata', 'put', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/messages/${f.lobbyMessageId}/moderation-metadata`, init: { method: 'PUT', ...task5Json, body: JSON.stringify({ state: 'ok' }) } })),
+  task5Entry('/partner-sdk/dms/{user_id_1}/{user_id_2}/messages/{message_id}/moderation-metadata', 'put', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/partner-sdk/dms/${f.userId}/${f.memberId}/messages/${f.messageId}/moderation-metadata`, init: { method: 'PUT', ...task5Json, body: JSON.stringify({ state: 'ok' }) } })),
+  task5Entry('/partner-sdk/provisional-accounts/unmerge', 'post', 'public', 204, 'empty', (f) => ({ path: '/api/v10/partner-sdk/provisional-accounts/unmerge', init: { method: 'POST', ...task5Json, body: JSON.stringify({ client_id: f.applicationId, client_secret: 'contract-secret', external_auth_token: 'external', external_auth_type: 1 }) } })),
+  task5Entry('/partner-sdk/provisional-accounts/unmerge/bot', 'post', 'bot', 204, 'empty', (f) => ({ path: '/api/v10/partner-sdk/provisional-accounts/unmerge/bot', init: { method: 'POST', ...task5Json, body: JSON.stringify({ external_user_id: f.userId }) } })),
+  task5Entry('/partner-sdk/token', 'post', 'public', 200, 'json', (f) => ({ path: '/api/v10/partner-sdk/token', init: { method: 'POST', ...task5Json, body: JSON.stringify({ client_id: f.applicationId, client_secret: 'contract-secret', external_auth_token: 'external', external_auth_type: 1 }) } })),
+  task5Entry('/partner-sdk/token/bot', 'post', 'bot', 200, 'json', (f) => ({ path: '/api/v10/partner-sdk/token/bot', init: { method: 'POST', ...task5Json, body: JSON.stringify({ external_user_id: f.userId }) } })),
+  task5Entry('/skus/{sku_id}/subscriptions', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/skus/${f.subscriptionSkuId}/subscriptions` })),
+  task5Entry('/skus/{sku_id}/subscriptions/{subscription_id}', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/skus/${f.subscriptionSkuId}/subscriptions/${f.subscriptionId}` })),
+  task5Entry('/stage-instances', 'post', 'bot', 200, 'json', (f) => ({ path: '/api/v10/stage-instances', init: { method: 'POST', ...task5Json, body: JSON.stringify({ channel_id: f.newStageChannelId, topic: 'contract stage' }) } })),
+  task5Entry('/stage-instances/{channel_id}', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/stage-instances/${f.stageChannelId}` })),
+  task5Entry('/stage-instances/{channel_id}', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/stage-instances/${f.stageChannelId}`, init: { method: 'DELETE' } })),
+  task5Entry('/stage-instances/{channel_id}', 'patch', 'bot', 200, 'json', (f) => ({ path: `/api/v10/stage-instances/${f.stageChannelId}`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ topic: 'updated stage' }) } })),
+  task5Entry('/sticker-packs', 'get', 'public', 200, 'json', () => ({ path: '/api/v10/sticker-packs' })),
+  task5Entry('/sticker-packs/{pack_id}', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/sticker-packs/${f.stickerPackId}` })),
+  task5Entry('/stickers/{sticker_id}', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/stickers/${f.catalogStickerId}` })),
+  task5Entry('/users/@me/applications/{application_id}/entitlements', 'get', 'bearer', 200, 'json', (f) => ({ path: `/api/v10/users/@me/applications/${f.applicationId}/entitlements` })),
+  task5Entry('/users/@me/applications/{application_id}/role-connection', 'get', 'bearer', 200, 'json', (f) => ({ path: `/api/v10/users/@me/applications/${f.applicationId}/role-connection` })),
+  task5Entry('/users/@me/applications/{application_id}/role-connection', 'put', 'bearer', 200, 'json', (f) => ({ path: `/api/v10/users/@me/applications/${f.applicationId}/role-connection`, init: { method: 'PUT', ...task5Json, body: JSON.stringify({ platform_name: 'Fauxcord', metadata: {} }) } })),
+  task5Entry('/users/@me/applications/{application_id}/role-connection', 'delete', 'bearer', 204, 'empty', (f) => ({ path: `/api/v10/users/@me/applications/${f.applicationId}/role-connection`, init: { method: 'DELETE' } })),
+  task5Entry('/users/@me/connections', 'get', 'bot', 200, 'json', () => ({ path: '/api/v10/users/@me/connections' })),
+  task5Entry('/users/@me/guilds/{guild_id}', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/users/@me/guilds/${f.guildId}`, init: { method: 'DELETE' } })),
+  task5Entry('/users/@me/guilds/{guild_id}/member', 'get', 'bearer', 200, 'json', (f) => ({ path: `/api/v10/users/@me/guilds/${f.guildId}/member` })),
+  task5Entry('/voice/regions', 'get', 'bot', 200, 'json', () => ({ path: '/api/v10/voice/regions' })),
+  task5Entry('/webhooks/{webhook_id}/{webhook_token}/messages/@original', 'delete', 'webhook', 204, 'empty', (f) => ({ path: `/api/v10/webhooks/${f.userId}/${f.originalInteractionToken}/messages/@original`, init: { method: 'DELETE' } })),
+  task5Entry('/webhooks/{webhook_id}/{webhook_token}/messages/@original', 'patch', 'webhook', 200, 'json', (f) => ({ path: `/api/v10/webhooks/${f.userId}/${f.originalInteractionToken}/messages/@original`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ content: 'updated original' }) } })),
+]
+
+/** All OpenAPI operations implemented by Fauxcord. */
+export const MANIFEST: SpecEndpoint[] = [...BASE_MANIFEST, ...TASK5_MANIFEST]

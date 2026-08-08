@@ -150,6 +150,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const lobby = getLobby(db, c.req.param('lobbyId'))
     const userId = currentUser(c)
     if (!lobby || !userId || !isLobbyMember(db, lobby.id, userId)) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
+    db.prepare("UPDATE lobbies SET updated_at = datetime('now') WHERE id = ?").run(lobby.id)
     return c.json({ code: `lobby-${lobby.id}` })
   })
 
@@ -197,6 +198,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const lobby = getLobby(db, lobbyId)
     if (!lobby || !isLobbyMember(db, lobbyId, userId)) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
     if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    db.prepare("UPDATE lobbies SET updated_at = datetime('now') WHERE id = ?").run(lobbyId)
     return c.json({ code: `lobby-${lobbyId}-${userId}` })
   })
 
