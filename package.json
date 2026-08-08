@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.0",
-    "better-sqlite3": "13.0.2",
+    "better-sqlite3": "13.0.3",
     "discord-api-types": "0.38.52",
     "hono": "4.13.0",
     "tsx": "4.23.6",
