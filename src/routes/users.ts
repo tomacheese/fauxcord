@@ -216,7 +216,14 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
           platform_username?: string | null
           metadata?: Record<string, string>
         }>()
-        .catch(() => ({}))
+        .catch(
+          () =>
+            ({}) as {
+              platform_name?: string
+              platform_username?: string | null
+              metadata?: Record<string, string>
+            }
+        )
       db.prepare(
         `INSERT INTO user_application_role_connections (application_id, user_id, platform_name, platform_username, metadata) VALUES (?, ?, ?, ?, ?) ON CONFLICT(application_id, user_id) DO UPDATE SET platform_name = excluded.platform_name, platform_username = excluded.platform_username, metadata = excluded.metadata, updated_at = datetime('now')`
       ).run(

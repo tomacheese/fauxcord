@@ -73,7 +73,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!ownerId) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     const payload = await c.req
       .json<Record<string, unknown>>()
-      .catch(() => ({}))
+      .catch(() => ({}) as Record<string, unknown>)
     const applicationId =
       (
         db
@@ -98,7 +98,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!ownerId) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     const payload = await c.req
       .json<Record<string, unknown>>()
-      .catch(() => ({}))
+      .catch(() => ({}) as Record<string, unknown>)
     const channelId =
       typeof payload.channel_id === 'string' ? payload.channel_id : null
     const lobby = createLobby(db, {
@@ -151,7 +151,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
       return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
     const payload = await c.req
       .json<Record<string, unknown>>()
-      .catch(() => ({}))
+      .catch(() => ({}) as Record<string, unknown>)
     return c.json(
       updateLobby(db, lobbyId, {
         metadata: payload.metadata as Record<string, string> | null | undefined,
@@ -172,7 +172,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
       return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
     const payload = await c.req
       .json<{ channel_id?: string | null }>()
-      .catch(() => ({}))
+      .catch(() => ({}) as { channel_id?: string | null })
     if (
       payload.channel_id !== null &&
       payload.channel_id !== undefined &&
@@ -243,7 +243,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
       return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
     const payload = await c.req
       .json<Record<string, unknown>>()
-      .catch(() => ({}))
+      .catch(() => ({}) as Record<string, unknown>)
     const member = addOrUpdateMember(db, lobbyId, userId, {
       metadata: payload.metadata as Record<string, string> | null | undefined,
       flags: typeof payload.flags === 'number' ? payload.flags : undefined,
@@ -296,7 +296,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!userId) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     const payload = await c.req
       .json<Record<string, unknown>>()
-      .catch(() => ({}))
+      .catch(() => ({}) as Record<string, unknown>)
     const message = createLobbyMessage(db, {
       lobbyId,
       authorId: userId,
@@ -317,7 +317,7 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
         return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
       const metadata = await c.req
         .json<Record<string, string>>()
-        .catch(() => ({}))
+        .catch(() => ({}) as Record<string, string>)
       if (!updateLobbyMessageModeration(db, lobbyId, messageId, metadata))
         return unknown(c, DiscordErrorCode.UNKNOWN_MESSAGE, 'Unknown Message')
       return c.body(null, 204)

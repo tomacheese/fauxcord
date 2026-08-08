@@ -3909,7 +3909,12 @@ const BASE_MANIFEST: SpecEndpoint[] = uniqueLegacyEntries
   })
   .toArray()
 
-const task5Preconditions = new WeakMap<ContractFixture, { lobbyCount?: number }>()
+interface Task5Precondition {
+  existingLobbyIds?: Set<string>
+  existingProvisionalTokens?: Set<string>
+}
+
+const task5Preconditions = new WeakMap<ContractFixture, Task5Precondition>()
 
 function task5Entry(
   specPath: string,
@@ -3935,31 +3940,179 @@ function task5Entry(
         return request(fixture)
       },
       // eslint-disable-next-line @typescript-eslint/no-use-before-define -- The operation assertion table is kept immediately below the manifest factory.
-      assert: ({ fixture }) => task5Assertion(key, fixture),
+      assert: ({ fixture, response }) => task5Assertion(key, fixture, response),
     }],
   }
 }
 
 const task5Json = { headers: { 'Content-Type': 'application/json' } }
 
-function task5Assertion(key: string, f: ContractFixture): Promise<void> {
+async function task5Assertion(
+  key: string,
+  f: ContractFixture,
+  response: Response
+): Promise<void> {
+  const failure = (): never => {
+    throw new Error(`${key} did not apply its expected operation effect`)
+  }
   const one = (sql: string, values: unknown[], expected: unknown) => {
     const actual = f.db.prepare(sql).get(...values)
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-      throw new Error(`${key} did not apply its expected operation effect`)
+      failure()
     }
   }
   const exists = (sql: string, values: unknown[]) => {
     if (!f.db.prepare(sql).get(...values)) {
-      throw new Error(`${key} did not apply its expected operation effect`)
+      failure()
     }
   }
+
+  const jsonValue = async (): Promise<unknown> =>
+    response.clone().json().catch(() => null)
+
+  const json = async (): Promise<Record<string, unknown>> => {
+    const body = await jsonValue()
+    if (!body || typeof body !== 'object' || Array.isArray(body)) failure()
+    return body as Record<string, unknown>
+  }
+
+  const createdLobby = async (
+    expected: {
+      linkedChannelId: string | null
+      metadata: string | null
+    }
+  ) => {
+    const body = await json()
+    const lobbyId = typeof body.id === 'string' ? body.id : null
+    const prior = task5Preconditions.get(f)?.existingLobbyIds
+    if (
+      !lobbyId ||
+      !prior ||
+      prior.has(lobbyId) ||
+      body.application_id !== f.applicationId ||
+      body.owner_id !== f.userId ||
+      body.channel_id !== expected.linkedChannelId ||
+      (expected.metadata === null
+        ? body.metadata !== null
+        : JSON.stringify(body.metadata) !== expected.metadata) ||
+      body.flags !== 0 ||
+      !Array.isArray(body.members) ||
+      !body.members.some(
+        (member) =>
+          member &&
+          typeof member === 'object' &&
+          (member as { id?: unknown }).id === f.userId
+      )
+    )
+      failure()
+    one(
+      'SELECT application_id, owner_id, linked_channel_id, metadata, flags FROM lobbies WHERE id = ?',
+      [lobbyId],
+      {
+        application_id: f.applicationId,
+        owner_id: f.userId,
+        linked_channel_id: expected.linkedChannelId,
+        metadata: expected.metadata,
+        flags: 0,
+      }
+    )
+    exists(
+      'SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?',
+      [lobbyId, f.userId]
+    )
+  }
+
+  const provisionalToken = async (externalUserId: string) => {
+    const body = await json()
+    const accessToken =
+      typeof body.access_token === 'string' ? body.access_token : null
+    const idToken = typeof body.id_token === 'string' ? body.id_token : null
+    const previous = task5Preconditions.get(f)?.existingProvisionalTokens
+    if (!accessToken || !idToken || !previous || previous.has(accessToken))
+      failure()
+    const row = f.db
+      .prepare(
+        `SELECT access_tokens.client_id, access_tokens.user_id, access_tokens.scope,
+                users.username
+         FROM oauth2_access_tokens AS access_tokens
+         JOIN users ON users.id = access_tokens.user_id
+         WHERE access_tokens.token = ?`
+      )
+      .get(accessToken) as
+      | {
+          client_id: string
+          user_id: string
+          scope: string
+          username: string
+        }
+      | undefined
+    if (
+      !row ||
+      row.client_id !== f.applicationId ||
+      row.scope !== 'identify' ||
+      row.username !== `provisional-${externalUserId}` ||
+      idToken !== `provisional-id-${row.user_id}`
+    )
+      failure()
+  }
+
+  const lobbyMember = async () => {
+    const body = await jsonValue()
+    const members = Array.isArray(body) ? body : [body]
+    if (
+      !members.some(
+        (member) =>
+          member &&
+          typeof member === 'object' &&
+          (member as { id?: unknown }).id === f.memberId
+      )
+    )
+      failure()
+    one(
+      'SELECT user_id, metadata, flags, additional_name FROM lobby_members WHERE lobby_id = ? AND user_id = ?',
+      [f.lobbyId, f.memberId],
+      {
+        user_id: f.memberId,
+        metadata: null,
+        flags: 0,
+        additional_name: null,
+      }
+    )
+  }
+
+  const lobbyMessage = async () => {
+    const body = await json()
+    const messageId = typeof body.id === 'string' ? body.id : null
+    if (
+      !messageId ||
+      body.lobby_id !== f.lobbyId ||
+      body.content !== 'lobby contract' ||
+      !body.author ||
+      typeof body.author !== 'object' ||
+      (body.author as { id?: unknown }).id !== f.userId
+    )
+      failure()
+    one(
+      'SELECT lobby_id, author_id, content FROM lobby_messages WHERE id = ?',
+      [messageId],
+      {
+        lobby_id: f.lobbyId,
+        author_id: f.userId,
+        content: 'lobby contract',
+      }
+    )
+  }
+
   switch (key) {
-    case 'put /lobbies 200':
+    case 'put /lobbies 200': {
+      await createdLobby({ linkedChannelId: null, metadata: null })
+      break
+    }
     case 'post /lobbies 201': {
-      const previous = task5Preconditions.get(f)?.lobbyCount
-      const current = (f.db.prepare('SELECT COUNT(*) AS count FROM lobbies WHERE owner_id = ?').get(f.userId) as { count: number }).count
-      if (previous === undefined || current !== previous + 1) throw new Error(`${key} did not apply its expected operation effect`)
+      await createdLobby({
+        linkedChannelId: f.channelId,
+        metadata: '{"mode":"contract"}',
+      })
       break
     }
     case 'delete /lobbies/{lobby_id} 204': { one('SELECT id FROM lobbies WHERE id = ?', [f.lobbyId], undefined); break
@@ -3972,29 +4125,57 @@ function task5Assertion(key: string, f: ContractFixture): Promise<void> {
     }
     case 'post /lobbies/{lobby_id}/members/@me/invites 200': { one("SELECT json_extract(metadata, '$.last_self_invite') AS user_id FROM lobbies WHERE id = ?", [f.lobbyId], { user_id: f.userId }); break
     }
-    case 'post /lobbies/{lobby_id}/members/bulk 200': { exists('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.memberId]); break
+    case 'post /lobbies/{lobby_id}/members/bulk 200': {
+      await lobbyMember()
+      break
     }
-    case 'put /lobbies/{lobby_id}/members/{user_id} 200': { exists('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.memberId]); break
+    case 'put /lobbies/{lobby_id}/members/{user_id} 200': {
+      await lobbyMember()
+      break
     }
     case 'delete /lobbies/{lobby_id}/members/{user_id} 204': { one('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.userId], undefined); break
     }
     case 'post /lobbies/{lobby_id}/members/{user_id}/invites 200': { one("SELECT json_extract(metadata, '$.last_member_invite') AS user_id FROM lobbies WHERE id = ?", [f.lobbyId], { user_id: f.userId }); break
     }
-    case 'post /lobbies/{lobby_id}/messages 201': { exists('SELECT id FROM lobby_messages WHERE lobby_id = ? AND content = ?', [f.lobbyId, 'lobby contract']); break
+    case 'post /lobbies/{lobby_id}/messages 201': {
+      await lobbyMessage()
+      break
     }
     case 'put /lobbies/{lobby_id}/messages/{message_id}/moderation-metadata 204': { one('SELECT moderation_metadata FROM lobby_messages WHERE id = ?', [f.lobbyMessageId], { moderation_metadata: '{"state":"ok"}' }); break
     }
-    case 'put /partner-sdk/dms/{user_id_1}/{user_id_2}/messages/{message_id}/moderation-metadata 204': { exists('SELECT message_id FROM partner_sdk_moderation WHERE message_id = ?', [f.messageId]); break
+    case 'put /partner-sdk/dms/{user_id_1}/{user_id_2}/messages/{message_id}/moderation-metadata 204': { one('SELECT user_id_1, user_id_2, metadata FROM partner_sdk_moderation WHERE message_id = ?', [f.messageId], { user_id_1: f.userId, user_id_2: f.memberId, metadata: '{"state":"ok"}' }); break
     }
     case 'post /partner-sdk/provisional-accounts/unmerge 204': { one('SELECT client_secret FROM oauth2_clients WHERE client_id = ?', [f.applicationId], { client_secret: 'contract-secret:unmerged' }); break
     }
     case 'post /partner-sdk/provisional-accounts/unmerge/bot 204': { one('SELECT client_secret FROM oauth2_clients WHERE client_id = ?', [f.applicationId], { client_secret: 'contract-secret:bot-unmerged' }); break
     }
-    case 'post /partner-sdk/token 200': { exists('SELECT token FROM oauth2_access_tokens WHERE token LIKE ?', ['provisional_%']); break
+    case 'post /partner-sdk/token 200': {
+      await provisionalToken('external')
+      break
     }
-    case 'post /partner-sdk/token/bot 200': { exists('SELECT token FROM oauth2_access_tokens WHERE token LIKE ?', ['provisional_%']); break
+    case 'post /partner-sdk/token/bot 200': {
+      await provisionalToken(f.userId)
+      break
     }
-    case 'post /stage-instances 200': { exists('SELECT channel_id FROM stage_instances WHERE channel_id = ?', [f.newStageChannelId]); break
+    case 'post /stage-instances 200': {
+      const body = await json()
+      if (
+        body.channel_id !== f.newStageChannelId ||
+        body.guild_id !== f.guildId ||
+        body.topic !== 'contract stage'
+      )
+        failure()
+      one(
+        'SELECT guild_id, channel_id, topic, privacy_level FROM stage_instances WHERE channel_id = ?',
+        [f.newStageChannelId],
+        {
+          guild_id: f.guildId,
+          channel_id: f.newStageChannelId,
+          topic: 'contract stage',
+          privacy_level: 2,
+        }
+      )
+      break
     }
     case 'delete /stage-instances/{channel_id} 204': { one('SELECT channel_id FROM stage_instances WHERE channel_id = ?', [f.stageChannelId], undefined); break
     }
@@ -4013,12 +4194,27 @@ function task5Assertion(key: string, f: ContractFixture): Promise<void> {
     default: { break
     }
   }
-  return Promise.resolve()
 }
 function captureTask5Precondition(key: string, f: ContractFixture): void {
-  if (key === 'put /lobbies 200' || key === 'post /lobbies 201') {
-    task5Preconditions.set(f, { lobbyCount: (f.db.prepare('SELECT COUNT(*) AS count FROM lobbies WHERE owner_id = ?').get(f.userId) as { count: number }).count })
-  }
+  const precondition = task5Preconditions.get(f) ?? {}
+  if (key === 'put /lobbies 200' || key === 'post /lobbies 201')
+    precondition.existingLobbyIds = new Set(
+      (f.db.prepare('SELECT id FROM lobbies').all() as { id: string }[]).map(
+        ({ id }) => id
+      )
+    )
+  if (
+    key === 'post /partner-sdk/token 200' ||
+    key === 'post /partner-sdk/token/bot 200'
+  )
+    precondition.existingProvisionalTokens = new Set(
+      (
+        f.db
+          .prepare("SELECT token FROM oauth2_access_tokens WHERE token LIKE 'provisional_%'")
+          .all() as { token: string }[]
+      ).map(({ token }) => token)
+    )
+  task5Preconditions.set(f, precondition)
 }
 const TASK5_MANIFEST: SpecEndpoint[] = [
   task5Entry('/lobbies', 'put', 'bot', 200, 'json', () => ({ path: '/api/v10/lobbies', init: { method: 'PUT', ...task5Json, body: JSON.stringify({ secret: 'contract' }) } })),

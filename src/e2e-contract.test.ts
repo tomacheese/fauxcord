@@ -111,6 +111,46 @@ describe('real HTTP contract fixture', () => {
     ).rejects.toThrow('did not apply its expected operation effect')
   })
 
+  it('rejects the Partner SDK token assertion for an unrelated provisional token', async () => {
+    const server = await createRealServer()
+    close = server.close
+    const fixture = createContractFixture(server.db)
+    const entry = MANIFEST.find(
+      ({ method, specPath }) =>
+        method === 'post' && specPath === '/partner-sdk/token'
+    )
+    expect(entry).toBeDefined()
+    const branch = entry?.successBranches[0]
+    expect(branch).toBeDefined()
+    if (!branch) return
+    const request = branch.request(fixture)
+    server.db
+      .prepare(
+        `INSERT INTO oauth2_access_tokens
+           (token, client_id, user_id, scope, expires_at)
+         VALUES (?, ?, ?, 'identify', datetime('now', '+1 hour'))`
+      )
+      .run('provisional_unrelated', fixture.applicationId, fixture.memberId)
+    const response = new Response(
+      JSON.stringify({
+        access_token: 'provisional_unrelated',
+        id_token: `provisional-id-${fixture.memberId}`,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    )
+    Object.defineProperty(response, 'url', {
+      value: `${server.baseUrl}${request.path}`,
+    })
+
+    await expect(
+      branch.assert({
+        baseUrl: server.baseUrl,
+        fixture,
+        response,
+      })
+    ).rejects.toThrow('did not apply its expected operation effect')
+  })
+
   it('rejects every mutation assertion when its operation was skipped', async () => {
     const acceptedWithoutMutation: string[] = []
     for (const entry of MANIFEST) {

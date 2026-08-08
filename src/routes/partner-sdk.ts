@@ -37,7 +37,15 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
         external_auth_token?: string
         external_auth_type?: number
       }>()
-      .catch(() => ({}))
+      .catch(
+        () =>
+          ({}) as {
+            client_id?: string
+            client_secret?: string | null
+            external_auth_token?: string
+            external_auth_type?: number
+          }
+      )
     if (
       !payload.client_id ||
       !SNOWFLAKE.test(payload.client_id) ||
@@ -69,7 +77,13 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
         external_user_id?: string
         provisional_user_id?: string | null
       }>()
-      .catch(() => ({}))
+      .catch(
+        () =>
+          ({}) as {
+            external_user_id?: string
+            provisional_user_id?: string | null
+          }
+      )
     if (!payload.external_user_id) return c.json(invalid(), 400)
     const client = db
       .prepare('SELECT client_id FROM oauth2_clients WHERE bot_token = ?')
@@ -90,7 +104,15 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
         external_auth_token?: string
         external_auth_type?: number
       }>()
-      .catch(() => ({}))
+      .catch(
+        () =>
+          ({}) as {
+            client_id?: string
+            client_secret?: string | null
+            external_auth_token?: string
+            external_auth_type?: number
+          }
+      )
     if (
       !payload.client_id ||
       !payload.external_auth_token ||
@@ -112,7 +134,7 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
     if (unauthorized) return unauthorized
     const payload = await c.req
       .json<{ external_user_id?: string }>()
-      .catch(() => ({}))
+      .catch(() => ({}) as { external_user_id?: string })
     if (!payload.external_user_id)
       return c.json(invalid('external_user_id'), 400)
     db.prepare(
@@ -130,7 +152,7 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
         return c.json(invalid(), 400)
       const metadata = await c.req
         .json<Record<string, string>>()
-        .catch(() => ({}))
+        .catch(() => ({}) as Record<string, string>)
       db.prepare(
         'CREATE TABLE IF NOT EXISTS partner_sdk_moderation (user_id_1 TEXT, user_id_2 TEXT, message_id TEXT PRIMARY KEY, metadata TEXT NOT NULL)'
       ).run()
@@ -154,7 +176,15 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
         external_auth_token?: string
         external_auth_type?: number
       }>()
-      .catch(() => ({}))
+      .catch(
+        () =>
+          ({}) as {
+            client_id?: string
+            client_secret?: string | null
+            external_auth_token?: string
+            external_auth_type?: number
+          }
+      )
     if (
       !payload.client_id ||
       !SNOWFLAKE.test(payload.client_id) ||
@@ -186,7 +216,15 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
         external_auth_token?: string
         external_auth_type?: number
       }>()
-      .catch(() => ({}))
+      .catch(
+        () =>
+          ({}) as {
+            client_id?: string
+            client_secret?: string | null
+            external_auth_token?: string
+            external_auth_type?: number
+          }
+      )
     if (
       !payload.client_id ||
       !payload.external_auth_token ||
