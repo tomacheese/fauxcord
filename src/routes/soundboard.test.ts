@@ -90,5 +90,33 @@ describe('Soundboard API', () => {
       })
       closeDatabase(db)
     })
+
+    it('rejects a malformed channel Snowflake before looking up the channel', async () => {
+      const { app, db } = createFullTestApp()
+      const token = 'Bot soundboard-channel-validation'
+      const userId = '888888888888888888'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'SoundboardBot', 1)"
+      ).run(userId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
+      ).run(token, userId)
+
+      const res = await app.request(
+        '/api/v10/channels/not-a-snowflake/send-soundboard-sound',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sound_id: '899999999999999999' }),
+        }
+      )
+
+      expect(res.status).toBe(400)
+      expect(await res.json()).toMatchObject({ code: 50_035 })
+      closeDatabase(db)
+    })
   })
 })

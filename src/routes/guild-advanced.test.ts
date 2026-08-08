@@ -1,3 +1,4 @@
+import { inflateSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Database } from '../db'
 import { closeDatabase } from '../db'
@@ -9,6 +10,7 @@ import {
   seedMember,
   seedMessage,
   seedRole,
+  seedScheduledEvent,
   seedVoiceChannel,
 } from '../test-helpers'
 import type { FullTestContext } from '../test-helpers'
@@ -250,13 +252,138 @@ describe('advanced guild routes', () => {
       enabled: true,
       channel_id: channelId,
     })
-    const png = await context.app.request(
-      `/api/v10/guilds/${guildId}/widget.png`,
-      { headers: { Authorization: token } }
+  })
+
+  it('serves public widget data and a decodable PNG while retaining authentication for guild management', async () => {
+    const widget = await context.app.request(
+      `/api/v10/guilds/${guildId}/widget.json`
     )
+    expect(widget.status).toBe(200)
+    expect(await widget.json()).toMatchObject({ id: guildId })
+
+    const png = await context.app.request(
+      `/api/v10/guilds/${guildId}/widget.png?style=shield`
+    )
+    expect(png.status).toBe(200)
     expect(png.headers.get('content-type')).toContain('image/png')
-    const pngBody = await png.arrayBuffer()
-    expect(pngBody.byteLength).toBeGreaterThan(0)
+
+    const bytes = Buffer.from(await png.arrayBuffer())
+    expect(bytes.subarray(0, 8)).toEqual(
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+    )
+
+    const chunkTypes: string[] = []
+    const imageData: Buffer[] = []
+    let offset = 8
+    while (offset < bytes.length) {
+      const length = bytes.readUInt32BE(offset)
+      const type = bytes.subarray(offset + 4, offset + 8).toString('ascii')
+      const data = bytes.subarray(offset + 8, offset + 8 + length)
+      chunkTypes.push(type)
+      if (type === 'IHDR') {
+        expect(length).toBe(13)
+        expect(data.readUInt32BE(0)).toBe(1)
+        expect(data.readUInt32BE(4)).toBe(1)
+      }
+      if (type === 'IDAT') imageData.push(data)
+      offset += length + 12
+    }
+    expect(offset).toBe(bytes.length)
+    expect(chunkTypes).toEqual(['IHDR', 'IDAT', 'IEND'])
+    expect(inflateSync(Buffer.concat(imageData))).toEqual(
+      Buffer.from([1, 0, 255])
+    )
+
+    for (const protectedPath of ['audit-logs', 'widget']) {
+      const protectedResponse = await context.app.request(
+        `/api/v10/guilds/${guildId}/${protectedPath}`
+      )
+      expect(protectedResponse.status, protectedPath).toBe(401)
+    }
+  })
+
+  it('rejects malformed Snowflake path parameters with Discord validation code 50035', async () => {
+    const { eventId } = seedScheduledEvent(db, guildId, userId, voiceChannelId)
+    const requests: {
+      name: string
+      path: string
+      init?: RequestInit
+    }[] = [
+      {
+        name: 'guild_id',
+        path: '/api/v10/guilds/not-a-snowflake/audit-logs',
+      },
+      {
+        name: 'rule_id',
+        path: `/api/v10/guilds/${guildId}/auto-moderation/rules/not-a-snowflake`,
+      },
+      {
+        name: 'integration_id',
+        path: `/api/v10/guilds/${guildId}/integrations/not-a-snowflake`,
+        init: { method: 'DELETE' },
+      },
+      {
+        name: 'user_id on a member route',
+        path: `/api/v10/guilds/${guildId}/members/not-a-snowflake`,
+        init: {
+          method: 'PUT',
+          body: JSON.stringify({ access_token: 'member-token' }),
+        },
+      },
+      {
+        name: 'request_id',
+        path: `/api/v10/guilds/${guildId}/requests/not-a-snowflake`,
+        init: { method: 'PATCH', body: '{}' },
+      },
+      {
+        name: 'role_id',
+        path: `/api/v10/guilds/${guildId}/roles/not-a-snowflake`,
+      },
+      {
+        name: 'event_id',
+        path: `/api/v10/guilds/${guildId}/scheduled-events/not-a-snowflake`,
+      },
+      {
+        name: 'exception_id',
+        path: `/api/v10/guilds/${guildId}/scheduled-events/${eventId}/exceptions/not-a-snowflake`,
+      },
+      {
+        name: 'exception_id on an event users route',
+        path: `/api/v10/guilds/${guildId}/scheduled-events/${eventId}/not-a-snowflake/users`,
+      },
+      {
+        name: 'sound_id',
+        path: `/api/v10/guilds/${guildId}/soundboard-sounds/not-a-snowflake`,
+      },
+      {
+        name: 'sticker_id',
+        path: `/api/v10/guilds/${guildId}/stickers/not-a-snowflake`,
+      },
+      {
+        name: 'user_id on a voice-state route',
+        path: `/api/v10/guilds/${guildId}/voice-states/not-a-snowflake`,
+      },
+    ]
+
+    for (const request of requests) {
+      const response = await context.app.request(request.path, {
+        ...request.init,
+        headers: {
+          Authorization: token,
+          ...(request.init?.body ? { 'Content-Type': 'application/json' } : {}),
+        },
+      })
+      expect(response.status, request.name).toBe(400)
+      expect(await response.json(), request.name).toMatchObject({
+        code: 50_035,
+      })
+    }
+
+    const publicWidget = await context.app.request(
+      '/api/v10/guilds/not-a-snowflake/widget.json'
+    )
+    expect(publicWidget.status).toBe(400)
+    expect(await publicWidget.json()).toMatchObject({ code: 50_035 })
   })
 
   it('exposes deterministic guild queries and validates malformed writes', async () => {

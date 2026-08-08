@@ -2400,7 +2400,9 @@ function authenticationFor(entry: LegacySpecEndpoint): ContractAuthentication {
   if (
     entry.specPath === '/gateway' ||
     entry.specPath === '/oauth2/keys' ||
-    entry.specPath === '/guilds/templates/{code}'
+    entry.specPath === '/guilds/templates/{code}' ||
+    entry.specPath === '/guilds/{guild_id}/widget.json' ||
+    entry.specPath === '/guilds/{guild_id}/widget.png'
   ) {
     return 'public'
   }

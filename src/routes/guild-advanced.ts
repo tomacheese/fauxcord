@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import type { Context } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import type { Database } from '../db'
 import { runInTransaction } from '../db'
 import { DiscordErrorCode, validationError } from '../errors'
@@ -63,6 +63,20 @@ import { generateSnowflake } from '../snowflake'
 
 type JsonObject = Record<string, unknown>
 
+const SNOWFLAKE_PATTERN = /^\d{17,20}$/
+const WIDGET_PNG = Uint8Array.from(
+  Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64'
+  )
+)
+
+interface SnowflakePathParameter {
+  field: string
+  parameter: string
+  allowedValues?: readonly string[]
+}
+
 function unknown(c: Context<AppEnv>, code: number, message: string): Response {
   return c.json({ message, code }, 404)
 }
@@ -77,6 +91,111 @@ function invalid(c: Context<AppEnv>, field: string): Response {
       },
     }).body,
     400
+  )
+}
+
+function validateSnowflakePath(
+  ...parameters: SnowflakePathParameter[]
+): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    for (const { allowedValues, field, parameter } of parameters) {
+      const value = c.req.param(parameter)
+      if (
+        value !== undefined &&
+        (allowedValues?.includes(value) === true ||
+          SNOWFLAKE_PATTERN.test(value))
+      ) {
+        continue
+      }
+      return c.json(
+        validationError({
+          [field]: {
+            _errors: [
+              {
+                code: 'BASE_TYPE_BAD_FORMAT',
+                message: 'Value is not a valid snowflake.',
+              },
+            ],
+          },
+        }).body,
+        400
+      )
+    }
+    await next()
+  }
+}
+
+function registerGuildSnowflakeValidation(app: Hono<AppEnv>): void {
+  app.use(
+    '/guilds/:guildId/*',
+    validateSnowflakePath({ field: 'guild_id', parameter: 'guildId' })
+  )
+  app.use(
+    '/guilds/:guildId/auto-moderation/rules/:ruleId',
+    validateSnowflakePath({ field: 'rule_id', parameter: 'ruleId' })
+  )
+  app.use(
+    '/guilds/:guildId/integrations/:integrationId',
+    validateSnowflakePath({
+      field: 'integration_id',
+      parameter: 'integrationId',
+    })
+  )
+  app.use(
+    '/guilds/:guildId/members/:userId',
+    validateSnowflakePath({
+      field: 'user_id',
+      parameter: 'userId',
+      allowedValues: ['@me', 'search'],
+    })
+  )
+  app.use(
+    '/guilds/:guildId/requests/:requestId',
+    validateSnowflakePath({ field: 'request_id', parameter: 'requestId' })
+  )
+  app.use(
+    '/guilds/:guildId/roles/:roleId',
+    validateSnowflakePath({
+      field: 'role_id',
+      parameter: 'roleId',
+      allowedValues: ['member-counts'],
+    })
+  )
+  const eventValidation = validateSnowflakePath({
+    field: 'guild_scheduled_event_id',
+    parameter: 'eventId',
+  })
+  app.use('/guilds/:guildId/scheduled-events/:eventId', eventValidation)
+  app.use('/guilds/:guildId/scheduled-events/:eventId/*', eventValidation)
+  app.use(
+    '/guilds/:guildId/scheduled-events/:eventId/exceptions/:exceptionId',
+    validateSnowflakePath({
+      field: 'guild_scheduled_event_exception_id',
+      parameter: 'exceptionId',
+    })
+  )
+  app.use(
+    '/guilds/:guildId/scheduled-events/:eventId/:exceptionId/users',
+    validateSnowflakePath({
+      field: 'guild_scheduled_event_exception_id',
+      parameter: 'exceptionId',
+    })
+  )
+  app.use(
+    '/guilds/:guildId/soundboard-sounds/:soundId',
+    validateSnowflakePath({ field: 'sound_id', parameter: 'soundId' })
+  )
+  app.use(
+    '/guilds/:guildId/stickers/:stickerId',
+    validateSnowflakePath({ field: 'sticker_id', parameter: 'stickerId' })
+  )
+  app.use(
+    '/guilds/:guildId/voice-states/:userId',
+    validateSnowflakePath({
+      field: 'user_id',
+      parameter: 'userId',
+      allowedValues: ['@me'],
+    })
   )
 }
 
@@ -151,14 +270,35 @@ function joinRequestObject(row: {
   }
 }
 
-/** Creates public guild-template routes mounted before authentication. */
+/** Creates public guild routes mounted before authentication. */
 export function createGuildAdvancedPublicRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
+  const guildValidation = validateSnowflakePath({
+    field: 'guild_id',
+    parameter: 'guildId',
+  })
+  app.use('/guilds/:guildId/widget.json', guildValidation)
+  app.use('/guilds/:guildId/widget.png', guildValidation)
+
   app.get('/guilds/templates/:code', (c) => {
     const template = getGuildTemplate(db, c.req.param('code'))
     return template
       ? c.json(template)
       : unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild Template')
+  })
+  app.get('/guilds/:guildId/widget.json', (c) => {
+    const { guildId } = c.req.param()
+    if (!getGuild(db, guildId)) {
+      return unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
+    }
+    return c.json(getGuildWidgetJson(db, guildId))
+  })
+  app.get('/guilds/:guildId/widget.png', (c) => {
+    const { guildId } = c.req.param()
+    if (!getGuild(db, guildId)) {
+      return unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
+    }
+    return c.body(WIDGET_PNG, 200, { 'Content-Type': 'image/png' })
   })
   return app
 }
@@ -167,6 +307,7 @@ export function createGuildAdvancedPublicRoutes(db: Database): Hono<AppEnv> {
 export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
   ensureAuxiliaryTables(db)
+  registerGuildSnowflakeValidation(app)
 
   app.get('/guilds/:guildId/audit-logs', (c) => {
     const { guildId } = c.req.param()
@@ -987,19 +1128,5 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
       ? access
       : c.json(setGuildWidget(db, guildId, await parseJsonBody(c)))
   })
-  app.get('/guilds/:guildId/widget.json', (c) => {
-    const { guildId } = c.req.param()
-    const access = requireGuildAccess(c, db, guildId)
-    return access instanceof Response
-      ? access
-      : c.json(getGuildWidgetJson(db, guildId))
-  })
-  app.get('/guilds/:guildId/widget.png', (c) => {
-    const access = requireGuildAccess(c, db, c.req.param('guildId'))
-    if (access instanceof Response) return access
-    const png = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])
-    return c.body(png, 200, { 'Content-Type': 'image/png' })
-  })
-
   return app
 }

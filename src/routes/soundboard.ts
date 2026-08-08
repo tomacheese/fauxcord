@@ -16,6 +16,8 @@ import {
 } from '../services/soundboard'
 import { parseJsonBody } from '../lib/route-helpers'
 
+const SNOWFLAKE_PATTERN = /^\d{17,20}$/
+
 /**
  * Creates the Soundboard API routes.
  * @returns Hono router instance
@@ -31,6 +33,21 @@ export function createSoundboardRoutes(db?: Database): Hono<AppEnv> {
   app.post('/channels/:channelId/send-soundboard-sound', async (c) => {
     if (!db) return c.notFound()
     const { channelId } = c.req.param()
+    if (!SNOWFLAKE_PATTERN.test(channelId)) {
+      return c.json(
+        validationError({
+          channel_id: {
+            _errors: [
+              {
+                code: 'BASE_TYPE_BAD_FORMAT',
+                message: 'Value is not a valid snowflake.',
+              },
+            ],
+          },
+        }).body,
+        400
+      )
+    }
     if (!getChannel(db, channelId)) {
       return c.json({ message: 'Unknown Channel', code: 10_003 }, 404)
     }
