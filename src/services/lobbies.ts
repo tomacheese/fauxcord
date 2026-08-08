@@ -57,9 +57,7 @@ function listMembers(db: Database, lobbyId: string): LobbyMemberObject[] {
     id: member.user_id,
     metadata: parseMap(member.metadata),
     flags: member.flags,
-    ...(member.additional_name !== null && {
-      additional_name: member.additional_name,
-    }),
+    additional_name: member.additional_name ?? '',
   }))
 }
 
