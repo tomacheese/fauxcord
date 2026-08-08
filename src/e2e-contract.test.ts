@@ -74,7 +74,7 @@ describe('real HTTP contract fixture', () => {
     ).toBe(200)
   })
 
-  it('rejects a destructive assertion when the declared mutation did not happen', async () => {
+  it('rejects a destructive assertion when a sibling resource changed instead', async () => {
     const server = await createRealServer()
     close = server.close
     const fixture = createContractFixture(server.db)
@@ -87,8 +87,19 @@ describe('real HTTP contract fixture', () => {
     expect(branch).toBeDefined()
     if (!branch) return
     const request = branch.request(fixture)
-    const response = await fetch(`${server.baseUrl}${request.path}`, {
-      headers: { Authorization: fixture.token },
+    const wrongResponse = await fetch(
+      `${server.baseUrl}/api/v10/invites/${fixture.inviteCode}`,
+      {
+        method: 'DELETE',
+        headers: { Authorization: fixture.token },
+      }
+    )
+    const response = new Response(await wrongResponse.text(), {
+      status: wrongResponse.status,
+      headers: wrongResponse.headers,
+    })
+    Object.defineProperty(response, 'url', {
+      value: `${server.baseUrl}${request.path}`,
     })
 
     await expect(
@@ -97,7 +108,7 @@ describe('real HTTP contract fixture', () => {
         fixture,
         response,
       })
-    ).rejects.toThrow('did not change its operation state')
+    ).rejects.toThrow('did not apply its expected operation effect')
   })
 
   it('rejects every mutation assertion when its operation was skipped', async () => {
@@ -225,11 +236,14 @@ describe('real HTTP contract fixture', () => {
   it('propagates an asynchronous startup error and cleans resources', async () => {
     const uploadPath = await mkdtemp(path.join(tmpdir(), 'fauxcord-async-'))
     const expected = new Error('injected async startup failure')
+    let closeCalls = 0
+    let db: Database | undefined
     // eslint-disable-next-line unicorn/prefer-event-target -- Node servers expose EventEmitter's `error` event contract.
     const fakeServer = new EventEmitter() as ReturnType<typeof serveWithGateway>
     Object.assign(fakeServer, {
       listening: false,
       close: (callback?: (error?: Error) => void) => {
+        closeCalls += 1
         callback?.()
         return fakeServer
       },
@@ -239,6 +253,9 @@ describe('real HTTP contract fixture', () => {
     try {
       const startup = createRealServer({
         uploadPath,
+        onDatabaseCreated: (created) => {
+          db = created
+        },
         serve: () => {
           queueMicrotask(() => fakeServer.emit('error', expected))
           return fakeServer
@@ -253,7 +270,9 @@ describe('real HTTP contract fixture', () => {
       await expect(Promise.race([startup, timeout])).rejects.toThrow(
         expected.message
       )
+      expect(closeCalls).toBe(1)
       await expect(stat(uploadPath)).rejects.toMatchObject({ code: 'ENOENT' })
+      expect(() => db?.prepare('SELECT 1').get()).toThrow()
     } finally {
       await rm(uploadPath, { recursive: true, force: true })
     }

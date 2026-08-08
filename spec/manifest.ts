@@ -1589,104 +1589,833 @@ function alternateRequest(
   return request
 }
 
-const mutationBaselines = new WeakMap<ContractFixture, Map<string, string>>()
+type SqlValue = string | number | null
 
-function mutationTables(entry: LegacySpecEndpoint): string[] {
-  const path = entry.specPath
-  const key = `${entry.method} ${path}`
-  if (entry.method === 'get') return []
-  if (path.includes('/reactions')) return ['reactions']
-  if (path.includes('/messages/pins') || path.includes('/pins/')) {
-    return ['pins', 'messages']
-  }
-  if (path.includes('/messages/bulk-delete')) return ['messages']
-  if (path.includes('/messages/{message_id}/threads')) {
-    return ['channels', 'thread_members']
-  }
-  if (path.includes('/messages/{message_id}/crosspost')) return ['messages']
-  if (path.includes('/messages/{message_id}')) return ['messages']
-  if (path === '/channels/{channel_id}/messages') return ['messages']
-  if (path.endsWith('/typing') || path.endsWith('/voice-status')) {
-    return ['channels']
-  }
-  if (path.endsWith('/permissions/{overwrite_id}')) {
-    return ['channel_overwrites']
-  }
-  if (path === '/channels/{channel_id}/invites') {
-    return entry.successStatus === 204
-      ? ['invites', 'invite_target_users']
-      : ['invites']
-  }
-  if (path === '/invites/{code}') return ['invites']
-  if (path === '/invites/{code}/target-users') {
-    return ['invite_target_users']
-  }
-  if (path === '/channels/{channel_id}/webhooks') return ['webhooks']
-  if (path.includes('/thread-members/')) return ['thread_members']
-  if (path === '/channels/{channel_id}/threads') {
-    return ['channels', 'thread_members']
-  }
-  if (path.endsWith('/followers')) return ['webhooks']
-  if (path.endsWith('/recipients/{user_id}')) return ['channel_recipients']
-  if (path === '/channels/{channel_id}') return ['channels']
-  if (path === '/guilds/{guild_id}') return ['guilds']
-  if (path === '/guilds/{guild_id}/channels') return ['channels']
-  if (path.includes('/members/{user_id}/roles/{role_id}')) {
-    return ['member_roles']
-  }
-  if (path.includes('/members/')) return ['guild_members', 'member_roles']
-  if (path.includes('/roles')) return ['roles']
-  if (path.includes('/emojis')) return ['emojis']
-  if (path.includes('/bans/')) return ['guild_bans', 'guild_members']
-  if (path === '/users/@me') return ['bots', 'users']
-  if (path === '/users/@me/channels') {
-    return ['channels', 'channel_recipients']
-  }
-  if (path.includes('/commands/{command_id}/permissions')) {
-    return ['application_command_permissions']
-  }
-  if (path.includes('/commands')) return ['application_commands']
-  if (path.includes('/interactions/')) return ['interactions', 'messages']
-  if (path.includes('/polls/{message_id}/expire')) return ['polls']
-  if (path.startsWith('/webhooks/')) {
-    if (
-      key.endsWith('/github') ||
-      key.endsWith('/slack') ||
-      entry.method === 'post'
-    ) {
-      return ['messages', 'embeds']
-    }
-    return path.includes('/messages/') ? ['messages'] : ['webhooks']
-  }
-  throw new Error(`No mutation state domain declared for ${key}`)
+interface MutationEffect {
+  description: string
+  isApplied: () => boolean
 }
 
-function snapshotTables(db: Database, tables: string[]): string {
-  return JSON.stringify(
-    tables.map((table) => ({
-      table,
-      rows: db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
-    }))
+const mutationEffects = new WeakMap<
+  ContractFixture,
+  Map<string, MutationEffect>
+>()
+
+function serialize(value: unknown): string {
+  return JSON.stringify(value)
+}
+
+function readRow(
+  db: Database,
+  sql: string,
+  params: readonly SqlValue[] = []
+): unknown {
+  return db.prepare(sql).get(...params) ?? null
+}
+
+function readRows(
+  db: Database,
+  sql: string,
+  params: readonly SqlValue[] = []
+): unknown[] {
+  return db.prepare(sql).all(...params)
+}
+
+function exactEffect(
+  description: string,
+  read: () => unknown,
+  expected: unknown
+): MutationEffect {
+  const before = serialize(read())
+  const serializedExpected = serialize(expected)
+  return {
+    description,
+    isApplied: () => {
+      const after = serialize(read())
+      return after !== before && after === serializedExpected
+    },
+  }
+}
+
+function predicateEffect(
+  description: string,
+  read: () => unknown,
+  matches: (after: unknown) => boolean
+): MutationEffect {
+  const before = serialize(read())
+  return {
+    description,
+    isApplied: () => {
+      const after = read()
+      return serialize(after) !== before && matches(after)
+    },
+  }
+}
+
+function countIncreaseEffect(
+  description: string,
+  readCount: () => number
+): MutationEffect {
+  const before = readCount()
+  return {
+    description,
+    isApplied: () => readCount() === before + 1,
+  }
+}
+
+function rowEffect(
+  fixture: ContractFixture,
+  description: string,
+  sql: string,
+  params: readonly SqlValue[],
+  expected: unknown
+): MutationEffect {
+  return exactEffect(
+    description,
+    () => readRow(fixture.db, sql, params),
+    expected
   )
 }
 
-function captureMutationBaseline(
+function rowsEffect(
+  fixture: ContractFixture,
+  description: string,
+  sql: string,
+  params: readonly SqlValue[],
+  expected: unknown[]
+): MutationEffect {
+  return exactEffect(
+    description,
+    () => readRows(fixture.db, sql, params),
+    expected
+  )
+}
+
+function matchingRowCreatedEffect(
+  fixture: ContractFixture,
+  description: string,
+  sql: string,
+  params: readonly SqlValue[]
+): MutationEffect {
+  const readCount = () => {
+    const row = readRow(fixture.db, sql, params) as { count: number }
+    return row.count
+  }
+  return countIncreaseEffect(description, readCount)
+}
+
+function captureMutationEffect(
   entry: LegacySpecEndpoint,
   status: number,
   fixture: ContractFixture
 ): void {
-  const tables = mutationTables(entry)
-  if (tables.length === 0) return
+  if (entry.method === 'get') return
   const key = `${entry.method} ${entry.specPath} ${status}`
-  const baselines = mutationBaselines.get(fixture) ?? new Map<string, string>()
-  baselines.set(key, snapshotTables(fixture.db, tables))
-  mutationBaselines.set(fixture, baselines)
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define -- Capture setup stays before the exhaustive effect catalog.
+  const effect = mutationEffectFor(key, fixture)
+  const effects = mutationEffects.get(fixture) ?? new Map<string, MutationEffect>()
+  effects.set(key, effect)
+  mutationEffects.set(fixture, effects)
+}
+
+function mutationEffectFor(
+  key: string,
+  fixture: ContractFixture
+): MutationEffect {
+  const f = fixture
+  const db = f.db
+  switch (key) {
+    case 'patch /channels/{channel_id} 200': {
+      return rowEffect(
+        f,
+        'target channel name to equal updated-channel',
+        'SELECT name FROM channels WHERE id = ?',
+        [f.channelId],
+        { name: 'updated-channel' }
+      )
+    }
+    case 'delete /channels/{channel_id} 200': {
+      return rowEffect(
+        f,
+        'target channel to be absent',
+        'SELECT id FROM channels WHERE id = ?',
+        [f.channelId],
+        null
+      )
+    }
+    case 'post /channels/{channel_id}/messages 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a message with the requested channel and content to be created',
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE channel_id = ? AND author_id = ? AND content = ?`,
+        [f.channelId, f.userId, 'Hello, world!']
+      )
+    }
+    case 'patch /channels/{channel_id}/messages/{message_id} 200': {
+      return rowEffect(
+        f,
+        'target message content to equal Edited message',
+        'SELECT content FROM messages WHERE id = ? AND channel_id = ?',
+        [f.messageId, f.channelId],
+        { content: 'Edited message' }
+      )
+    }
+    case 'delete /channels/{channel_id}/messages/{message_id} 204': {
+      return rowEffect(
+        f,
+        'target message to be absent',
+        'SELECT id FROM messages WHERE id = ? AND channel_id = ?',
+        [f.deletableMessageId, f.channelId],
+        null
+      )
+    }
+    case 'post /channels/{channel_id}/messages/bulk-delete 204': {
+      return rowsEffect(
+        f,
+        'both requested messages to be absent',
+        'SELECT id FROM messages WHERE channel_id = ? AND id IN (?, ?) ORDER BY id',
+        [f.channelId, f.messageId, f.deletableMessageId],
+        []
+      )
+    }
+    case 'post /channels/{channel_id}/typing 200':
+    case 'post /channels/{channel_id}/typing 204': {
+      const channelId = key.endsWith('200') ? f.groupDmChannelId : f.channelId
+      return predicateEffect(
+        'target channel typing_at to be populated',
+        () => readRow(db, 'SELECT typing_at FROM channels WHERE id = ?', [channelId]),
+        (after) =>
+          typeof (after as { typing_at?: unknown }).typing_at === 'string'
+      )
+    }
+    case 'put /channels/{channel_id}/messages/pins/{message_id} 204':
+    case 'put /channels/{channel_id}/pins/{message_id} 204': {
+      return rowEffect(
+        f,
+        'target message to be pinned in the target channel',
+        `SELECT m.pinned, EXISTS(
+           SELECT 1 FROM pins p WHERE p.channel_id = ? AND p.message_id = m.id
+         ) AS pin_exists FROM messages m WHERE m.id = ?`,
+        [f.channelId, f.messageId],
+        { pinned: 1, pin_exists: 1 }
+      )
+    }
+    case 'delete /channels/{channel_id}/messages/pins/{message_id} 204':
+    case 'delete /channels/{channel_id}/pins/{message_id} 204': {
+      return rowEffect(
+        f,
+        'target message pin to be removed from the target channel',
+        `SELECT m.pinned, EXISTS(
+           SELECT 1 FROM pins p WHERE p.channel_id = ? AND p.message_id = m.id
+         ) AS pin_exists FROM messages m WHERE m.id = ?`,
+        [f.channelId, f.pinnedMessageId],
+        { pinned: 0, pin_exists: 0 }
+      )
+    }
+    case 'put /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me 204': {
+      return rowEffect(
+        f,
+        'the requested reaction by the bot to exist on the target message',
+        'SELECT message_id, user_id, emoji FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?',
+        [f.messageId, f.userId, '👍'],
+        { message_id: f.messageId, user_id: f.userId, emoji: '👍' }
+      )
+    }
+    case 'delete /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me 204':
+    case 'delete /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the requested user reaction to be absent from the target message',
+        'SELECT id FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?',
+        [f.reactedMessageId, f.userId, '👍'],
+        null
+      )
+    }
+    case 'delete /channels/{channel_id}/messages/{message_id}/reactions 204': {
+      return rowsEffect(
+        f,
+        'all reactions to be absent from the target message',
+        'SELECT id FROM reactions WHERE message_id = ?',
+        [f.reactedMessageId],
+        []
+      )
+    }
+    case 'post /channels/{channel_id}/webhooks 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a webhook with the requested channel and name to be created',
+        'SELECT COUNT(*) AS count FROM webhooks WHERE channel_id = ? AND name = ?',
+        [f.channelId, 'Test Webhook']
+      )
+    }
+    case 'put /channels/{channel_id}/permissions/{overwrite_id} 204': {
+      return rowEffect(
+        f,
+        'the requested overwrite values to exist on the target channel',
+        `SELECT type, allow, deny FROM channel_overwrites
+         WHERE channel_id = ? AND id = ?`,
+        [f.channelId, f.roleId],
+        { type: 0, allow: '0', deny: '0' }
+      )
+    }
+    case 'delete /channels/{channel_id}/permissions/{overwrite_id} 204': {
+      return rowEffect(
+        f,
+        'the target channel overwrite to be absent',
+        'SELECT id FROM channel_overwrites WHERE channel_id = ? AND id = ?',
+        [f.channelId, f.deletableOverwriteId],
+        null
+      )
+    }
+    case 'post /channels/{channel_id}/invites 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'an invite with the requested channel and max_age to be created',
+        'SELECT COUNT(*) AS count FROM invites WHERE channel_id = ? AND max_age = 3600',
+        [f.channelId]
+      )
+    }
+    case 'post /channels/{channel_id}/invites 204': {
+      return matchingRowCreatedEffect(
+        f,
+        'an invite and target-user job for the requested channel to be created',
+        `SELECT COUNT(*) AS count FROM invites i
+         JOIN invite_target_users t ON t.code = i.code
+         WHERE i.channel_id = ? AND i.max_age = 3600 AND t.total_users = 1`,
+        [f.channelId]
+      )
+    }
+    case 'delete /invites/{code} 200': {
+      return rowEffect(
+        f,
+        'the target invite code to be absent',
+        'SELECT code FROM invites WHERE code = ?',
+        [f.deletableInviteCode],
+        null
+      )
+    }
+    case 'put /invites/{code}/target-users 204': {
+      return rowEffect(
+        f,
+        'the target invite job to contain the uploaded user',
+        `SELECT total_users, raw_csv FROM invite_target_users WHERE code = ?`,
+        [f.inviteCode],
+        { total_users: 1, raw_csv: 'user_id\n999999999999999999\n' }
+      )
+    }
+    case 'patch /guilds/{guild_id} 200': {
+      return rowEffect(
+        f,
+        'target guild name to equal Updated Guild',
+        'SELECT name FROM guilds WHERE id = ?',
+        [f.guildId],
+        { name: 'Updated Guild' }
+      )
+    }
+    case 'post /guilds/{guild_id}/channels 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'a text channel with the requested guild and name to be created',
+        'SELECT COUNT(*) AS count FROM channels WHERE guild_id = ? AND name = ? AND type = 0',
+        [f.guildId, 'new-channel']
+      )
+    }
+    case 'patch /guilds/{guild_id}/members/@me 200': {
+      return rowEffect(
+        f,
+        'the bot member nickname to equal SelfNick',
+        'SELECT nick FROM guild_members WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.userId],
+        { nick: 'SelfNick' }
+      )
+    }
+    case 'patch /guilds/{guild_id}/members/{user_id} 200': {
+      return rowEffect(
+        f,
+        'target member nickname to equal TestNick',
+        'SELECT nick FROM guild_members WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.memberId],
+        { nick: 'TestNick' }
+      )
+    }
+    case 'patch /guilds/{guild_id}/members/{user_id} 204': {
+      return rowsEffect(
+        f,
+        'target member mute and role assignment to match the request',
+        `SELECT gm.mute, mr.role_id FROM guild_members gm
+         JOIN member_roles mr ON mr.guild_id = gm.guild_id AND mr.user_id = gm.user_id
+         WHERE gm.guild_id = ? AND gm.user_id = ? ORDER BY mr.role_id`,
+        [f.guildId, f.memberId],
+        [{ mute: 0, role_id: f.roleId }]
+      )
+    }
+    case 'delete /guilds/{guild_id}/members/{user_id} 204': {
+      return rowEffect(
+        f,
+        'target guild member to be absent',
+        'SELECT user_id FROM guild_members WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.memberId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/roles 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a role with the requested guild and name to be created',
+        'SELECT COUNT(*) AS count FROM roles WHERE guild_id = ? AND name = ?',
+        [f.guildId, 'test-role']
+      )
+    }
+    case 'patch /guilds/{guild_id}/roles/{role_id} 200': {
+      return rowEffect(
+        f,
+        'target role name to equal updated-role',
+        'SELECT name FROM roles WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.roleId],
+        { name: 'updated-role' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/roles/{role_id} 204': {
+      return rowEffect(
+        f,
+        'target role to be absent',
+        'SELECT id FROM roles WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.deletableRoleId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/emojis 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'an emoji with the requested guild and name to be created',
+        'SELECT COUNT(*) AS count FROM emojis WHERE guild_id = ? AND name = ?',
+        [f.guildId, 'new_emoji']
+      )
+    }
+    case 'patch /guilds/{guild_id}/emojis/{emoji_id} 200': {
+      return rowEffect(
+        f,
+        'target emoji name to equal renamed_emoji',
+        'SELECT name FROM emojis WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.emojiId],
+        { name: 'renamed_emoji' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/emojis/{emoji_id} 204': {
+      return rowEffect(
+        f,
+        'target emoji to be absent',
+        'SELECT id FROM emojis WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.emojiId],
+        null
+      )
+    }
+    case 'put /guilds/{guild_id}/bans/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the requested user ban to exist in the target guild',
+        'SELECT guild_id, user_id FROM guild_bans WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.banTargetUserId],
+        { guild_id: f.guildId, user_id: f.banTargetUserId }
+      )
+    }
+    case 'delete /guilds/{guild_id}/bans/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the target user ban to be absent from the target guild',
+        'SELECT user_id FROM guild_bans WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.bannedUserId],
+        null
+      )
+    }
+    case 'put /guilds/{guild_id}/members/{user_id}/roles/{role_id} 204': {
+      return rowEffect(
+        f,
+        'the requested role assignment to exist for the target member',
+        `SELECT guild_id, user_id, role_id FROM member_roles
+         WHERE guild_id = ? AND user_id = ? AND role_id = ?`,
+        [f.guildId, f.memberId, f.roleId],
+        { guild_id: f.guildId, user_id: f.memberId, role_id: f.roleId }
+      )
+    }
+    case 'delete /guilds/{guild_id}/members/{user_id}/roles/{role_id} 204': {
+      return rowEffect(
+        f,
+        'the target role assignment to be absent from the target member',
+        `SELECT role_id FROM member_roles
+         WHERE guild_id = ? AND user_id = ? AND role_id = ?`,
+        [f.guildId, f.memberId, f.assignedRoleId],
+        null
+      )
+    }
+    case 'patch /users/@me 200': {
+      return rowEffect(
+        f,
+        'the authenticated bot and user names to equal UpdatedBot',
+        `SELECT b.username AS bot_username, u.username AS user_username
+         FROM bots b JOIN users u ON u.id = b.user_id WHERE b.token = ?`,
+        [f.token],
+        { bot_username: 'UpdatedBot', user_username: 'UpdatedBot' }
+      )
+    }
+    case 'patch /webhooks/{webhook_id} 200': {
+      return rowEffect(
+        f,
+        'target webhook name to equal Updated Webhook',
+        'SELECT name FROM webhooks WHERE id = ?',
+        [f.webhookId],
+        { name: 'Updated Webhook' }
+      )
+    }
+    case 'patch /webhooks/{webhook_id}/{webhook_token} 200': {
+      return rowEffect(
+        f,
+        'target webhook name to equal Token Updated Webhook',
+        'SELECT name FROM webhooks WHERE id = ? AND token = ?',
+        [f.webhookId, f.webhookToken],
+        { name: 'Token Updated Webhook' }
+      )
+    }
+    case 'delete /webhooks/{webhook_id} 204':
+    case 'delete /webhooks/{webhook_id}/{webhook_token} 204': {
+      return rowEffect(
+        f,
+        'target webhook to be absent',
+        'SELECT id FROM webhooks WHERE id = ?',
+        [f.webhookId],
+        null
+      )
+    }
+    case 'post /webhooks/{webhook_id}/{webhook_token} 200':
+    case 'post /webhooks/{webhook_id}/{webhook_token} 204': {
+      return matchingRowCreatedEffect(
+        f,
+        'a target-webhook message with the requested content to be created',
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE channel_id = ? AND author_id = ? AND content = ?`,
+        [f.channelId, f.webhookId, 'Webhook message']
+      )
+    }
+    case 'patch /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} 200': {
+      return rowEffect(
+        f,
+        'target webhook message content to equal Edited webhook message',
+        'SELECT content FROM messages WHERE id = ? AND author_id = ?',
+        [f.webhookMessageId, f.webhookId],
+        { content: 'Edited webhook message' }
+      )
+    }
+    case 'delete /webhooks/{webhook_id}/{webhook_token}/messages/{message_id} 204': {
+      return rowEffect(
+        f,
+        'target webhook message to be absent',
+        'SELECT id FROM messages WHERE id = ? AND author_id = ?',
+        [f.webhookMessageId, f.webhookId],
+        null
+      )
+    }
+    case 'post /applications/{application_id}/commands 200': {
+      return rowEffect(
+        f,
+        'target global command description to equal the replacement value',
+        `SELECT description FROM application_commands
+         WHERE id = ? AND application_id = ? AND guild_id IS NULL`,
+        [f.commandId, f.userId],
+        { description: 'replaced global command' }
+      )
+    }
+    case 'post /applications/{application_id}/commands 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'a global command with the requested name and description to be created',
+        `SELECT COUNT(*) AS count FROM application_commands
+         WHERE application_id = ? AND guild_id IS NULL AND name = ? AND description = ?`,
+        [f.userId, 'contractcreate', 'x']
+      )
+    }
+    case 'put /applications/{application_id}/commands 200': {
+      return rowsEffect(
+        f,
+        'the global command set to equal the bulk overwrite payload',
+        `SELECT name, description FROM application_commands
+         WHERE application_id = ? AND guild_id IS NULL ORDER BY name`,
+        [f.userId],
+        [{ name: 'ping', description: 'x' }]
+      )
+    }
+    case 'patch /applications/{application_id}/commands/{command_id} 200': {
+      return rowEffect(
+        f,
+        'target global command description to equal updated',
+        'SELECT description FROM application_commands WHERE id = ? AND application_id = ?',
+        [f.commandId, f.userId],
+        { description: 'updated' }
+      )
+    }
+    case 'delete /applications/{application_id}/commands/{command_id} 204': {
+      return rowEffect(
+        f,
+        'target global command to be absent',
+        'SELECT id FROM application_commands WHERE id = ? AND application_id = ?',
+        [f.commandId, f.userId],
+        null
+      )
+    }
+    case 'post /applications/{application_id}/guilds/{guild_id}/commands 200': {
+      return rowEffect(
+        f,
+        'target guild command description to equal the replacement value',
+        `SELECT description FROM application_commands
+         WHERE id = ? AND application_id = ? AND guild_id = ?`,
+        [f.guildCommandId, f.userId, f.guildId],
+        { description: 'replaced guild command' }
+      )
+    }
+    case 'post /applications/{application_id}/guilds/{guild_id}/commands 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'a guild command with the requested name and description to be created',
+        `SELECT COUNT(*) AS count FROM application_commands
+         WHERE application_id = ? AND guild_id = ? AND name = ? AND description = ?`,
+        [f.userId, f.guildId, 'guildcreate', 'x']
+      )
+    }
+    case 'put /applications/{application_id}/guilds/{guild_id}/commands 200': {
+      return rowsEffect(
+        f,
+        'the guild command set to equal the bulk overwrite payload',
+        `SELECT name, description FROM application_commands
+         WHERE application_id = ? AND guild_id = ? ORDER BY name`,
+        [f.userId, f.guildId],
+        [{ name: 'guildping', description: 'x' }]
+      )
+    }
+    case 'patch /applications/{application_id}/guilds/{guild_id}/commands/{command_id} 200': {
+      return rowEffect(
+        f,
+        'target guild command description to equal updated',
+        `SELECT description FROM application_commands
+         WHERE id = ? AND application_id = ? AND guild_id = ?`,
+        [f.guildCommandId, f.userId, f.guildId],
+        { description: 'updated' }
+      )
+    }
+    case 'delete /applications/{application_id}/guilds/{guild_id}/commands/{command_id} 204': {
+      return rowEffect(
+        f,
+        'target guild command to be absent',
+        `SELECT id FROM application_commands
+         WHERE id = ? AND application_id = ? AND guild_id = ?`,
+        [f.guildCommandId, f.userId, f.guildId],
+        null
+      )
+    }
+    case 'put /applications/{application_id}/guilds/{guild_id}/commands/{command_id}/permissions 200': {
+      return rowEffect(
+        f,
+        'target guild command permissions to equal the requested permissions',
+        `SELECT permissions FROM application_command_permissions
+         WHERE application_id = ? AND guild_id = ? AND command_id = ?`,
+        [f.userId, f.guildId, f.guildCommandId],
+        {
+          permissions: JSON.stringify([
+            { id: f.roleId, type: 1, permission: true },
+          ]),
+        }
+      )
+    }
+    case 'post /interactions/{interaction_id}/{interaction_token}/callback 200': {
+      return predicateEffect(
+        'target interaction to be responded with the requested message content',
+        () =>
+          readRow(
+            db,
+            `SELECT i.responded, i.initial_response_message_id, m.content
+             FROM interactions i LEFT JOIN messages m
+               ON m.id = i.initial_response_message_id
+             WHERE i.id = ? AND i.token = ?`,
+            [f.interactionId, f.interactionToken]
+          ),
+        (after) => {
+          const row = after as {
+            responded?: unknown
+            initial_response_message_id?: unknown
+            content?: unknown
+          }
+          return (
+            row.responded === 1 &&
+            typeof row.initial_response_message_id === 'string' &&
+            row.content === 'contract callback response'
+          )
+        }
+      )
+    }
+    case 'post /interactions/{interaction_id}/{interaction_token}/callback 204': {
+      return rowEffect(
+        f,
+        'target interaction to be marked responded without a response message',
+        `SELECT responded, initial_response_message_id FROM interactions
+         WHERE id = ? AND token = ?`,
+        [f.interactionId, f.interactionToken],
+        { responded: 1, initial_response_message_id: null }
+      )
+    }
+    case 'post /channels/{channel_id}/threads 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'a thread with the requested parent, name, and bot membership to be created',
+        `SELECT COUNT(*) AS count FROM channels c JOIN thread_members tm ON tm.thread_id = c.id
+         WHERE c.parent_id = ? AND c.name = ? AND c.type = 11 AND tm.user_id = ?`,
+        [f.channelId, 'new-thread', f.userId]
+      )
+    }
+    case 'post /channels/{channel_id}/messages/{message_id}/threads 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'a thread with the requested parent, name, and bot membership to be created',
+        `SELECT COUNT(*) AS count FROM channels c JOIN thread_members tm ON tm.thread_id = c.id
+         WHERE c.parent_id = ? AND c.name = ? AND c.type = 11 AND tm.user_id = ?`,
+        [f.channelId, 'msg-thread', f.userId]
+      )
+    }
+    case 'put /channels/{channel_id}/thread-members/@me 204': {
+      return rowEffect(
+        f,
+        'the bot membership to exist in the target thread',
+        'SELECT thread_id, user_id FROM thread_members WHERE thread_id = ? AND user_id = ?',
+        [f.joinableThreadId, f.userId],
+        { thread_id: f.joinableThreadId, user_id: f.userId }
+      )
+    }
+    case 'delete /channels/{channel_id}/thread-members/@me 204': {
+      return rowEffect(
+        f,
+        'the bot membership to be absent from the target thread',
+        'SELECT user_id FROM thread_members WHERE thread_id = ? AND user_id = ?',
+        [f.threadId, f.userId],
+        null
+      )
+    }
+    case 'put /channels/{channel_id}/thread-members/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the requested user membership to exist in the target thread',
+        'SELECT thread_id, user_id FROM thread_members WHERE thread_id = ? AND user_id = ?',
+        [f.threadId, f.memberId],
+        { thread_id: f.threadId, user_id: f.memberId }
+      )
+    }
+    case 'delete /channels/{channel_id}/thread-members/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the requested user membership to be absent from the target thread',
+        'SELECT user_id FROM thread_members WHERE thread_id = ? AND user_id = ?',
+        [f.memberThreadId, f.memberId],
+        null
+      )
+    }
+    case 'post /channels/{channel_id}/messages/{message_id}/crosspost 200': {
+      return rowEffect(
+        f,
+        'target announcement message CROSSPOSTED flag to be set',
+        'SELECT flags FROM messages WHERE id = ? AND channel_id = ?',
+        [f.announcementMessageId, f.announcementChannelId],
+        { flags: 2 }
+      )
+    }
+    case 'post /channels/{channel_id}/followers 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a follower webhook in the requested destination channel to be created',
+        'SELECT COUNT(*) AS count FROM webhooks WHERE channel_id = ? AND name = ?',
+        [f.channelId, 'Follower Webhook']
+      )
+    }
+    case 'put /channels/{channel_id}/voice-status 204': {
+      return rowEffect(
+        f,
+        'target voice channel status to equal contract test',
+        'SELECT voice_status FROM channels WHERE id = ?',
+        [f.voiceChannelId],
+        { voice_status: 'contract test' }
+      )
+    }
+    case 'put /channels/{channel_id}/recipients/{user_id} 201':
+    case 'put /channels/{channel_id}/recipients/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the requested recipient to exist in the target group DM',
+        'SELECT channel_id, user_id FROM channel_recipients WHERE channel_id = ? AND user_id = ?',
+        [f.groupDmChannelId, f.memberId],
+        { channel_id: f.groupDmChannelId, user_id: f.memberId }
+      )
+    }
+    case 'delete /channels/{channel_id}/recipients/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the target recipient to be absent from the target group DM',
+        'SELECT user_id FROM channel_recipients WHERE channel_id = ? AND user_id = ?',
+        [f.groupDmChannelId, f.removableRecipientId],
+        null
+      )
+    }
+    case 'post /users/@me/channels 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a two-recipient DM containing the bot and requested user to be created',
+        `SELECT COUNT(*) AS count FROM channels c
+         WHERE c.type = 1 AND c.guild_id IS NULL
+           AND EXISTS (SELECT 1 FROM channel_recipients r WHERE r.channel_id = c.id AND r.user_id = ?)
+           AND EXISTS (SELECT 1 FROM channel_recipients r WHERE r.channel_id = c.id AND r.user_id = ?)
+           AND (SELECT COUNT(*) FROM channel_recipients r WHERE r.channel_id = c.id) = 2`,
+        [f.userId, f.memberId]
+      )
+    }
+    case 'post /channels/{channel_id}/polls/{message_id}/expire 200': {
+      return predicateEffect(
+        'target poll to be finalized with an expiry timestamp',
+        () =>
+          readRow(
+            db,
+            'SELECT finalized, expiry FROM polls WHERE message_id = ?',
+            [f.pollMessageId]
+          ),
+        (after) => {
+          const row = after as { finalized?: unknown; expiry?: unknown }
+          return row.finalized === 1 && typeof row.expiry === 'string'
+        }
+      )
+    }
+    case 'post /webhooks/{webhook_id}/{webhook_token}/github 204': {
+      return matchingRowCreatedEffect(
+        f,
+        'a target-webhook message with a GitHub embed to be created',
+        `SELECT COUNT(*) AS count FROM messages m JOIN embeds e ON e.message_id = m.id
+         WHERE m.channel_id = ? AND m.author_id = ?`,
+        [f.channelId, f.webhookId]
+      )
+    }
+    case 'post /webhooks/{webhook_id}/{webhook_token}/slack 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a target-webhook message with the requested Slack text to be created',
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE channel_id = ? AND author_id = ? AND content = ?`,
+        [f.channelId, f.webhookId, 'contract test']
+      )
+    }
+    default: {
+      throw new Error(`No operation-specific mutation effect declared for ${key}`)
+    }
+  }
 }
 
 function createOperationAssertion(
   entry: LegacySpecEndpoint,
   status: number
 ): SpecSuccessBranch['assert'] {
+  // eslint-disable-next-line @typescript-eslint/require-await -- A rejected promise is the assertion contract for synchronous state mismatches.
   return async ({ baseUrl, fixture, response }) => {
     const label = `${entry.method.toUpperCase()} ${entry.specPath} ${status}`
     if (response.status !== status) {
@@ -1696,17 +2425,16 @@ function createOperationAssertion(
       throw new Error(`${label} did not use the real contract server`)
     }
 
-    const tables = mutationTables(entry)
-    if (tables.length === 0) return
-    const baseline = mutationBaselines
+    if (entry.method === 'get') return
+    const effect = mutationEffects
       .get(fixture)
       ?.get(`${entry.method} ${entry.specPath} ${status}`)
-    if (baseline === undefined) {
-      throw new Error(`${label} did not capture its state baseline`)
+    if (!effect) {
+      throw new Error(`${label} did not capture its expected operation effect`)
     }
-    if (snapshotTables(fixture.db, tables) === baseline) {
+    if (!effect.isApplied()) {
       throw new Error(
-        `${label} did not change its operation state: ${tables.join(', ')}`
+        `${label} did not apply its expected operation effect: ${effect.description}`
       )
     }
   }
@@ -1719,26 +2447,26 @@ for (const entry of LEGACY_MANIFEST) {
 }
 
 /** All currently implemented Fauxcord operations in unique OpenAPI-key form. */
-export const MANIFEST: SpecEndpoint[] = [...uniqueLegacyEntries.values()].map(
-  (entry) => {
+export const MANIFEST: SpecEndpoint[] = uniqueLegacyEntries.values().map(
+  (entry: LegacySpecEndpoint) => {
     const key = `${entry.method} ${entry.specPath}`
     const statuses = MULTI_SUCCESS_STATUSES[key] ?? [entry.successStatus]
     return {
       specPath: entry.specPath,
       method: entry.method,
       authentication: authenticationFor(entry),
-      createFixture: (factory) => factory.create(),
+      createFixture: (factory: ContractFixtureFactory) => factory.create(),
       successBranches: statuses.map((status) => ({
         status,
         ...responseContract(entry, status),
         responseSchemaOverride: entry.responseSchemaOverride,
-        request: (fixture) => {
+        request: (fixture: ContractFixture) => {
           const request = alternateRequest(entry, status, fixture)
-          captureMutationBaseline(entry, status, fixture)
+          captureMutationEffect(entry, status, fixture)
           return request
         },
         assert: createOperationAssertion(entry, status),
       })),
     }
   }
-)
+).toArray()

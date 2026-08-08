@@ -350,13 +350,19 @@ export async function createRealServer(
     let appFetch: Hono['fetch'] = () =>
       Promise.resolve(new Response('Server is starting', { status: 503 }))
     const serve = options.serve ?? serveWithGateway
-    const started = await startNodeServer(serve, {
-      fetch: (request, env, executionContext) =>
-        appFetch(request, env, executionContext),
-      port: 0,
-      hostname: '127.0.0.1',
-      wss,
-    })
+    const started = await startNodeServer(
+      serve,
+      {
+        fetch: (request, env, executionContext) =>
+          appFetch(request, env, executionContext),
+        port: 0,
+        hostname: '127.0.0.1',
+        wss,
+      },
+      (createdServer) => {
+        server = createdServer
+      }
+    )
     server = started.server
     const baseUrl = `http://127.0.0.1:${started.port}`
     const built = buildApp(database, {
@@ -415,7 +421,8 @@ export async function createRealServer(
 
 async function startNodeServer(
   serve: typeof serveWithGateway,
-  options: Parameters<typeof serveWithGateway>[0]
+  options: Parameters<typeof serveWithGateway>[0],
+  onServerCreated: (server: ReturnType<typeof serveWithGateway>) => void
 ): Promise<{ server: ReturnType<typeof serveWithGateway>; port: number }> {
   return new Promise((resolve, reject) => {
     let startedServer: ReturnType<typeof serveWithGateway>
@@ -427,6 +434,7 @@ async function startNodeServer(
         startedServer.off('error', handleError)
         resolve({ server: startedServer, port: address.port })
       })
+      onServerCreated(startedServer)
       startedServer.once('error', handleError)
     } catch (error) {
       reject(error instanceof Error ? error : new Error(String(error)))
@@ -437,10 +445,12 @@ async function startNodeServer(
 async function closeNodeServer(
   server: ReturnType<typeof serveWithGateway> | undefined
 ): Promise<void> {
-  if (!server?.listening) return
+  if (!server) return
   await new Promise<void>((resolve, reject) => {
     server.close((error) => {
-      if (error) reject(error)
+      if (error && 'code' in error && error.code === 'ERR_SERVER_NOT_RUNNING') {
+        resolve()
+      } else if (error) reject(error)
       else resolve()
     })
   })
