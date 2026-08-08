@@ -520,4 +520,22 @@ describe('GET /channels/:channelId/threads/search', () => {
     )
     expect(res.status).toBe(404)
   })
+
+  it('returns 202 while an empty channel has no search index', async () => {
+    const { app, db, guildId } = setup()
+    const emptyChannelId = seedChannel(db, guildId, '555555555555555555')
+
+    const res = await app.request(
+      `/channels/${emptyChannelId}/threads/search`,
+      { headers: AUTH }
+    )
+
+    expect(res.status).toBe(202)
+    await expect(res.json()).resolves.toEqual({
+      message: 'Search index is not ready',
+      code: 11_000,
+      documents_indexed: 0,
+      retry_after: 1,
+    })
+  })
 })

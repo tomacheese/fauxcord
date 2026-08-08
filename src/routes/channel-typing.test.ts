@@ -3,6 +3,7 @@ import { Hono } from 'hono'
 import { createChannelTypingRoutes } from './channel-typing'
 import { initializeDatabase, closeDatabase } from '../db'
 import { seedBot, seedGuild, seedChannel } from '../test-helpers'
+import { seedGroupDmChannel } from '../test-helpers'
 import type { Database } from '../db'
 
 describe('Channel Typing API', () => {
@@ -33,6 +34,17 @@ describe('Channel Typing API', () => {
       })
       expect(res.status).toBe(204)
       expect(await res.text()).toBe('')
+    })
+
+    it('returns 200 with a typing response for a group DM', async () => {
+      const groupDmId = seedGroupDmChannel(db, '444444444444444444')
+      const res = await app.request(`/channels/${groupDmId}/typing`, {
+        method: 'POST',
+        headers: { Authorization: token },
+      })
+
+      expect(res.status).toBe(200)
+      await expect(res.json()).resolves.toEqual({})
     })
 
     it('returns 404 for an unknown channel', async () => {

@@ -32,6 +32,27 @@ describe('PUT /channels/:channelId/recipients/:userId', () => {
     expect(res.status).toBe(204)
   })
 
+  it('returns the updated group DM with 201 when credentials are supplied', async () => {
+    const channel = seedGroupDmChannel(db)
+    const user = createTestUser(db, { username: 'Grace' })
+
+    const res = await app.request(
+      `/channels/${channel}/recipients/${user.id}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: 'user-token', nick: 'Grace' }),
+      }
+    )
+
+    expect(res.status).toBe(201)
+    await expect(res.json()).resolves.toMatchObject({
+      id: channel,
+      type: 3,
+      recipients: [{ id: user.id }],
+    })
+  })
+
   it('returns 400 for a non-group-DM channel', async () => {
     const bot = seedBot(db, 'Bot testtoken')
     const guild = seedGuild(db, bot)

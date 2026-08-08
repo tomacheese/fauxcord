@@ -40,6 +40,7 @@ function migrateChannelsThreadColumns(db: Database): void {
 /** Additional channel feature columns (voice status), independent of thread support. */
 const CHANNELS_FEATURE_COLUMNS: Record<string, string> = {
   voice_status: 'TEXT',
+  typing_at: 'TEXT',
 }
 
 /**
@@ -127,6 +128,7 @@ export function initializeDatabase(dbPath: string): Database {
       invitable             INTEGER NOT NULL DEFAULT 1,
       archive_timestamp     TEXT,
       voice_status          TEXT,
+      typing_at             TEXT,
       created_at            TEXT NOT NULL DEFAULT (datetime('now'))
     );
 

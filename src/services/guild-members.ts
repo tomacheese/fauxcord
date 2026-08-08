@@ -266,6 +266,7 @@ export function getGuildMembers(
 export interface GuildMemberUpdateParams {
   nick?: string | null
   roles?: string[]
+  mute?: boolean | null
 }
 
 /**
@@ -291,6 +292,12 @@ export function updateGuildMember(
     db.prepare(
       'UPDATE guild_members SET nick = ? WHERE guild_id = ? AND user_id = ?'
     ).run(payload.nick, guildId, userId)
+  }
+
+  if (payload.mute !== undefined && payload.mute !== null) {
+    db.prepare(
+      'UPDATE guild_members SET mute = ? WHERE guild_id = ? AND user_id = ?'
+    ).run(payload.mute ? 1 : 0, guildId, userId)
   }
 
   if (payload.roles !== undefined) {

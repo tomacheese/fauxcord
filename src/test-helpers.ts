@@ -8,9 +8,9 @@
 
 import { Hono } from 'hono'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { WebSocketServer } from 'ws'
 import { serveWithGateway } from './http-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
@@ -163,6 +163,7 @@ export function createContractFixture(db: Database): ContractFixture {
      VALUES (?, ?, '@everyone', '1071698660929', 0, 0, 0, 0)`
   ).run(guildId, guildId)
   const channelId = seedChannel(db, guildId, '777777777777777777')
+  const unindexedChannelId = seedChannel(db, guildId, '777777777777777781')
   const announcementChannelId = seedAnnouncementChannel(
     db,
     guildId,
@@ -182,6 +183,16 @@ export function createContractFixture(db: Database): ContractFixture {
     token
   )
   const deletableMessageId = seedMessage(db, channelId, userId, token)
+  const pinnedMessageId = seedMessage(db, channelId, userId, token)
+  db.prepare('INSERT INTO pins (channel_id, message_id) VALUES (?, ?)').run(
+    channelId,
+    pinnedMessageId
+  )
+  db.prepare('UPDATE messages SET pinned = 1 WHERE id = ?').run(pinnedMessageId)
+  const reactedMessageId = seedMessage(db, channelId, userId, token)
+  db.prepare(
+    'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+  ).run(reactedMessageId, userId, '👍')
   const pollMessageId = seedMessage(db, channelId, userId, token)
   createPoll(db, pollMessageId, {
     question: 'Contract poll?',
@@ -189,10 +200,25 @@ export function createContractFixture(db: Database): ContractFixture {
   })
   const webhookMessageId = seedMessage(db, channelId, webhookId, 'webhook')
   const roleId = seedRole(db, guildId)
+  const deletableRoleId = seedRole(db, guildId, 'deletable-role')
+  const assignedRoleId = seedRole(db, guildId, 'assigned-role')
+  const deletableOverwriteId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channel_overwrites (channel_id, id, type, allow, deny)
+     VALUES (?, ?, 0, '0', '0')`
+  ).run(channelId, deletableOverwriteId)
   db.prepare(
     'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
   ).run(guildId, userId)
   const memberId = seedMember(db, guildId)
+  db.prepare(
+    'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+  ).run(guildId, memberId, assignedRoleId)
+  const banTargetUserId = seedMember(db, guildId)
+  const removableRecipientId = seedMember(db, guildId)
+  db.prepare(
+    'INSERT INTO channel_recipients (channel_id, user_id) VALUES (?, ?)'
+  ).run(groupDmChannelId, removableRecipientId)
   const emojiId = seedEmoji(db, guildId, userId)
   const inviteCode = seedInvite(db, channelId, guildId, userId, 'contractcode')
   const deletableInviteCode = seedInvite(
@@ -213,6 +239,27 @@ export function createContractFixture(db: Database): ContractFixture {
   db.prepare(
     'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
   ).run(threadId, userId)
+  const joinableThreadId = generateSnowflake()
+  const memberThreadId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channels
+       (id, guild_id, type, name, parent_id, owner_id, archived,
+        auto_archive_duration, archive_timestamp)
+     VALUES (?, ?, 11, 'joinable-thread', ?, ?, 1, 1440, datetime('now')),
+            (?, ?, 11, 'member-thread', ?, ?, 1, 1440, datetime('now'))`
+  ).run(
+    joinableThreadId,
+    guildId,
+    channelId,
+    userId,
+    memberThreadId,
+    guildId,
+    channelId,
+    userId
+  )
+  db.prepare(
+    'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
+  ).run(memberThreadId, memberId)
   const commandId = seedApplicationCommand(db, userId, null, 'contractcmd')
   const guildCommandId = seedApplicationCommand(
     db,
@@ -238,28 +285,39 @@ export function createContractFixture(db: Database): ContractFixture {
   ).run(webhookMessageId, originalInteractionId)
 
   return {
+    db,
     token,
     userId,
     bearerToken,
     guildId,
     channelId,
+    unindexedChannelId,
     announcementChannelId,
     announcementMessageId,
     voiceChannelId,
     groupDmChannelId,
     messageId,
     deletableMessageId,
+    pinnedMessageId,
+    reactedMessageId,
     pollMessageId,
     webhookMessageId,
     webhookId,
     webhookToken,
     roleId,
+    deletableRoleId,
+    assignedRoleId,
+    deletableOverwriteId,
     memberId,
     emojiId,
     inviteCode,
     deletableInviteCode,
     bannedUserId,
+    banTargetUserId,
     threadId,
+    joinableThreadId,
+    memberThreadId,
+    removableRecipientId,
     commandId,
     guildCommandId,
     interactionId,
@@ -285,34 +343,31 @@ export async function createRealServer(
   let unsubscribeGateway: (() => void) | undefined
   let server: ReturnType<typeof serveWithGateway> | undefined
   try {
-    const port = await reserveTcpPort()
-    const baseUrl = `http://127.0.0.1:${port}`
     db = initializeDatabase(':memory:')
     const database = db
     options.onDatabaseCreated?.(database)
+    const wss = new WebSocketServer({ noServer: true })
+    let appFetch: Hono['fetch'] = () =>
+      Promise.resolve(new Response('Server is starting', { status: 503 }))
+    const serve = options.serve ?? serveWithGateway
+    const started = await startNodeServer(serve, {
+      fetch: (request, env, executionContext) =>
+        appFetch(request, env, executionContext),
+      port: 0,
+      hostname: '127.0.0.1',
+      wss,
+    })
+    server = started.server
+    const baseUrl = `http://127.0.0.1:${started.port}`
     const built = buildApp(database, {
       baseUrl,
       uploadPath,
       disableAuth: false,
       latencyMs: 0,
+      wss,
     })
+    appFetch = built.app.fetch
     unsubscribeGateway = built.unsubscribeGateway
-    const serve = options.serve ?? serveWithGateway
-    server = await new Promise<ReturnType<typeof serveWithGateway>>(
-      (resolve) => {
-        const startedServer = serve(
-          {
-            fetch: built.app.fetch,
-            port,
-            hostname: '127.0.0.1',
-            wss: built.wss,
-          },
-          () => {
-            resolve(startedServer)
-          }
-        )
-      }
-    )
 
     let closePromise: Promise<void> | undefined
     return {
@@ -358,23 +413,25 @@ export async function createRealServer(
 }
 /* eslint-enable @typescript-eslint/no-use-before-define */
 
-async function reserveTcpPort(): Promise<number> {
-  const probe = createServer()
-  await new Promise<void>((resolve, reject) => {
-    probe.once('error', reject)
-    probe.listen(0, '127.0.0.1', resolve)
+async function startNodeServer(
+  serve: typeof serveWithGateway,
+  options: Parameters<typeof serveWithGateway>[0]
+): Promise<{ server: ReturnType<typeof serveWithGateway>; port: number }> {
+  return new Promise((resolve, reject) => {
+    let startedServer: ReturnType<typeof serveWithGateway>
+    const handleError = (error: Error) => {
+      reject(error)
+    }
+    try {
+      startedServer = serve(options, (address) => {
+        startedServer.off('error', handleError)
+        resolve({ server: startedServer, port: address.port })
+      })
+      startedServer.once('error', handleError)
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
   })
-  const address = probe.address()
-  await new Promise<void>((resolve, reject) => {
-    probe.close((error) => {
-      if (error) reject(error)
-      else resolve()
-    })
-  })
-  if (!address || typeof address === 'string') {
-    throw new Error('Port reservation did not expose a TCP address')
-  }
-  return address.port
 }
 
 async function closeNodeServer(

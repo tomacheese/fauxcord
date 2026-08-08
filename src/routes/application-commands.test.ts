@@ -46,6 +46,32 @@ describe('Application Commands routes (global)', () => {
     expect(body.name).toBe('ping')
   })
 
+  it('updates an existing global command by name and returns 200', async () => {
+    const url = `/applications/${applicationId}/commands`
+    const headers = {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    }
+    const created = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'old' }),
+    })
+    const original = (await created.json()) as { id: string }
+
+    const updated = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'new' }),
+    })
+
+    expect(updated.status).toBe(200)
+    await expect(updated.json()).resolves.toMatchObject({
+      id: original.id,
+      description: 'new',
+    })
+  })
+
   it('403s when applicationId does not match the authenticated bot', async () => {
     const res = await app.request('/applications/999/commands', {
       method: 'GET',
@@ -169,6 +195,32 @@ describe('Application Commands routes (guild-scoped)', () => {
       { headers: { Authorization: token } }
     )
     expect(missingGuild.status).toBe(404)
+  })
+
+  it('updates an existing guild command by name and returns 200', async () => {
+    const url = `/applications/${applicationId}/guilds/${guildId}/commands`
+    const headers = {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    }
+    const created = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'old' }),
+    })
+    const original = (await created.json()) as { id: string }
+
+    const updated = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'new' }),
+    })
+
+    expect(updated.status).toBe(200)
+    await expect(updated.json()).resolves.toMatchObject({
+      id: original.id,
+      description: 'new',
+    })
   })
 
   it('bulk overwrites guild commands', async () => {

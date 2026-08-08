@@ -50,6 +50,35 @@ describe('Channel Invites API', () => {
       expect(body.inviter?.id).toBeTruthy()
     })
 
+    it('creates an invite with target users and returns 204', async () => {
+      const form = new FormData()
+      form.set('payload_json', JSON.stringify({ max_age: 3600 }))
+      form.set(
+        'target_users_file',
+        new File(['user_id\n555555555555555555\n'], 'targets.csv', {
+          type: 'text/csv',
+        })
+      )
+
+      const res = await app.request(`/channels/${channelId}/invites`, {
+        method: 'POST',
+        headers: { Authorization: token },
+        body: form,
+      })
+
+      expect(res.status).toBe(204)
+      expect(db.prepare('SELECT COUNT(*) AS count FROM invites').get()).toEqual(
+        { count: 1 }
+      )
+      expect(
+        db
+          .prepare(
+            'SELECT total_users, processed_users FROM invite_target_users'
+          )
+          .get()
+      ).toEqual({ total_users: 1, processed_users: 1 })
+    })
+
     it('returns 404 for a non-existent channel', async () => {
       const res = await app.request('/channels/999999999999999999/invites', {
         method: 'POST',

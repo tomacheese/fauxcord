@@ -41,6 +41,8 @@ export interface BuildAppConfig {
   disableAuth: boolean
   /** Artificial latency (ms) applied to all responses */
   latencyMs?: number
+  /** Existing no-server WebSocket server when HTTP is bound before assembly. */
+  wss?: WebSocketServer
 }
 
 /**
@@ -67,7 +69,7 @@ export function buildApp(
   // `noServer: true` is required because `@hono/node-server`'s
   // `serve({ websocket: { server: wss } })` takes over handling the
   // upgrade event.
-  const wss = new WebSocketServer({ noServer: true })
+  const wss = config.wss ?? new WebSocketServer({ noServer: true })
 
   // Configure middleware (applied to all requests)
   app.use('*', corsMiddleware)

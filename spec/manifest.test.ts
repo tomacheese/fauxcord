@@ -84,7 +84,7 @@ describe('OpenAPI operation manifest', () => {
     }
   })
 
-  it('uses only success statuses declared by the OpenAPI operation', () => {
+  it('covers every declared OpenAPI success status once per operation', () => {
     for (const entry of MANIFEST) {
       const operation = spec.paths[entry.specPath]?.[entry.method]
       const expectedStatuses = Object.keys(operation?.responses ?? {})
@@ -95,12 +95,9 @@ describe('OpenAPI operation manifest', () => {
         .map((branch) => branch.status)
         .sort((a, b) => a - b)
 
-      expect(new Set(actualStatuses).size).toBe(actualStatuses.length)
-      for (const status of actualStatuses) {
-        expect(expectedStatuses, operationKey(entry.method, entry.specPath)).toContain(
-          status
-        )
-      }
+      expect(actualStatuses, operationKey(entry.method, entry.specPath)).toEqual(
+        expectedStatuses
+      )
     }
   })
 })

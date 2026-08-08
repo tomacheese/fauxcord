@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import type { Database } from './db'
 import { MANIFEST } from '../spec/manifest'
+import { serveWithGateway } from './http-server'
 import { createContractFixture, createRealServer } from './test-helpers'
 
 describe('real HTTP contract fixture', () => {
@@ -15,7 +17,13 @@ describe('real HTTP contract fixture', () => {
   })
 
   it('starts the production app assembly on an OS-assigned port', async () => {
-    const server = await createRealServer()
+    const requestedPorts: number[] = []
+    const server = await createRealServer({
+      serve: (options, listener) => {
+        requestedPorts.push(options.port)
+        return serveWithGateway(options, listener)
+      },
+    })
     close = server.close
     const response = await fetch(`${server.baseUrl}/_mock/health`)
 
@@ -29,6 +37,7 @@ describe('real HTTP contract fixture', () => {
       (result) => result.json()
     )) as { url: string }
     expect(gateway.url).toBe(server.baseUrl.replace('http:', 'ws:'))
+    expect(requestedPorts).toEqual([0])
 
     await server.close()
     await server.close()
@@ -88,8 +97,53 @@ describe('real HTTP contract fixture', () => {
         fixture,
         response,
       })
-    ).rejects.toThrow('did not remove its target resource')
+    ).rejects.toThrow('did not change its operation state')
   })
+
+  it('rejects every mutation assertion when its operation was skipped', async () => {
+    const acceptedWithoutMutation: string[] = []
+    for (const entry of MANIFEST) {
+      if (entry.method === 'get') continue
+      for (const branch of entry.successBranches) {
+        const server = await createRealServer()
+        try {
+          const fixture = await entry.createFixture({
+            create: () => Promise.resolve(createContractFixture(server.db)),
+          })
+          const request = branch.request(fixture)
+          const response = new Response(
+            branch.body === 'empty' ? null : JSON.stringify({}),
+            {
+              status: branch.status,
+              headers: branch.contentType
+                ? { 'Content-Type': branch.contentType }
+                : undefined,
+            }
+          )
+          Object.defineProperty(response, 'url', {
+            value: `${server.baseUrl}${request.path}`,
+          })
+
+          try {
+            await branch.assert({
+              baseUrl: server.baseUrl,
+              fixture,
+              response,
+            })
+            acceptedWithoutMutation.push(
+              `${entry.method.toUpperCase()} ${entry.specPath} ${branch.status}`
+            )
+          } catch {
+            // Rejection is the required result when no state change occurred.
+          }
+        } finally {
+          await server.close()
+        }
+      }
+    }
+
+    expect(acceptedWithoutMutation).toEqual([])
+  }, 120_000)
 
   it('executes every declared success branch through the real server', async () => {
     for (const entry of MANIFEST) {
@@ -163,6 +217,43 @@ describe('real HTTP contract fixture', () => {
       expect(error).toEqual(new Error('injected startup failure'))
       await expect(stat(uploadPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(() => db?.prepare('SELECT 1').get()).toThrow()
+    } finally {
+      await rm(uploadPath, { recursive: true, force: true })
+    }
+  })
+
+  it('propagates an asynchronous startup error and cleans resources', async () => {
+    const uploadPath = await mkdtemp(path.join(tmpdir(), 'fauxcord-async-'))
+    const expected = new Error('injected async startup failure')
+    // eslint-disable-next-line unicorn/prefer-event-target -- Node servers expose EventEmitter's `error` event contract.
+    const fakeServer = new EventEmitter() as ReturnType<typeof serveWithGateway>
+    Object.assign(fakeServer, {
+      listening: false,
+      close: (callback?: (error?: Error) => void) => {
+        callback?.()
+        return fakeServer
+      },
+    })
+    fakeServer.on('error', () => undefined)
+
+    try {
+      const startup = createRealServer({
+        uploadPath,
+        serve: () => {
+          queueMicrotask(() => fakeServer.emit('error', expected))
+          return fakeServer
+        },
+      })
+      const timeout = new Promise<never>((_resolve, reject) => {
+        setTimeout(() => {
+          reject(new Error('startup did not reject'))
+        }, 100)
+      })
+
+      await expect(Promise.race([startup, timeout])).rejects.toThrow(
+        expected.message
+      )
+      await expect(stat(uploadPath)).rejects.toMatchObject({ code: 'ENOENT' })
     } finally {
       await rm(uploadPath, { recursive: true, force: true })
     }

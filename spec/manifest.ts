@@ -47,8 +47,12 @@
  * lets contract tests validate against that exact branch rather than the ambiguous union.
  */
 
+import type { Database } from '../src/db'
+
 /** Seeded test data available to manifest request builders. */
 export interface ContractFixture {
+  /** Isolated datastore used to verify operation-specific state changes. */
+  db: Database
   /** Bot token used for Authorization header (e.g. "Bot testtoken") */
   token: string
   /** Bot user ID */
@@ -59,6 +63,8 @@ export interface ContractFixture {
   guildId: string
   /** Seeded text channel ID */
   channelId: string
+  /** Seeded text channel without searchable threads. */
+  unindexedChannelId: string
   /** Seeded announcement channel ID. */
   announcementChannelId: string
   /** Seeded announcement-channel message ID. */
@@ -74,6 +80,10 @@ export interface ContractFixture {
   messageId: string
   /** Message reserved for destructive request branches. */
   deletableMessageId: string
+  /** Message pinned before destructive pin-removal branches. */
+  pinnedMessageId: string
+  /** Message with a seeded bot reaction for destructive reaction branches. */
+  reactedMessageId: string
   /** Message containing a seeded poll. */
   pollMessageId: string
   /**
@@ -87,6 +97,12 @@ export interface ContractFixture {
   webhookToken: string
   /** Seeded role ID (non-@everyone) */
   roleId: string
+  /** Seeded role reserved for role deletion. */
+  deletableRoleId: string
+  /** Seeded role already assigned to the member. */
+  assignedRoleId: string
+  /** Seeded permission overwrite reserved for deletion. */
+  deletableOverwriteId: string
   /** Seeded member user ID (a second user who is a member of the guild) */
   memberId: string
   /** Seeded emoji ID */
@@ -101,8 +117,16 @@ export interface ContractFixture {
   deletableInviteCode: string
   /** Seeded banned user ID (a user with a ban record in the guild) */
   bannedUserId: string
+  /** Seeded unbanned user used by the ban-creation branch. */
+  banTargetUserId: string
   /** Seeded thread (channel type 11) ID, archived, with the bot as a member */
   threadId: string
+  /** Seeded thread that the bot has not joined. */
+  joinableThreadId: string
+  /** Seeded thread containing the secondary member. */
+  memberThreadId: string
+  /** Existing group-DM recipient reserved for removal. */
+  removableRecipientId: string
   /** Seeded global application command ID */
   commandId: string
   /** Seeded guild-scoped application command ID */
@@ -305,7 +329,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/messages/pins/${f.messageId}`,
+      path: `/api/v10/channels/${f.channelId}/messages/pins/${f.pinnedMessageId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -331,7 +355,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions/%F0%9F%91%8D/@me`,
+      path: `/api/v10/channels/${f.channelId}/messages/${f.reactedMessageId}/reactions/%F0%9F%91%8D/@me`,
       init: { method: 'DELETE' },
     }),
   },
@@ -340,7 +364,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions/%F0%9F%91%8D/${f.userId}`,
+      path: `/api/v10/channels/${f.channelId}/messages/${f.reactedMessageId}/reactions/%F0%9F%91%8D/${f.userId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -349,7 +373,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/messages/${f.messageId}/reactions`,
+      path: `/api/v10/channels/${f.channelId}/messages/${f.reactedMessageId}/reactions`,
       init: { method: 'DELETE' },
     }),
   },
@@ -373,7 +397,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/pins/${f.messageId}`,
+      path: `/api/v10/channels/${f.channelId}/pins/${f.pinnedMessageId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -420,7 +444,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/permissions/${f.roleId}`,
+      path: `/api/v10/channels/${f.channelId}/permissions/${f.deletableOverwriteId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -652,7 +676,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/guilds/${f.guildId}/roles/${f.roleId}`,
+      path: `/api/v10/guilds/${f.guildId}/roles/${f.deletableRoleId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -728,7 +752,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'put',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/guilds/${f.guildId}/bans/${f.bannedUserId}`,
+      path: `/api/v10/guilds/${f.guildId}/bans/${f.banTargetUserId}`,
       init: { method: 'PUT' },
     }),
   },
@@ -757,7 +781,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.roleId}`,
+      path: `/api/v10/guilds/${f.guildId}/members/${f.memberId}/roles/${f.assignedRoleId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -1242,7 +1266,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'put',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.threadId}/thread-members/@me`,
+      path: `/api/v10/channels/${f.joinableThreadId}/thread-members/@me`,
       init: { method: 'PUT' },
     }),
   },
@@ -1269,7 +1293,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.threadId}/thread-members/${f.memberId}`,
+      path: `/api/v10/channels/${f.memberThreadId}/thread-members/${f.memberId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -1357,7 +1381,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'delete',
     successStatus: 204,
     request: (f: ContractFixture) => ({
-      path: `/api/v10/channels/${f.groupDmChannelId}/recipients/${f.memberId}`,
+      path: `/api/v10/channels/${f.groupDmChannelId}/recipients/${f.removableRecipientId}`,
       init: { method: 'DELETE' },
     }),
   },
@@ -1421,6 +1445,14 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
 ]
 
 const MULTI_SUCCESS_STATUSES: Readonly<Record<string, readonly number[]>> = {
+  'post /channels/{channel_id}/typing': [200, 204],
+  'post /channels/{channel_id}/invites': [200, 204],
+  'patch /guilds/{guild_id}/members/{user_id}': [200, 204],
+  'post /applications/{application_id}/commands': [200, 201],
+  'post /applications/{application_id}/guilds/{guild_id}/commands': [200, 201],
+  'post /interactions/{interaction_id}/{interaction_token}/callback': [200, 204],
+  'get /channels/{channel_id}/threads/search': [200, 202],
+  'put /channels/{channel_id}/recipients/{user_id}': [201, 204],
   'post /webhooks/{webhook_id}/{webhook_token}': [200, 204],
 }
 
@@ -1458,24 +1490,197 @@ function alternateRequest(
 ): ContractRequest {
   const request = entry.request(fixture)
   const key = `${entry.method} ${entry.specPath}`
+  if (key === 'post /channels/{channel_id}/typing' && status === 200) {
+    return {
+      ...request,
+      path: `/api/v10/channels/${fixture.groupDmChannelId}/typing`,
+    }
+  }
+  if (key === 'post /channels/{channel_id}/invites' && status === 204) {
+    const body = new FormData()
+    body.set('payload_json', JSON.stringify({ max_age: 3600 }))
+    body.set(
+      'target_users_file',
+      new File([`user_id\n${fixture.memberId}\n`], 'targets.csv', {
+        type: 'text/csv',
+      })
+    )
+    return { ...request, init: { method: 'POST', body } }
+  }
+  if (
+    key === 'patch /guilds/{guild_id}/members/{user_id}' &&
+    status === 204
+  ) {
+    return {
+      ...request,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roles: [fixture.roleId], mute: false }),
+      },
+    }
+  }
+  if (key === 'post /applications/{application_id}/commands' && status === 200) {
+    return {
+      ...request,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'contractcmd',
+          description: 'replaced global command',
+        }),
+      },
+    }
+  }
+  if (
+    key ===
+      'post /applications/{application_id}/guilds/{guild_id}/commands' &&
+    status === 200
+  ) {
+    return {
+      ...request,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'guildcontractcmd',
+          description: 'replaced guild command',
+        }),
+      },
+    }
+  }
+  if (
+    key === 'post /interactions/{interaction_id}/{interaction_token}/callback' &&
+    status === 200
+  ) {
+    return {
+      ...request,
+      path: `${request.path}?with_response=true`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 4,
+          data: { content: 'contract callback response' },
+        }),
+      },
+    }
+  }
+  if (key === 'get /channels/{channel_id}/threads/search' && status === 202) {
+    return {
+      ...request,
+      path: `/api/v10/channels/${fixture.unindexedChannelId}/threads/search`,
+    }
+  }
+  if (key === 'put /channels/{channel_id}/recipients/{user_id}' && status === 201) {
+    return {
+      ...request,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: 'contract-user-token', nick: 'member' }),
+      },
+    }
+  }
   if (key === 'post /webhooks/{webhook_id}/{webhook_token}' && status === 204) {
     return { ...request, path: request.path.replace('?wait=true', '') }
   }
   return request
 }
 
-function requestHeaders(
-  entry: LegacySpecEndpoint,
-  fixture: ContractFixture,
-  init?: RequestInit
-): Headers {
-  const headers = new Headers(init?.headers)
-  const authentication = authenticationFor(entry)
-  if (authentication === 'bot') headers.set('Authorization', fixture.token)
-  if (authentication === 'bearer') {
-    headers.set('Authorization', `Bearer ${fixture.bearerToken}`)
+const mutationBaselines = new WeakMap<ContractFixture, Map<string, string>>()
+
+function mutationTables(entry: LegacySpecEndpoint): string[] {
+  const path = entry.specPath
+  const key = `${entry.method} ${path}`
+  if (entry.method === 'get') return []
+  if (path.includes('/reactions')) return ['reactions']
+  if (path.includes('/messages/pins') || path.includes('/pins/')) {
+    return ['pins', 'messages']
   }
-  return headers
+  if (path.includes('/messages/bulk-delete')) return ['messages']
+  if (path.includes('/messages/{message_id}/threads')) {
+    return ['channels', 'thread_members']
+  }
+  if (path.includes('/messages/{message_id}/crosspost')) return ['messages']
+  if (path.includes('/messages/{message_id}')) return ['messages']
+  if (path === '/channels/{channel_id}/messages') return ['messages']
+  if (path.endsWith('/typing') || path.endsWith('/voice-status')) {
+    return ['channels']
+  }
+  if (path.endsWith('/permissions/{overwrite_id}')) {
+    return ['channel_overwrites']
+  }
+  if (path === '/channels/{channel_id}/invites') {
+    return entry.successStatus === 204
+      ? ['invites', 'invite_target_users']
+      : ['invites']
+  }
+  if (path === '/invites/{code}') return ['invites']
+  if (path === '/invites/{code}/target-users') {
+    return ['invite_target_users']
+  }
+  if (path === '/channels/{channel_id}/webhooks') return ['webhooks']
+  if (path.includes('/thread-members/')) return ['thread_members']
+  if (path === '/channels/{channel_id}/threads') {
+    return ['channels', 'thread_members']
+  }
+  if (path.endsWith('/followers')) return ['webhooks']
+  if (path.endsWith('/recipients/{user_id}')) return ['channel_recipients']
+  if (path === '/channels/{channel_id}') return ['channels']
+  if (path === '/guilds/{guild_id}') return ['guilds']
+  if (path === '/guilds/{guild_id}/channels') return ['channels']
+  if (path.includes('/members/{user_id}/roles/{role_id}')) {
+    return ['member_roles']
+  }
+  if (path.includes('/members/')) return ['guild_members', 'member_roles']
+  if (path.includes('/roles')) return ['roles']
+  if (path.includes('/emojis')) return ['emojis']
+  if (path.includes('/bans/')) return ['guild_bans', 'guild_members']
+  if (path === '/users/@me') return ['bots', 'users']
+  if (path === '/users/@me/channels') {
+    return ['channels', 'channel_recipients']
+  }
+  if (path.includes('/commands/{command_id}/permissions')) {
+    return ['application_command_permissions']
+  }
+  if (path.includes('/commands')) return ['application_commands']
+  if (path.includes('/interactions/')) return ['interactions', 'messages']
+  if (path.includes('/polls/{message_id}/expire')) return ['polls']
+  if (path.startsWith('/webhooks/')) {
+    if (
+      key.endsWith('/github') ||
+      key.endsWith('/slack') ||
+      entry.method === 'post'
+    ) {
+      return ['messages', 'embeds']
+    }
+    return path.includes('/messages/') ? ['messages'] : ['webhooks']
+  }
+  throw new Error(`No mutation state domain declared for ${key}`)
+}
+
+function snapshotTables(db: Database, tables: string[]): string {
+  return JSON.stringify(
+    tables.map((table) => ({
+      table,
+      rows: db.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all(),
+    }))
+  )
+}
+
+function captureMutationBaseline(
+  entry: LegacySpecEndpoint,
+  status: number,
+  fixture: ContractFixture
+): void {
+  const tables = mutationTables(entry)
+  if (tables.length === 0) return
+  const key = `${entry.method} ${entry.specPath} ${status}`
+  const baselines = mutationBaselines.get(fixture) ?? new Map<string, string>()
+  baselines.set(key, snapshotTables(fixture.db, tables))
+  mutationBaselines.set(fixture, baselines)
 }
 
 function createOperationAssertion(
@@ -1483,7 +1688,6 @@ function createOperationAssertion(
   status: number
 ): SpecSuccessBranch['assert'] {
   return async ({ baseUrl, fixture, response }) => {
-    const request = alternateRequest(entry, status, fixture)
     const label = `${entry.method.toUpperCase()} ${entry.specPath} ${status}`
     if (response.status !== status) {
       throw new Error(`${label} returned ${response.status}`)
@@ -1492,20 +1696,18 @@ function createOperationAssertion(
       throw new Error(`${label} did not use the real contract server`)
     }
 
-    const pairedGet = uniqueLegacyEntries.has(`get ${entry.specPath}`)
-    if (!pairedGet || entry.method === 'get') return
-
-    const observation = await fetch(`${baseUrl}${request.path}`, {
-      headers: requestHeaders(entry, fixture),
-    })
-    if (entry.method === 'delete') {
-      if (observation.status !== 404) {
-        throw new Error(`${label} did not remove its target resource`)
-      }
-      return
+    const tables = mutationTables(entry)
+    if (tables.length === 0) return
+    const baseline = mutationBaselines
+      .get(fixture)
+      ?.get(`${entry.method} ${entry.specPath} ${status}`)
+    if (baseline === undefined) {
+      throw new Error(`${label} did not capture its state baseline`)
     }
-    if (!observation.ok) {
-      throw new Error(`${label} mutation was not observable through GET`)
+    if (snapshotTables(fixture.db, tables) === baseline) {
+      throw new Error(
+        `${label} did not change its operation state: ${tables.join(', ')}`
+      )
     }
   }
 }
@@ -1530,7 +1732,11 @@ export const MANIFEST: SpecEndpoint[] = [...uniqueLegacyEntries.values()].map(
         status,
         ...responseContract(entry, status),
         responseSchemaOverride: entry.responseSchemaOverride,
-        request: (fixture) => alternateRequest(entry, status, fixture),
+        request: (fixture) => {
+          const request = alternateRequest(entry, status, fixture)
+          captureMutationBaseline(entry, status, fixture)
+          return request
+        },
         assert: createOperationAssertion(entry, status),
       })),
     }

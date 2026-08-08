@@ -24,7 +24,7 @@ export function createChannelRecipientRoutes(db: Database): Hono {
   const app = new Hono()
 
   // PUT /channels/:channelId/recipients/:userId — Add a group-DM recipient
-  app.put('/channels/:channelId/recipients/:userId', (c) => {
+  app.put('/channels/:channelId/recipients/:userId', async (c) => {
     const { channelId, userId } = c.req.param()
 
     const channel = getChannel(db, channelId)
@@ -48,6 +48,10 @@ export function createChannelRecipientRoutes(db: Database): Hono {
     }
 
     addChannelRecipient(db, channelId, userId)
+    if ((c.req.header('content-type') ?? '').includes('application/json')) {
+      await c.req.json()
+      return c.json(getChannel(db, channelId), 201)
+    }
     return c.body(null, 204)
   })
 
