@@ -63,7 +63,7 @@ import { generateSnowflake } from '../snowflake'
 
 type JsonObject = Record<string, unknown>
 
-const SNOWFLAKE_PATTERN = /^\d{17,20}$/
+const SNOWFLAKE_PATTERN = /^(0|[1-9][0-9]*)$/
 const WIDGET_PNG = Uint8Array.from(
   Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

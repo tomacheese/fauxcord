@@ -284,8 +284,7 @@ describe('advanced guild routes', () => {
         expect(length).toBe(13)
         expect(data.readUInt32BE(0)).toBe(1)
         expect(data.readUInt32BE(4)).toBe(1)
-      }
-      if (type === 'IDAT') imageData.push(data)
+      } else if (type === 'IDAT') imageData.push(data)
       offset += length + 12
     }
     expect(offset).toBe(bytes.length)
@@ -370,7 +369,7 @@ describe('advanced guild routes', () => {
         ...request.init,
         headers: {
           Authorization: token,
-          ...(request.init?.body ? { 'Content-Type': 'application/json' } : {}),
+          'Content-Type': 'application/json',
         },
       })
       expect(response.status, request.name).toBe(400)
@@ -384,6 +383,39 @@ describe('advanced guild routes', () => {
     )
     expect(publicWidget.status).toBe(400)
     expect(await publicWidget.json()).toMatchObject({ code: 50_035 })
+
+    for (const malformedGuildId of ['01', '-1', 'abc']) {
+      const response = await context.app.request(
+        `/api/v10/guilds/${malformedGuildId}/widget.json`
+      )
+      expect(response.status, malformedGuildId).toBe(400)
+      expect(await response.json(), malformedGuildId).toMatchObject({
+        code: 50_035,
+      })
+    }
+  })
+
+  it('accepts OpenAPI Snowflake boundaries and continues to resource lookup', async () => {
+    const unknownGuildCases = [
+      { id: '0', authenticated: true },
+      { id: '7', authenticated: false },
+    ]
+    for (const { authenticated, id } of unknownGuildCases) {
+      const response = await context.app.request(
+        `/api/v10/guilds/${id}/${authenticated ? 'audit-logs' : 'widget.json'}`,
+        authenticated ? { headers: { Authorization: token } } : undefined
+      )
+      expect(response.status, id).toBe(404)
+      expect(await response.json(), id).toMatchObject({ code: 10_004 })
+    }
+
+    const longSnowflake = '1234567890123456789012345678901234567890'
+    const resourceResponse = await context.app.request(
+      `/api/v10/guilds/${guildId}/auto-moderation/rules/${longSnowflake}`,
+      { headers: { Authorization: token } }
+    )
+    expect(resourceResponse.status).toBe(404)
+    expect(await resourceResponse.json()).toMatchObject({ code: 10_023 })
   })
 
   it('exposes deterministic guild queries and validates malformed writes', async () => {

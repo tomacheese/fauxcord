@@ -16,7 +16,7 @@ import {
 } from '../services/soundboard'
 import { parseJsonBody } from '../lib/route-helpers'
 
-const SNOWFLAKE_PATTERN = /^\d{17,20}$/
+const SNOWFLAKE_PATTERN = /^(0|[1-9][0-9]*)$/
 
 /**
  * Creates the Soundboard API routes.

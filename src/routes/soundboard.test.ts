@@ -102,20 +102,58 @@ describe('Soundboard API', () => {
         "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
       ).run(token, userId)
 
-      const res = await app.request(
-        '/api/v10/channels/not-a-snowflake/send-soundboard-sound',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ sound_id: '899999999999999999' }),
-        }
-      )
+      for (const malformedChannelId of ['01', '-1', 'not-a-snowflake']) {
+        const res = await app.request(
+          `/api/v10/channels/${malformedChannelId}/send-soundboard-sound`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sound_id: '899999999999999999' }),
+          }
+        )
 
-      expect(res.status).toBe(400)
-      expect(await res.json()).toMatchObject({ code: 50_035 })
+        expect(res.status, malformedChannelId).toBe(400)
+        expect(await res.json(), malformedChannelId).toMatchObject({
+          code: 50_035,
+        })
+      }
+      closeDatabase(db)
+    })
+
+    it('accepts OpenAPI Snowflake boundaries and continues to channel lookup', async () => {
+      const { app, db } = createFullTestApp()
+      const token = 'Bot soundboard-channel-boundaries'
+      const userId = '811111111111111112'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'SoundboardBot', 1)"
+      ).run(userId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
+      ).run(token, userId)
+
+      for (const channelId of [
+        '0',
+        '7',
+        '1234567890123456789012345678901234567890',
+      ]) {
+        const res = await app.request(
+          `/api/v10/channels/${channelId}/send-soundboard-sound`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sound_id: '899999999999999999' }),
+          }
+        )
+
+        expect(res.status, channelId).toBe(404)
+        expect(await res.json(), channelId).toMatchObject({ code: 10_003 })
+      }
       closeDatabase(db)
     })
   })
