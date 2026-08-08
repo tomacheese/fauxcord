@@ -7,7 +7,7 @@
  */
 
 import { Hono } from 'hono'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { WebSocketServer } from 'ws'
@@ -861,4 +861,271 @@ export function seedInteraction(
     userId,
   })
   return { interactionId, interactionToken }
+}
+
+/**
+ * Seeds an application with a distinct owning user.
+ * @param db - Database
+ * @param applicationId - Application ID, generated when omitted
+ * @param ownerId - Owner user ID, generated when omitted
+ * @returns Seeded application and owner IDs
+ */
+export function seedApplicationOwner(
+  db: Database,
+  applicationId = generateSnowflake(),
+  ownerId = generateSnowflake()
+): { applicationId: string; ownerId: string } {
+  db.prepare(
+    `INSERT INTO users (id, username, discriminator, bot)
+     VALUES (?, 'ApplicationOwner', '0', 0)`
+  ).run(ownerId)
+  db.prepare(
+    `INSERT INTO applications (id, owner_id, name, verify_key)
+     VALUES (?, ?, 'Fixture Application', ?)`
+  ).run(applicationId, ownerId, `verify_${applicationId}`)
+  return { applicationId, ownerId }
+}
+
+/**
+ * Seeds a local OAuth2 Bearer credential and its user/client principals.
+ * @param db - Database
+ * @param userId - Credential user ID, generated when omitted
+ * @param clientId - OAuth2 client ID, generated when omitted
+ * @returns Bearer token and principal IDs
+ */
+export function seedBearerCredential(
+  db: Database,
+  userId = generateSnowflake(),
+  clientId = generateSnowflake()
+): { bearerToken: string; clientId: string; userId: string } {
+  const bearerToken = `fixture_bearer_${generateSnowflake()}`
+  db.prepare(
+    `INSERT OR IGNORE INTO users (id, username, discriminator, bot)
+     VALUES (?, 'BearerUser', '0', 0)`
+  ).run(userId)
+  db.prepare(
+    `INSERT INTO oauth2_clients (client_id, client_secret)
+     VALUES (?, ?)`
+  ).run(clientId, `fixture_secret_${clientId}`)
+  db.prepare(
+    `INSERT INTO oauth2_access_tokens
+       (token, client_id, user_id, scope, expires_at)
+     VALUES (?, ?, ?, 'identify role_connections.write', datetime('now', '+1 day'))`
+  ).run(bearerToken, clientId, userId)
+  return { bearerToken, clientId, userId }
+}
+
+/**
+ * Seeds a distinct non-bot user.
+ * @param db - Database
+ * @param userId - User ID, generated when omitted
+ * @returns Seeded user ID
+ */
+export function seedSecondUser(
+  db: Database,
+  userId = generateSnowflake()
+): { userId: string } {
+  db.prepare(
+    `INSERT INTO users (id, username, discriminator, bot)
+     VALUES (?, 'SecondUser', '0', 0)`
+  ).run(userId)
+  return { userId }
+}
+
+/**
+ * Seeds a lobby and its owner membership.
+ * @param db - Database
+ * @param applicationId - Parent application ID
+ * @param ownerId - Owning user ID
+ * @param linkedChannelId - Initially linked channel ID
+ * @returns Seeded lobby ID
+ */
+export function seedLobby(
+  db: Database,
+  applicationId: string,
+  ownerId: string,
+  linkedChannelId: string
+): { lobbyId: string } {
+  const lobbyId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO lobbies
+       (id, application_id, owner_id, linked_channel_id, metadata)
+     VALUES (?, ?, ?, ?, '{}')`
+  ).run(lobbyId, applicationId, ownerId, linkedChannelId)
+  db.prepare(
+    `INSERT INTO lobby_members (lobby_id, user_id, metadata)
+     VALUES (?, ?, '{}')`
+  ).run(lobbyId, ownerId)
+  return { lobbyId }
+}
+
+/**
+ * Seeds a stage channel without creating a stage instance.
+ * @param db - Database
+ * @param guildId - Parent guild ID
+ * @returns Seeded stage channel ID
+ */
+export function seedStageChannel(
+  db: Database,
+  guildId: string
+): { stageChannelId: string } {
+  const stageChannelId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channels (id, guild_id, type, name)
+     VALUES (?, ?, 13, 'fixture-stage')`
+  ).run(stageChannelId, guildId)
+  return { stageChannelId }
+}
+
+/**
+ * Seeds a SKU and one active subscription for a user.
+ * @param db - Database
+ * @param applicationId - Parent application ID
+ * @param userId - Subscriber user ID
+ * @returns Seeded SKU and subscription IDs
+ */
+export function seedSkuSubscription(
+  db: Database,
+  applicationId: string,
+  userId: string
+): { skuId: string; subscriptionId: string } {
+  const skuId = generateSnowflake()
+  const subscriptionId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO skus (id, application_id, name, slug)
+     VALUES (?, ?, 'Fixture Subscription', ?)`
+  ).run(skuId, applicationId, `fixture-subscription-${skuId}`)
+  db.prepare(
+    `INSERT INTO subscriptions
+       (id, sku_id, user_id, sku_ids, entitlement_ids,
+        current_period_start, current_period_end, status)
+     VALUES (?, ?, ?, ?, '[]', '2030-01-01T00:00:00.000Z',
+             '2030-02-01T00:00:00.000Z', 0)`
+  ).run(subscriptionId, skuId, userId, JSON.stringify([skuId]))
+  return { skuId, subscriptionId }
+}
+
+/**
+ * Seeds a guild template.
+ * @param db - Database
+ * @param guildId - Source guild ID
+ * @param creatorId - Template creator user ID
+ * @returns Seeded template code
+ */
+export function seedGuildTemplate(
+  db: Database,
+  guildId: string,
+  creatorId: string
+): { templateCode: string } {
+  const templateCode = `fixture-${generateSnowflake()}`
+  const guild = db
+    .prepare('SELECT name FROM guilds WHERE id = ?')
+    .get(guildId) as { name: string } | undefined
+  db.prepare(
+    `INSERT INTO guild_templates
+       (code, source_guild_id, creator_id, name, serialized_source_guild)
+     VALUES (?, ?, ?, 'Fixture Template', ?)`
+  ).run(
+    templateCode,
+    guildId,
+    creatorId,
+    JSON.stringify({ id: guildId, name: guild?.name ?? 'Fixture Guild' })
+  )
+  return { templateCode }
+}
+
+/**
+ * Seeds a scheduled voice event.
+ * @param db - Database
+ * @param guildId - Parent guild ID
+ * @param creatorId - Creator user ID
+ * @param channelId - Event voice or stage channel ID
+ * @returns Seeded event ID
+ */
+export function seedScheduledEvent(
+  db: Database,
+  guildId: string,
+  creatorId: string,
+  channelId: string
+): { eventId: string } {
+  const eventId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO scheduled_events
+       (id, guild_id, channel_id, creator_id, name, scheduled_start_time,
+        privacy_level, status, entity_type)
+     VALUES (?, ?, ?, ?, 'Fixture Event', '2030-01-01T00:00:00.000Z', 2, 1, 2)`
+  ).run(eventId, guildId, channelId, creatorId)
+  return { eventId }
+}
+
+/**
+ * Seeds an interaction response addressed by the webhook `@original` route.
+ * @param db - Database
+ * @param applicationId - Interaction application ID used as the webhook ID
+ * @param channelId - Destination channel ID
+ * @param userId - Interaction user and response author ID
+ * @returns Webhook credentials and original message ID
+ */
+export function seedWebhookOriginalMessage(
+  db: Database,
+  applicationId: string,
+  channelId: string,
+  userId: string
+): {
+  interactionId: string
+  originalMessageId: string
+  webhookId: string
+  webhookToken: string
+} {
+  const { interactionId, interactionToken } = seedInteraction(
+    db,
+    applicationId,
+    channelId,
+    userId
+  )
+  const originalMessageId = seedMessage(
+    db,
+    channelId,
+    userId,
+    'interaction',
+    'Original interaction response'
+  )
+  db.prepare(
+    `UPDATE interactions
+     SET responded = 1, initial_response_message_id = ?
+     WHERE id = ?`
+  ).run(originalMessageId, interactionId)
+  return {
+    interactionId,
+    originalMessageId,
+    webhookId: applicationId,
+    webhookToken: interactionToken,
+  }
+}
+
+/**
+ * Creates a disposable upload fixture in its own temporary directory.
+ * @param content - UTF-8 fixture file contents
+ * @returns File paths and an idempotent cleanup function
+ */
+export async function seedDisposableUploadedFile(
+  content = 'fixture upload'
+): Promise<{
+  cleanup: () => Promise<void>
+  filePath: string
+  filename: string
+  uploadDirectory: string
+}> {
+  const uploadDirectory = await mkdtemp(
+    path.join(tmpdir(), 'fauxcord-upload-fixture-')
+  )
+  const filename = 'fixture.txt'
+  const filePath = path.join(uploadDirectory, filename)
+  await writeFile(filePath, content, 'utf8')
+  return {
+    cleanup: () => rm(uploadDirectory, { recursive: true, force: true }),
+    filePath,
+    filename,
+    uploadDirectory,
+  }
 }
