@@ -1,12 +1,114 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { Ajv2020 } from 'ajv/dist/2020.js'
+import { createRequire } from 'node:module'
 import type { Database } from './db'
-import { MANIFEST } from '../spec/manifest'
+import {
+  MANIFEST,
+  type SpecEndpoint,
+  type SpecSuccessBranch,
+} from '../spec/manifest'
 import { serveWithGateway } from './http-server'
 import { createContractFixture, createRealServer } from './test-helpers'
+
+const require = createRequire(import.meta.url)
+const addFormats = require('ajv-formats') as (ajv: Ajv2020) => void
+const spec = JSON.parse(
+  readFileSync(new URL('../spec/openapi.json', import.meta.url), 'utf8')
+) as {
+  paths: Record<
+    string,
+    Record<
+      string,
+      {
+        responses?: Record<string, { content?: Record<string, unknown> }>
+      }
+    >
+  >
+}
+const ajv = new Ajv2020({
+  strict: false,
+  allErrors: true,
+  validateFormats: true,
+})
+addFormats(ajv)
+ajv.addFormat('snowflake', /^[0-9]{17,20}$/)
+ajv.addFormat('nonce', true)
+ajv.addSchema(spec, 'https://discord.com/spec')
+
+function responseSchema(
+  entry: SpecEndpoint,
+  branch: SpecSuccessBranch
+): { $ref: string } | undefined {
+  const response =
+    spec.paths[entry.specPath]?.[entry.method]?.responses?.[
+      String(branch.status)
+    ]
+  if (!response?.content?.['application/json']) return undefined
+  const escapedPath = entry.specPath.replaceAll('~', '~0').replaceAll('/', '~1')
+  return {
+    $ref:
+      `https://discord.com/spec#/paths/${escapedPath}/${entry.method}` +
+      `/responses/${branch.status}/content/application~1json/schema`,
+  }
+}
+
+async function assertResponseBody(
+  entry: SpecEndpoint,
+  branch: SpecSuccessBranch,
+  response: Response,
+  label: string
+): Promise<void> {
+  if (branch.body === 'empty') {
+    await expect(response.text(), label).resolves.toBe('')
+    return
+  }
+  if (branch.body === 'json') {
+    const body: unknown = await response.json()
+    const schema = responseSchema(entry, branch)
+    expect(schema, `No JSON schema found for ${label}`).toBeDefined()
+    if (!schema) return
+    const validate = ajv.compile(schema)
+    if (!validate(body)) {
+      throw new Error(
+        `Schema validation failed for ${label}: ${JSON.stringify(validate.errors)}`
+      )
+    }
+    return
+  }
+
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  expect(bytes.byteLength, label).toBeGreaterThan(0)
+  if (branch.body === 'png') {
+    expect([...bytes.subarray(0, 8)], label).toEqual([
+      137, 80, 78, 71, 13, 10, 26, 10,
+    ])
+    let offset = 8
+    const chunks: string[] = []
+    while (offset < bytes.byteLength) {
+      expect(offset + 12, label).toBeLessThanOrEqual(bytes.byteLength)
+      const length = new DataView(
+        bytes.buffer,
+        bytes.byteOffset + offset,
+        4
+      ).getUint32(0)
+      const chunkEnd = offset + 12 + length
+      expect(chunkEnd, label).toBeLessThanOrEqual(bytes.byteLength)
+      chunks.push(
+        new TextDecoder().decode(bytes.subarray(offset + 4, offset + 8))
+      )
+      offset = chunkEnd
+    }
+    expect(chunks, label).toContain('IHDR')
+    expect(chunks.at(-1), label).toBe('IEND')
+    return
+  }
+  expect(new TextDecoder().decode(bytes).trim(), label).not.toBe('')
+}
 
 describe('real HTTP contract fixture', () => {
   let close: (() => Promise<void>) | undefined
@@ -223,14 +325,7 @@ describe('real HTTP contract fixture', () => {
             )
           }
           const assertionResponse = response.clone()
-          if (branch.body === 'empty') {
-            await expect(response.text(), label).resolves.toBe('')
-          } else if (branch.body === 'json') {
-            await expect(response.json(), label).resolves.toBeDefined()
-          } else {
-            const body = await response.arrayBuffer()
-            expect(body.byteLength, label).toBeGreaterThan(0)
-          }
+          await assertResponseBody(entry, branch, response, label)
           await branch.assert({
             baseUrl: server.baseUrl,
             fixture,
