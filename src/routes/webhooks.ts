@@ -86,13 +86,20 @@ function createFollowupOrWebhookMessage(
   )
 }
 
-function getOriginalMessageId(db: Database, webhookId: string, token: string): string | null {
+function getOriginalMessageId(
+  db: Database,
+  webhookId: string,
+  token: string
+): string | null {
   const interaction = getInteractionFollowupTarget(db, webhookId, token)
-  if (interaction?.initialResponseMessageId) return interaction.initialResponseMessageId
+  if (interaction?.initialResponseMessageId)
+    return interaction.initialResponseMessageId
   const webhook = getWebhookByToken(db, webhookId, token)
   if (!webhook) return null
   const message = db
-    .prepare('SELECT id FROM messages WHERE author_id = ? AND channel_id = ? ORDER BY id DESC LIMIT 1')
+    .prepare(
+      'SELECT id FROM messages WHERE author_id = ? AND channel_id = ? ORDER BY id DESC LIMIT 1'
+    )
     .get(webhook.id, webhook.channel_id) as { id: string } | undefined
   return message?.id ?? null
 }
@@ -475,12 +482,7 @@ export function createWebhookRoutes(db: Database, baseUrl: string): Hono {
       content?: string
       embeds?: unknown[]
     }>()
-    const updated = updateMessage(
-      db,
-      messageId,
-      payload,
-      baseUrl
-    )
+    const updated = updateMessage(db, messageId, payload, baseUrl)
     if (!updated) {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,

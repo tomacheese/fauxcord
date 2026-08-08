@@ -2405,13 +2405,7 @@ const MULTI_SUCCESS_STATUSES: Readonly<Record<string, readonly number[]>> = {
 }
 
 function authenticationFor(entry: LegacySpecEndpoint): ContractAuthentication {
-  if (
-    entry.specPath === '/gateway' ||
-    entry.specPath === '/oauth2/keys' ||
-    entry.specPath === '/guilds/templates/{code}' ||
-    entry.specPath === '/guilds/{guild_id}/widget.json' ||
-    entry.specPath === '/guilds/{guild_id}/widget.png'
-  ) {
+  if (['/gateway', '/oauth2/keys', '/guilds/templates/{code}', '/guilds/{guild_id}/widget.json', '/guilds/{guild_id}/widget.png'].includes(entry.specPath)) {
     return 'public'
   }
   if (
@@ -3915,6 +3909,8 @@ const BASE_MANIFEST: SpecEndpoint[] = uniqueLegacyEntries
   })
   .toArray()
 
+const task5Preconditions = new WeakMap<ContractFixture, { lobbyCount?: number }>()
+
 function task5Entry(
   specPath: string,
   method: SpecEndpoint['method'],
@@ -3923,6 +3919,7 @@ function task5Entry(
   body: ContractBodyMode,
   request: (fixture: ContractFixture) => ContractRequest
 ): SpecEndpoint {
+  const key = `${method} ${specPath} ${status}`
   return {
     specPath,
     method,
@@ -3933,43 +3930,103 @@ function task5Entry(
       contentType: body === 'empty' ? null : 'application/json',
       body,
       request: (fixture) => {
-        if (method !== 'get') {
-          task5MutationSnapshots.set(
-            fixture.db,
-            (fixture.db.prepare('SELECT total_changes() AS changes').get() as {
-              changes: number
-            }).changes
-          )
-        }
+        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- Captures request-specific state in the assertion helper below.
+        captureTask5Precondition(key, fixture)
         return request(fixture)
       },
-      assert: async ({ fixture }) => {
-        const before = task5MutationSnapshots.get(fixture.db)
-        if (
-          method !== 'get' &&
-          (before === undefined ||
-            (fixture.db.prepare('SELECT total_changes() AS changes').get() as {
-              changes: number
-            }).changes <= before)
-        ) {
-          throw new Error(
-            `${method.toUpperCase()} ${specPath} did not apply its expected operation effect`
-          )
-        }
-      },
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define -- The operation assertion table is kept immediately below the manifest factory.
+      assert: ({ fixture }) => task5Assertion(key, fixture),
     }],
   }
 }
 
 const task5Json = { headers: { 'Content-Type': 'application/json' } }
-const task5MutationSnapshots = new WeakMap<Database, number>()
+
+function task5Assertion(key: string, f: ContractFixture): Promise<void> {
+  const one = (sql: string, values: unknown[], expected: unknown) => {
+    const actual = f.db.prepare(sql).get(...values)
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`${key} did not apply its expected operation effect`)
+    }
+  }
+  const exists = (sql: string, values: unknown[]) => {
+    if (!f.db.prepare(sql).get(...values)) {
+      throw new Error(`${key} did not apply its expected operation effect`)
+    }
+  }
+  switch (key) {
+    case 'put /lobbies 200':
+    case 'post /lobbies 201': {
+      const previous = task5Preconditions.get(f)?.lobbyCount
+      const current = (f.db.prepare('SELECT COUNT(*) AS count FROM lobbies WHERE owner_id = ?').get(f.userId) as { count: number }).count
+      if (previous === undefined || current !== previous + 1) throw new Error(`${key} did not apply its expected operation effect`)
+      break
+    }
+    case 'delete /lobbies/{lobby_id} 204': { one('SELECT id FROM lobbies WHERE id = ?', [f.lobbyId], undefined); break
+    }
+    case 'patch /lobbies/{lobby_id} 200': { one('SELECT metadata FROM lobbies WHERE id = ?', [f.lobbyId], { metadata: '{"mode":"updated"}' }); break
+    }
+    case 'patch /lobbies/{lobby_id}/channel-linking 200': { one('SELECT linked_channel_id FROM lobbies WHERE id = ?', [f.lobbyId], { linked_channel_id: f.voiceChannelId }); break
+    }
+    case 'delete /lobbies/{lobby_id}/members/@me 204': { one('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.userId], undefined); break
+    }
+    case 'post /lobbies/{lobby_id}/members/@me/invites 200': { one("SELECT json_extract(metadata, '$.last_self_invite') AS user_id FROM lobbies WHERE id = ?", [f.lobbyId], { user_id: f.userId }); break
+    }
+    case 'post /lobbies/{lobby_id}/members/bulk 200': { exists('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.memberId]); break
+    }
+    case 'put /lobbies/{lobby_id}/members/{user_id} 200': { exists('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.memberId]); break
+    }
+    case 'delete /lobbies/{lobby_id}/members/{user_id} 204': { one('SELECT user_id FROM lobby_members WHERE lobby_id = ? AND user_id = ?', [f.lobbyId, f.userId], undefined); break
+    }
+    case 'post /lobbies/{lobby_id}/members/{user_id}/invites 200': { one("SELECT json_extract(metadata, '$.last_member_invite') AS user_id FROM lobbies WHERE id = ?", [f.lobbyId], { user_id: f.userId }); break
+    }
+    case 'post /lobbies/{lobby_id}/messages 201': { exists('SELECT id FROM lobby_messages WHERE lobby_id = ? AND content = ?', [f.lobbyId, 'lobby contract']); break
+    }
+    case 'put /lobbies/{lobby_id}/messages/{message_id}/moderation-metadata 204': { one('SELECT moderation_metadata FROM lobby_messages WHERE id = ?', [f.lobbyMessageId], { moderation_metadata: '{"state":"ok"}' }); break
+    }
+    case 'put /partner-sdk/dms/{user_id_1}/{user_id_2}/messages/{message_id}/moderation-metadata 204': { exists('SELECT message_id FROM partner_sdk_moderation WHERE message_id = ?', [f.messageId]); break
+    }
+    case 'post /partner-sdk/provisional-accounts/unmerge 204': { one('SELECT client_secret FROM oauth2_clients WHERE client_id = ?', [f.applicationId], { client_secret: 'contract-secret:unmerged' }); break
+    }
+    case 'post /partner-sdk/provisional-accounts/unmerge/bot 204': { one('SELECT client_secret FROM oauth2_clients WHERE client_id = ?', [f.applicationId], { client_secret: 'contract-secret:bot-unmerged' }); break
+    }
+    case 'post /partner-sdk/token 200': { exists('SELECT token FROM oauth2_access_tokens WHERE token LIKE ?', ['provisional_%']); break
+    }
+    case 'post /partner-sdk/token/bot 200': { exists('SELECT token FROM oauth2_access_tokens WHERE token LIKE ?', ['provisional_%']); break
+    }
+    case 'post /stage-instances 200': { exists('SELECT channel_id FROM stage_instances WHERE channel_id = ?', [f.newStageChannelId]); break
+    }
+    case 'delete /stage-instances/{channel_id} 204': { one('SELECT channel_id FROM stage_instances WHERE channel_id = ?', [f.stageChannelId], undefined); break
+    }
+    case 'patch /stage-instances/{channel_id} 200': { one('SELECT topic FROM stage_instances WHERE channel_id = ?', [f.stageChannelId], { topic: 'updated stage' }); break
+    }
+    case 'put /users/@me/applications/{application_id}/role-connection 200': { one('SELECT platform_name FROM user_application_role_connections WHERE application_id = ? AND user_id = ?', [f.applicationId, f.userId], { platform_name: 'Fauxcord' }); break
+    }
+    case 'delete /users/@me/applications/{application_id}/role-connection 204': { one('SELECT user_id FROM user_application_role_connections WHERE application_id = ? AND user_id = ?', [f.applicationId, f.userId], undefined); break
+    }
+    case 'delete /users/@me/guilds/{guild_id} 204': { one('SELECT user_id FROM guild_members WHERE guild_id = ? AND user_id = ?', [f.guildId, f.userId], undefined); break
+    }
+    case 'delete /webhooks/{webhook_id}/{webhook_token}/messages/@original 204': { one('SELECT id FROM messages WHERE id = ?', [f.webhookMessageId], undefined); break
+    }
+    case 'patch /webhooks/{webhook_id}/{webhook_token}/messages/@original 200': { one('SELECT content FROM messages WHERE id = ?', [f.webhookMessageId], { content: 'updated original' }); break
+    }
+    default: { break
+    }
+  }
+  return Promise.resolve()
+}
+function captureTask5Precondition(key: string, f: ContractFixture): void {
+  if (key === 'put /lobbies 200' || key === 'post /lobbies 201') {
+    task5Preconditions.set(f, { lobbyCount: (f.db.prepare('SELECT COUNT(*) AS count FROM lobbies WHERE owner_id = ?').get(f.userId) as { count: number }).count })
+  }
+}
 const TASK5_MANIFEST: SpecEndpoint[] = [
   task5Entry('/lobbies', 'put', 'bot', 200, 'json', () => ({ path: '/api/v10/lobbies', init: { method: 'PUT', ...task5Json, body: JSON.stringify({ secret: 'contract' }) } })),
   task5Entry('/lobbies', 'post', 'bot', 201, 'json', (f) => ({ path: '/api/v10/lobbies', init: { method: 'POST', ...task5Json, body: JSON.stringify({ channel_id: f.channelId, metadata: { mode: 'contract' } }) } })),
   task5Entry('/lobbies/{lobby_id}', 'get', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}` })),
   task5Entry('/lobbies/{lobby_id}', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}`, init: { method: 'DELETE' } })),
   task5Entry('/lobbies/{lobby_id}', 'patch', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ metadata: { mode: 'updated' } }) } })),
-  task5Entry('/lobbies/{lobby_id}/channel-linking', 'patch', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/channel-linking`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ channel_id: f.channelId }) } })),
+  task5Entry('/lobbies/{lobby_id}/channel-linking', 'patch', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/channel-linking`, init: { method: 'PATCH', ...task5Json, body: JSON.stringify({ channel_id: f.voiceChannelId }) } })),
   task5Entry('/lobbies/{lobby_id}/members/@me', 'delete', 'bot', 204, 'empty', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/@me`, init: { method: 'DELETE' } })),
   task5Entry('/lobbies/{lobby_id}/members/@me/invites', 'post', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/@me/invites`, init: { method: 'POST' } })),
   task5Entry('/lobbies/{lobby_id}/members/bulk', 'post', 'bot', 200, 'json', (f) => ({ path: `/api/v10/lobbies/${f.lobbyId}/members/bulk`, init: { method: 'POST', ...task5Json, body: JSON.stringify([{ user_id: f.memberId }]) } })),

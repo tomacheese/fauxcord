@@ -144,13 +144,96 @@ describe('PATCH /users/@me', () => {
 describe('Task 5 current-user OAuth2 resources', () => {
   it('stores a Bearer user role connection and lists their entitlements', async () => {
     const ctx = createFullTestApp()
-    const { applicationId, ownerId } = (await import('../test-helpers')).seedApplicationOwner(ctx.db)
-    const credential = (await import('../test-helpers')).seedBearerCredential(ctx.db, ownerId, applicationId)
-    ctx.db.prepare("UPDATE oauth2_access_tokens SET scope = 'role_connections.write guilds.members.read' WHERE token = ?").run(credential.bearerToken)
-    const put = await ctx.app.request(`/users/@me/applications/${applicationId}/role-connection`, { method: 'PUT', headers: { Authorization: `Bearer ${credential.bearerToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ platform_name: 'Fauxcord', metadata: { level: '1' } }) })
+    const { applicationId, ownerId } = (
+      await import('../test-helpers')
+    ).seedApplicationOwner(ctx.db)
+    const credential = (await import('../test-helpers')).seedBearerCredential(
+      ctx.db,
+      ownerId,
+      applicationId
+    )
+    ctx.db
+      .prepare(
+        "UPDATE oauth2_access_tokens SET scope = 'role_connections.write guilds.members.read' WHERE token = ?"
+      )
+      .run(credential.bearerToken)
+    const put = await ctx.app.request(
+      `/users/@me/applications/${applicationId}/role-connection`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${credential.bearerToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          platform_name: 'Fauxcord',
+          metadata: { level: '1' },
+        }),
+      }
+    )
     expect(put.status).toBe(200)
-    const listed = await ctx.app.request(`/users/@me/applications/${applicationId}/entitlements`, { headers: { Authorization: `Bearer ${credential.bearerToken}` } })
+    const listed = await ctx.app.request(
+      `/users/@me/applications/${applicationId}/entitlements`,
+      { headers: { Authorization: `Bearer ${credential.bearerToken}` } }
+    )
     expect(listed.status).toBe(200)
+    ctx.cleanup()
+  })
+})
+
+describe('Task 5 OAuth2 scope authorization', () => {
+  it('rejects unlisted Bearer scopes while accepting the exact OpenAPI scopes', async () => {
+    const ctx = createFullTestApp()
+    const { applicationId, ownerId } = (
+      await import('../test-helpers')
+    ).seedApplicationOwner(ctx.db)
+    const credential = (await import('../test-helpers')).seedBearerCredential(
+      ctx.db,
+      ownerId,
+      applicationId
+    )
+    const deniedHeaders = { Authorization: `Bearer ${credential.bearerToken}` }
+    ctx.db
+      .prepare(
+        "UPDATE oauth2_access_tokens SET scope = 'not-authorized' WHERE token = ?"
+      )
+      .run(credential.bearerToken)
+    for (const path of [
+      `/users/@me/applications/${applicationId}/entitlements`,
+      '/users/@me/connections',
+      `/skus/${applicationId}/subscriptions`,
+    ]) {
+      expect(
+        (await ctx.app.request(path, { headers: deniedHeaders })).status
+      ).toBe(403)
+    }
+    ctx.db
+      .prepare(
+        "UPDATE oauth2_access_tokens SET scope = 'connections applications.entitlements' WHERE token = ?"
+      )
+      .run(credential.bearerToken)
+    expect(
+      (
+        await ctx.app.request(
+          `/users/@me/applications/${applicationId}/entitlements`,
+          { headers: deniedHeaders }
+        )
+      ).status
+    ).toBe(200)
+    expect(
+      (
+        await ctx.app.request('/users/@me/connections', {
+          headers: deniedHeaders,
+        })
+      ).status
+    ).toBe(200)
+    expect(
+      (
+        await ctx.app.request(`/skus/${applicationId}/subscriptions`, {
+          headers: deniedHeaders,
+        })
+      ).status
+    ).toBe(200)
     ctx.cleanup()
   })
 })

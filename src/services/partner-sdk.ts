@@ -12,9 +12,15 @@ export interface ProvisionalToken {
   expires_at_s: number
 }
 
-export function issueProvisionalToken(db: Database, clientId: string, externalUserId: string): ProvisionalToken {
+export function issueProvisionalToken(
+  db: Database,
+  clientId: string,
+  externalUserId: string
+): ProvisionalToken {
   const userId = generateSnowflake()
-  db.prepare("INSERT INTO users (id, username, discriminator, bot) VALUES (?, ?, '0', 0)").run(userId, `provisional-${externalUserId.slice(0, 24)}`)
+  db.prepare(
+    "INSERT INTO users (id, username, discriminator, bot) VALUES (?, ?, '0', 0)"
+  ).run(userId, `provisional-${externalUserId.slice(0, 24)}`)
   const accessToken = `provisional_${generateSnowflake()}`
   const expiresAt = new Date(Date.now() + 3_600_000)
   db.prepare(
@@ -33,8 +39,16 @@ export function issueProvisionalToken(db: Database, clientId: string, externalUs
   }
 }
 
-export function acceptsPartnerClient(db: Database, clientId: string, clientSecret: string | null): boolean {
+export function acceptsPartnerClient(
+  db: Database,
+  clientId: string,
+  clientSecret: string | null
+): boolean {
   return Boolean(
-    db.prepare('SELECT 1 FROM oauth2_clients WHERE client_id = ? AND (? IS NULL OR client_secret = ?)').get(clientId, clientSecret, clientSecret)
+    db
+      .prepare(
+        'SELECT 1 FROM oauth2_clients WHERE client_id = ? AND (? IS NULL OR client_secret = ?)'
+      )
+      .get(clientId, clientSecret, clientSecret)
   )
 }

@@ -21,7 +21,16 @@ const SNOWFLAKE = /^(0|[1-9][0-9]*)$/
 const UNKNOWN_LOBBY = 10_004
 
 function invalid(c: Context<AppEnv>) {
-  return c.json(validationError({ id: { _errors: [{ code: 'BASE_TYPE_BAD_FORMAT', message: 'Invalid snowflake.' }] } }).body, 400)
+  return c.json(
+    validationError({
+      id: {
+        _errors: [
+          { code: 'BASE_TYPE_BAD_FORMAT', message: 'Invalid snowflake.' },
+        ],
+      },
+    }).body,
+    400
+  )
 }
 
 function unknown(c: Context<AppEnv>, code: number, message: string) {
@@ -42,12 +51,15 @@ function mapMembers(value: unknown) {
     if (!member || typeof member !== 'object') return []
     const input = member as Record<string, unknown>
     return typeof input.id === 'string' || typeof input.user_id === 'string'
-      ? [{
-          userId: (input.id ?? input.user_id) as string,
-          metadata: input.metadata as Record<string, string> | null | undefined,
-          flags: typeof input.flags === 'number' ? input.flags : undefined,
-          additionalName: input.additional_name as string | null | undefined,
-        }]
+      ? [
+          {
+            userId: (input.id ?? input.user_id) as string,
+            metadata: input.metadata as
+              Record<string, string> | null | undefined,
+            flags: typeof input.flags === 'number' ? input.flags : undefined,
+            additionalName: input.additional_name as string | null | undefined,
+          },
+        ]
       : []
   })
 }
@@ -59,32 +71,51 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
   app.put('/lobbies', async (c) => {
     const ownerId = currentUser(c)
     if (!ownerId) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    const payload = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
-    const applicationId = (db
-      .prepare('SELECT id FROM applications WHERE owner_id = ? ORDER BY id LIMIT 1')
-      .get(ownerId) as { id: string } | undefined)?.id ?? ownerId
-    return c.json(createLobby(db, {
-      applicationId,
-      ownerId,
-      metadata: payload.lobby_metadata as Record<string, string> | null | undefined,
-      flags: typeof payload.flags === 'number' ? payload.flags : undefined,
-    }))
+    const payload = await c.req
+      .json<Record<string, unknown>>()
+      .catch(() => ({}))
+    const applicationId =
+      (
+        db
+          .prepare(
+            'SELECT id FROM applications WHERE owner_id = ? ORDER BY id LIMIT 1'
+          )
+          .get(ownerId) as { id: string } | undefined
+      )?.id ?? ownerId
+    return c.json(
+      createLobby(db, {
+        applicationId,
+        ownerId,
+        metadata: payload.lobby_metadata as
+          Record<string, string> | null | undefined,
+        flags: typeof payload.flags === 'number' ? payload.flags : undefined,
+      })
+    )
   })
 
   app.post('/lobbies', async (c) => {
     const ownerId = botUser(c)
     if (!ownerId) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    const payload = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
-    const channelId = typeof payload.channel_id === 'string' ? payload.channel_id : null
+    const payload = await c.req
+      .json<Record<string, unknown>>()
+      .catch(() => ({}))
+    const channelId =
+      typeof payload.channel_id === 'string' ? payload.channel_id : null
     const lobby = createLobby(db, {
-      applicationId: (db
-        .prepare('SELECT id FROM applications WHERE owner_id = ? ORDER BY id LIMIT 1')
-        .get(ownerId) as { id: string } | undefined)?.id ?? ownerId,
+      applicationId:
+        (
+          db
+            .prepare(
+              'SELECT id FROM applications WHERE owner_id = ? ORDER BY id LIMIT 1'
+            )
+            .get(ownerId) as { id: string } | undefined
+        )?.id ?? ownerId,
       ownerId,
       channelId,
       metadata: payload.metadata as Record<string, string> | null | undefined,
       flags: typeof payload.flags === 'number' ? payload.flags : undefined,
-      overrideEventWebhooksUrl: payload.override_event_webhooks_url as string | null | undefined,
+      overrideEventWebhooksUrl: payload.override_event_webhooks_url as
+        string | null | undefined,
       members: mapMembers(payload.members),
     })
     return c.json(lobby, 201)
@@ -95,7 +126,8 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (!botUser(c) || lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    if (!botUser(c) || lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
     return c.json(lobby)
   })
 
@@ -104,7 +136,8 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    if (lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
     deleteLobby(db, lobbyId)
     return c.body(null, 204)
   })
@@ -114,14 +147,20 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    const payload = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
-    return c.json(updateLobby(db, lobbyId, {
-      metadata: payload.metadata as Record<string, string> | null | undefined,
-      flags: typeof payload.flags === 'number' ? payload.flags : undefined,
-      overrideEventWebhooksUrl: payload.override_event_webhooks_url as string | null | undefined,
-      members: mapMembers(payload.members),
-    }))
+    if (lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    const payload = await c.req
+      .json<Record<string, unknown>>()
+      .catch(() => ({}))
+    return c.json(
+      updateLobby(db, lobbyId, {
+        metadata: payload.metadata as Record<string, string> | null | undefined,
+        flags: typeof payload.flags === 'number' ? payload.flags : undefined,
+        overrideEventWebhooksUrl: payload.override_event_webhooks_url as
+          string | null | undefined,
+        members: mapMembers(payload.members),
+      })
+    )
   })
 
   app.patch('/lobbies/:lobbyId/channel-linking', async (c) => {
@@ -129,11 +168,20 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== currentUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    const payload = await c.req.json<{ channel_id?: string | null }>().catch(() => ({} as { channel_id?: string | null }))
-    if (payload.channel_id !== null && payload.channel_id !== undefined && !SNOWFLAKE.test(payload.channel_id)) return invalid(c)
+    if (lobby.owner_id !== currentUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    const payload = await c.req
+      .json<{ channel_id?: string | null }>()
+      .catch(() => ({}))
+    if (
+      payload.channel_id !== null &&
+      payload.channel_id !== undefined &&
+      !SNOWFLAKE.test(payload.channel_id)
+    )
+      return invalid(c)
     const updated = updateLobbyChannel(db, lobbyId, payload.channel_id ?? null)
-    if (!updated) return unknown(c, DiscordErrorCode.UNKNOWN_CHANNEL, 'Unknown Channel')
+    if (!updated)
+      return unknown(c, DiscordErrorCode.UNKNOWN_CHANNEL, 'Unknown Channel')
     return c.json(updated)
   })
 
@@ -141,7 +189,8 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const lobbyId = c.req.param('lobbyId')
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const userId = currentUser(c)
-    if (!userId || !isLobbyMember(db, lobbyId, userId)) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
+    if (!userId || !isLobbyMember(db, lobbyId, userId))
+      return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
     deleteLobbyMember(db, lobbyId, userId)
     return c.body(null, 204)
   })
@@ -149,8 +198,11 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
   app.post('/lobbies/:lobbyId/members/@me/invites', (c) => {
     const lobby = getLobby(db, c.req.param('lobbyId'))
     const userId = currentUser(c)
-    if (!lobby || !userId || !isLobbyMember(db, lobby.id, userId)) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    db.prepare("UPDATE lobbies SET updated_at = datetime('now') WHERE id = ?").run(lobby.id)
+    if (!lobby || !userId || !isLobbyMember(db, lobby.id, userId))
+      return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
+    db.prepare(
+      "UPDATE lobbies SET metadata = json_set(COALESCE(metadata, '{}'), '$.last_self_invite', ?) WHERE id = ?"
+    ).run(userId, lobby.id)
     return c.json({ code: `lobby-${lobby.id}` })
   })
 
@@ -158,9 +210,23 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const lobbyId = c.req.param('lobbyId')
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    if (lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
     const members = await c.req.json<unknown>().catch(() => [])
-    if (!Array.isArray(members) || members.length === 0) return c.json(validationError({ members: { _errors: [{ code: 'BASE_TYPE_REQUIRED', message: 'This field is required.' }] } }).body, 400)
+    if (!Array.isArray(members) || members.length === 0)
+      return c.json(
+        validationError({
+          members: {
+            _errors: [
+              {
+                code: 'BASE_TYPE_REQUIRED',
+                message: 'This field is required.',
+              },
+            ],
+          },
+        }).body,
+        400
+      )
     const added = mapMembers(members).flatMap((member) => {
       const item = addOrUpdateMember(db, lobbyId, member.userId, member)
       return item ? [item] : []
@@ -173,14 +239,18 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId) || !SNOWFLAKE.test(userId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    const payload = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
+    if (lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    const payload = await c.req
+      .json<Record<string, unknown>>()
+      .catch(() => ({}))
     const member = addOrUpdateMember(db, lobbyId, userId, {
       metadata: payload.metadata as Record<string, string> | null | undefined,
       flags: typeof payload.flags === 'number' ? payload.flags : undefined,
       additionalName: payload.additional_name as string | null | undefined,
     })
-    if (!member) return unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
+    if (!member)
+      return unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
     return c.json(member)
   })
 
@@ -188,17 +258,23 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const { lobbyId, userId } = c.req.param()
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    if (!deleteLobbyMember(db, lobbyId, userId)) return unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
+    if (lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    if (!deleteLobbyMember(db, lobbyId, userId))
+      return unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
     return c.body(null, 204)
   })
 
   app.post('/lobbies/:lobbyId/members/:userId/invites', (c) => {
     const { lobbyId, userId } = c.req.param()
     const lobby = getLobby(db, lobbyId)
-    if (!lobby || !isLobbyMember(db, lobbyId, userId)) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    db.prepare("UPDATE lobbies SET updated_at = datetime('now') WHERE id = ?").run(lobbyId)
+    if (!lobby || !isLobbyMember(db, lobbyId, userId))
+      return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
+    if (lobby.owner_id !== botUser(c))
+      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+    db.prepare(
+      "UPDATE lobbies SET metadata = json_set(COALESCE(metadata, '{}'), '$.last_member_invite', ?) WHERE id = ?"
+    ).run(userId, lobbyId)
     return c.json({ code: `lobby-${lobbyId}-${userId}` })
   })
 
@@ -206,9 +282,11 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const lobbyId = c.req.param('lobbyId')
     const lobby = getLobby(db, lobbyId)
     const userId = currentUser(c)
-    if (!lobby || !userId || !isLobbyMember(db, lobbyId, userId)) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
+    if (!lobby || !userId || !isLobbyMember(db, lobbyId, userId))
+      return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
     const limit = Number(c.req.query('limit') ?? '50')
-    if (!Number.isInteger(limit) || limit < 1 || limit > 200) return invalid(c)
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
+      return invalid(c)
     return c.json(listLobbyMessages(db, lobbyId, limit))
   })
 
@@ -216,7 +294,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     const lobbyId = c.req.param('lobbyId')
     const userId = currentUser(c)
     if (!userId) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    const payload = await c.req.json<Record<string, unknown>>().catch(() => ({} as Record<string, unknown>))
+    const payload = await c.req
+      .json<Record<string, unknown>>()
+      .catch(() => ({}))
     const message = createLobbyMessage(db, {
       lobbyId,
       authorId: userId,
@@ -227,15 +307,22 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     return c.json(message, 201)
   })
 
-  app.put('/lobbies/:lobbyId/messages/:messageId/moderation-metadata', async (c) => {
-    const { lobbyId, messageId } = c.req.param()
-    const lobby = getLobby(db, lobbyId)
-    if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (lobby.owner_id !== botUser(c)) return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    const metadata = await c.req.json<Record<string, string>>().catch(() => ({}))
-    if (!updateLobbyMessageModeration(db, lobbyId, messageId, metadata)) return unknown(c, DiscordErrorCode.UNKNOWN_MESSAGE, 'Unknown Message')
-    return c.body(null, 204)
-  })
+  app.put(
+    '/lobbies/:lobbyId/messages/:messageId/moderation-metadata',
+    async (c) => {
+      const { lobbyId, messageId } = c.req.param()
+      const lobby = getLobby(db, lobbyId)
+      if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
+      if (lobby.owner_id !== botUser(c))
+        return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+      const metadata = await c.req
+        .json<Record<string, string>>()
+        .catch(() => ({}))
+      if (!updateLobbyMessageModeration(db, lobbyId, messageId, metadata))
+        return unknown(c, DiscordErrorCode.UNKNOWN_MESSAGE, 'Unknown Message')
+      return c.body(null, 204)
+    }
+  )
 
   return app
 }

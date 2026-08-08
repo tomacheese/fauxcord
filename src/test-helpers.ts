@@ -32,8 +32,14 @@ import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
 import { createLobbyRoutes } from './routes/lobbies'
 import { createStageInstanceRoutes } from './routes/stage-instances'
-import { createCatalogPublicRoutes, createCatalogRoutes } from './routes/catalog'
-import { createPartnerSdkPublicRoutes, createPartnerSdkRoutes } from './routes/partner-sdk'
+import {
+  createCatalogPublicRoutes,
+  createCatalogRoutes,
+} from './routes/catalog'
+import {
+  createPartnerSdkPublicRoutes,
+  createPartnerSdkRoutes,
+} from './routes/partner-sdk'
 import {
   createGuildAdvancedPublicRoutes,
   createGuildAdvancedRoutes,
@@ -478,22 +484,38 @@ export function createContractFixture(db: Database): ContractFixture {
      WHERE id = ?`
   ).run(webhookMessageId, originalInteractionId)
   const { lobbyId } = seedLobby(db, applicationId, userId, channelId)
-  db.prepare(`INSERT INTO user_application_role_connections
-    (application_id, user_id, platform_name, metadata) VALUES (?, ?, 'Contract', '{}')`).run(applicationId, userId)
+  db.prepare(
+    `INSERT INTO user_application_role_connections
+    (application_id, user_id, platform_name, metadata) VALUES (?, ?, 'Contract', '{}')`
+  ).run(applicationId, userId)
   const lobbyMessageId = generateSnowflake()
-  db.prepare(`INSERT INTO lobby_messages (id, lobby_id, channel_id, author_id, application_id, content)
-    VALUES (?, ?, ?, ?, ?, 'Contract lobby message')`).run(lobbyMessageId, lobbyId, channelId, userId, applicationId)
+  db.prepare(
+    `INSERT INTO lobby_messages (id, lobby_id, channel_id, author_id, application_id, content)
+    VALUES (?, ?, ?, ?, ?, 'Contract lobby message')`
+  ).run(lobbyMessageId, lobbyId, channelId, userId, applicationId)
   const { stageChannelId } = seedStageChannel(db, guildId)
-  db.prepare(`INSERT INTO stage_instances (id, guild_id, channel_id, topic)
-    VALUES (?, ?, ?, 'Contract stage')`).run(generateSnowflake(), guildId, stageChannelId)
+  db.prepare(
+    `INSERT INTO stage_instances (id, guild_id, channel_id, topic)
+    VALUES (?, ?, ?, 'Contract stage')`
+  ).run(generateSnowflake(), guildId, stageChannelId)
   const newStageChannelId = generateSnowflake()
-  db.prepare(`INSERT INTO channels (id, guild_id, type, name)
-    VALUES (?, ?, 13, 'new-contract-stage')`).run(newStageChannelId, guildId)
-  const { skuId: subscriptionSkuId, subscriptionId } = seedSkuSubscription(db, applicationId, userId)
+  db.prepare(
+    `INSERT INTO channels (id, guild_id, type, name)
+    VALUES (?, ?, 13, 'new-contract-stage')`
+  ).run(newStageChannelId, guildId)
+  const { skuId: subscriptionSkuId, subscriptionId } = seedSkuSubscription(
+    db,
+    applicationId,
+    userId
+  )
   const stickerPackId = generateSnowflake()
   const catalogStickerId = generateSnowflake()
-  db.prepare("INSERT INTO sticker_packs (id, sku_id, name) VALUES (?, ?, 'Contract Pack')").run(stickerPackId, skuId)
-  db.prepare("INSERT INTO stickers (id, name, tags, type, format_type, pack_id, sort_value) VALUES (?, 'Contract Sticker', 'contract', 1, 1, ?, 0)").run(catalogStickerId, stickerPackId)
+  db.prepare(
+    "INSERT INTO sticker_packs (id, sku_id, name) VALUES (?, ?, 'Contract Pack')"
+  ).run(stickerPackId, skuId)
+  db.prepare(
+    "INSERT INTO stickers (id, name, tags, type, format_type, pack_id, sort_value) VALUES (?, 'Contract Sticker', 'contract', 1, 1, ?, 0)"
+  ).run(catalogStickerId, stickerPackId)
 
   return {
     db,

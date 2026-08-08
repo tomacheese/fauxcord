@@ -79,9 +79,8 @@ function toLobby(db: Database, row: LobbyRow): LobbyObject {
 }
 
 export function getLobby(db: Database, lobbyId: string): LobbyObject | null {
-  const row = db
-    .prepare('SELECT * FROM lobbies WHERE id = ?')
-    .get(lobbyId) as LobbyRow | undefined
+  const row = db.prepare('SELECT * FROM lobbies WHERE id = ?').get(lobbyId) as
+    LobbyRow | undefined
   return row ? toLobby(db, row) : null
 }
 
@@ -94,12 +93,12 @@ export function createLobby(
     metadata?: StringMap | null
     flags?: number
     overrideEventWebhooksUrl?: string | null
-    members?: Array<{
+    members?: {
       userId: string
       metadata?: StringMap | null
       flags?: number
       additionalName?: string | null
-    }>
+    }[]
   }
 ): LobbyObject {
   return runInTransaction(db, () => {
@@ -118,11 +117,16 @@ export function createLobby(
       input.flags ?? 0,
       input.overrideEventWebhooksUrl ?? null
     )
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- The exported mutation helper is declared below with the rest of member operations.
     addOrUpdateMember(db, id, input.ownerId, {})
-    for (const member of input.members ?? []) {
+    const members = input.members ?? []
+    for (const member of members) {
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define -- The exported mutation helper is declared below with the rest of member operations.
       addOrUpdateMember(db, id, member.userId, member)
     }
-    return getLobby(db, id) as LobbyObject
+    const lobby = getLobby(db, id)
+    if (!lobby) throw new Error('created lobby is missing')
+    return lobby
   })
 }
 
@@ -133,12 +137,12 @@ export function updateLobby(
     metadata?: StringMap | null
     flags?: number
     overrideEventWebhooksUrl?: string | null
-    members?: Array<{
+    members?: {
       userId: string
       metadata?: StringMap | null
       flags?: number
       additionalName?: string | null
-    }>
+    }[]
   }
 ): LobbyObject | null {
   return runInTransaction(db, () => {
@@ -148,14 +152,18 @@ export function updateLobby(
       `UPDATE lobbies SET metadata = ?, flags = ?, override_event_webhooks_url = ?,
        updated_at = datetime('now') WHERE id = ?`
     ).run(
-      input.metadata === undefined ? current.metadata : JSON.stringify(input.metadata),
+      input.metadata === undefined
+        ? current.metadata
+        : JSON.stringify(input.metadata),
       input.flags ?? current.flags,
       input.overrideEventWebhooksUrl === undefined
         ? current.override_event_webhooks_url
         : input.overrideEventWebhooksUrl,
       lobbyId
     )
-    for (const member of input.members ?? []) {
+    const members = input.members ?? []
+    for (const member of members) {
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define -- The exported mutation helper is declared below with the rest of member operations.
       addOrUpdateMember(db, lobbyId, member.userId, member)
     }
     return getLobby(db, lobbyId)
@@ -181,11 +189,16 @@ export function updateLobbyChannel(
 export function deleteLobby(db: Database, lobbyId: string): boolean {
   return runInTransaction(
     db,
-    () => db.prepare('DELETE FROM lobbies WHERE id = ?').run(lobbyId).changes > 0
+    () =>
+      db.prepare('DELETE FROM lobbies WHERE id = ?').run(lobbyId).changes > 0
   )
 }
 
-export function isLobbyMember(db: Database, lobbyId: string, userId: string): boolean {
+export function isLobbyMember(
+  db: Database,
+  lobbyId: string,
+  userId: string
+): boolean {
   return Boolean(
     db
       .prepare('SELECT 1 FROM lobby_members WHERE lobby_id = ? AND user_id = ?')
@@ -197,7 +210,11 @@ export function addOrUpdateMember(
   db: Database,
   lobbyId: string,
   userId: string,
-  input: { metadata?: StringMap | null; flags?: number; additionalName?: string | null }
+  input: {
+    metadata?: StringMap | null
+    flags?: number
+    additionalName?: string | null
+  }
 ): LobbyMemberObject | null {
   if (!getUser(db, userId)) return null
   const existing = db
@@ -211,7 +228,9 @@ export function addOrUpdateMember(
   ).run(
     lobbyId,
     userId,
-    input.metadata === undefined ? (existing?.metadata ?? null) : JSON.stringify(input.metadata),
+    input.metadata === undefined
+      ? (existing?.metadata ?? null)
+      : JSON.stringify(input.metadata),
     input.flags ?? existing?.flags ?? 0,
     input.additionalName === undefined
       ? (existing?.additional_name ?? null)
@@ -220,7 +239,11 @@ export function addOrUpdateMember(
   return listMembers(db, lobbyId).find((member) => member.id === userId) ?? null
 }
 
-export function deleteLobbyMember(db: Database, lobbyId: string, userId: string): boolean {
+export function deleteLobbyMember(
+  db: Database,
+  lobbyId: string,
+  userId: string
+): boolean {
   return runInTransaction(
     db,
     () =>
@@ -257,7 +280,10 @@ interface LobbyMessageRow {
   flags: number
 }
 
-function toLobbyMessage(db: Database, row: LobbyMessageRow): LobbyMessageObject | null {
+function toLobbyMessage(
+  db: Database,
+  row: LobbyMessageRow
+): LobbyMessageObject | null {
   const author = getUser(db, row.author_id)
   if (!author) return null
   return {
@@ -267,8 +293,12 @@ function toLobbyMessage(db: Database, row: LobbyMessageRow): LobbyMessageObject 
     lobby_id: row.lobby_id,
     channel_id: row.channel_id,
     author,
-    ...(listMembers(db, row.lobby_id).find((member) => member.id === row.author_id) && {
-      lobby_member: listMembers(db, row.lobby_id).find((member) => member.id === row.author_id),
+    ...(listMembers(db, row.lobby_id).find(
+      (member) => member.id === row.author_id
+    ) && {
+      lobby_member: listMembers(db, row.lobby_id).find(
+        (member) => member.id === row.author_id
+      ),
     }),
     ...(row.metadata !== null && { metadata: parseMap(row.metadata) ?? {} }),
     ...(row.moderation_metadata !== null && {
@@ -279,10 +309,16 @@ function toLobbyMessage(db: Database, row: LobbyMessageRow): LobbyMessageObject 
   }
 }
 
-export function listLobbyMessages(db: Database, lobbyId: string, limit = 50): LobbyMessageObject[] {
+export function listLobbyMessages(
+  db: Database,
+  lobbyId: string,
+  limit = 50
+): LobbyMessageObject[] {
   return (
     db
-      .prepare('SELECT * FROM lobby_messages WHERE lobby_id = ? ORDER BY id DESC LIMIT ?')
+      .prepare(
+        'SELECT * FROM lobby_messages WHERE lobby_id = ? ORDER BY id DESC LIMIT ?'
+      )
       .all(lobbyId, limit) as LobbyMessageRow[]
   ).flatMap((row) => {
     const message = toLobbyMessage(db, row)
@@ -292,16 +328,34 @@ export function listLobbyMessages(db: Database, lobbyId: string, limit = 50): Lo
 
 export function createLobbyMessage(
   db: Database,
-  input: { lobbyId: string; authorId: string; content?: string | null; metadata?: StringMap; flags?: number }
+  input: {
+    lobbyId: string
+    authorId: string
+    content?: string | null
+    metadata?: StringMap
+    flags?: number
+  }
 ): LobbyMessageObject | null {
   const lobby = getLobby(db, input.lobbyId)
-  if (!lobby || !lobby.channel_id || !isLobbyMember(db, input.lobbyId, input.authorId)) return null
+  if (!lobby?.channel_id || !isLobbyMember(db, input.lobbyId, input.authorId))
+    return null
   const id = generateSnowflake()
   db.prepare(
     `INSERT INTO lobby_messages (id, lobby_id, channel_id, author_id, application_id, content, metadata, flags)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, input.lobbyId, lobby.channel_id, input.authorId, lobby.application_id, input.content ?? '', input.metadata ? JSON.stringify(input.metadata) : null, input.flags ?? 0)
-  const row = db.prepare('SELECT * FROM lobby_messages WHERE id = ?').get(id) as LobbyMessageRow
+  ).run(
+    id,
+    input.lobbyId,
+    lobby.channel_id,
+    input.authorId,
+    lobby.application_id,
+    input.content ?? '',
+    input.metadata ? JSON.stringify(input.metadata) : null,
+    input.flags ?? 0
+  )
+  const row = db
+    .prepare('SELECT * FROM lobby_messages WHERE id = ?')
+    .get(id) as LobbyMessageRow
   return toLobbyMessage(db, row)
 }
 
@@ -315,7 +369,9 @@ export function updateLobbyMessageModeration(
     db,
     () =>
       db
-        .prepare('UPDATE lobby_messages SET moderation_metadata = ? WHERE id = ? AND lobby_id = ?')
+        .prepare(
+          'UPDATE lobby_messages SET moderation_metadata = ? WHERE id = ? AND lobby_id = ?'
+        )
         .run(JSON.stringify(metadata), messageId, lobbyId).changes > 0
   )
 }

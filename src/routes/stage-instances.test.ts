@@ -25,7 +25,12 @@ describe('stage instance routes', () => {
       body: JSON.stringify({ channel_id: channelId, topic: 'Route stage' }),
     })
     expect(create.status).toBe(200)
-    const get = await app.request(`/stage-instances/${channelId}`, { headers: { Authorization: token } })
-    await expect(get.json()).resolves.toMatchObject({ channel_id: channelId, topic: 'Route stage' })
+    const get = await app.request(`/stage-instances/${channelId}`, {
+      headers: { Authorization: token },
+    })
+    await expect(get.json()).resolves.toMatchObject({
+      channel_id: channelId,
+      topic: 'Route stage',
+    })
   })
 })

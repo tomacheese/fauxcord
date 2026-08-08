@@ -28,8 +28,14 @@ import { createInteractionRoutes } from './routes/interactions'
 import { createOAuth2Routes } from './routes/oauth2'
 import { createLobbyRoutes } from './routes/lobbies'
 import { createStageInstanceRoutes } from './routes/stage-instances'
-import { createCatalogPublicRoutes, createCatalogRoutes } from './routes/catalog'
-import { createPartnerSdkPublicRoutes, createPartnerSdkRoutes } from './routes/partner-sdk'
+import {
+  createCatalogPublicRoutes,
+  createCatalogRoutes,
+} from './routes/catalog'
+import {
+  createPartnerSdkPublicRoutes,
+  createPartnerSdkRoutes,
+} from './routes/partner-sdk'
 import {
   createGuildAdvancedPublicRoutes,
   createGuildAdvancedRoutes,

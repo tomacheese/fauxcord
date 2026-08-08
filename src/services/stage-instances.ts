@@ -33,32 +33,71 @@ function toObject(row: StageInstanceRow): StageInstanceObject {
   }
 }
 
-export function getStageInstance(db: Database, channelId: string): StageInstanceObject | null {
-  const row = db.prepare('SELECT * FROM stage_instances WHERE channel_id = ?').get(channelId) as StageInstanceRow | undefined
+export function getStageInstance(
+  db: Database,
+  channelId: string
+): StageInstanceObject | null {
+  const row = db
+    .prepare('SELECT * FROM stage_instances WHERE channel_id = ?')
+    .get(channelId) as StageInstanceRow | undefined
   return row ? toObject(row) : null
 }
 
-export function createStageInstance(db: Database, input: { guildId: string; channelId: string; topic: string; privacyLevel?: number; guildScheduledEventId?: string | null }): StageInstanceObject {
+export function createStageInstance(
+  db: Database,
+  input: {
+    guildId: string
+    channelId: string
+    topic: string
+    privacyLevel?: number
+    guildScheduledEventId?: string | null
+  }
+): StageInstanceObject {
   return runInTransaction(db, () => {
     const id = generateSnowflake()
     db.prepare(
       `INSERT INTO stage_instances
          (id, guild_id, channel_id, topic, privacy_level, guild_scheduled_event_id)
        VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(id, input.guildId, input.channelId, input.topic, input.privacyLevel ?? 2, input.guildScheduledEventId ?? null)
-    return getStageInstance(db, input.channelId) as StageInstanceObject
+    ).run(
+      id,
+      input.guildId,
+      input.channelId,
+      input.topic,
+      input.privacyLevel ?? 2,
+      input.guildScheduledEventId ?? null
+    )
+    const stage = getStageInstance(db, input.channelId)
+    if (!stage) throw new Error('created stage instance is missing')
+    return stage
   })
 }
 
-export function updateStageInstance(db: Database, channelId: string, input: { topic?: string; privacyLevel?: number }): StageInstanceObject | null {
+export function updateStageInstance(
+  db: Database,
+  channelId: string,
+  input: { topic?: string; privacyLevel?: number }
+): StageInstanceObject | null {
   return runInTransaction(db, () => {
     const current = getStageInstance(db, channelId)
     if (!current) return null
-    db.prepare('UPDATE stage_instances SET topic = ?, privacy_level = ?, updated_at = datetime(\'now\') WHERE channel_id = ?').run(input.topic ?? current.topic, input.privacyLevel ?? current.privacy_level, channelId)
+    db.prepare(
+      "UPDATE stage_instances SET topic = ?, privacy_level = ?, updated_at = datetime('now') WHERE channel_id = ?"
+    ).run(
+      input.topic ?? current.topic,
+      input.privacyLevel ?? current.privacy_level,
+      channelId
+    )
     return getStageInstance(db, channelId)
   })
 }
 
 export function deleteStageInstance(db: Database, channelId: string): boolean {
-  return runInTransaction(db, () => db.prepare('DELETE FROM stage_instances WHERE channel_id = ?').run(channelId).changes > 0)
+  return runInTransaction(
+    db,
+    () =>
+      db
+        .prepare('DELETE FROM stage_instances WHERE channel_id = ?')
+        .run(channelId).changes > 0
+  )
 }

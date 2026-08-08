@@ -14,7 +14,9 @@ describe('partner SDK routes', () => {
     const application = seedApplicationOwner(db)
     clientId = application.applicationId
     token = seedBot(db, 'Bot partner-sdk', application.ownerId)
-    db.prepare('INSERT INTO oauth2_clients (client_id, client_secret, bot_token) VALUES (?, ?, ?)').run(clientId, 'partner-secret', token)
+    db.prepare(
+      'INSERT INTO oauth2_clients (client_id, client_secret, bot_token) VALUES (?, ?, ?)'
+    ).run(clientId, 'partner-secret', token)
     app = new Hono<AppEnv>()
     app.route('/', createPartnerSdkRoutes(db))
     app.use('*', createAuthMiddleware(db, false))
@@ -23,9 +25,17 @@ describe('partner SDK routes', () => {
     const response = await app.request('/partner-sdk/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: 'partner-secret', external_auth_token: 'external', external_auth_type: 1 }),
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: 'partner-secret',
+        external_auth_token: 'external',
+        external_auth_type: 1,
+      }),
     })
     expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toMatchObject({ token_type: 'Bearer', scope: 'identify' })
+    await expect(response.json()).resolves.toMatchObject({
+      token_type: 'Bearer',
+      scope: 'identify',
+    })
   })
 })
