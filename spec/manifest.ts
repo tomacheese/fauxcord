@@ -147,6 +147,24 @@ export interface ContractFixture {
   commandId: string
   /** Seeded guild-scoped application command ID */
   guildCommandId: string
+  /** Seeded auto-moderation rule ID. */
+  autoModerationRuleId: string
+  /** User available for the guild member-add operation. */
+  addableMemberId: string
+  /** Seeded scheduled event ID. */
+  scheduledEventId: string
+  /** Seeded scheduled event exception ID. */
+  scheduledEventExceptionId: string
+  /** Seeded guild soundboard sound ID. */
+  guildSoundboardSoundId: string
+  /** Seeded guild sticker ID. */
+  guildStickerId: string
+  /** Seeded guild template code. */
+  guildTemplateCode: string
+  /** Seeded join-request ID. */
+  joinRequestId: string
+  /** Seeded guild integration ID. */
+  guildIntegrationId: string
   /** Seeded interaction ID (guild-scoped, channel-bound) */
   interactionId: string
   /** Seeded interaction token */
@@ -201,9 +219,7 @@ export interface SpecEndpoint {
   /** HTTP method (lowercase). */
   method: 'get' | 'post' | 'patch' | 'put' | 'delete'
   authentication: ContractAuthentication
-  createFixture: (
-    factory: ContractFixtureFactory
-  ) => Promise<ContractFixture>
+  createFixture: (factory: ContractFixtureFactory) => Promise<ContractFixture>
   successBranches: SpecSuccessBranch[]
 }
 
@@ -350,7 +366,8 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}',
+    specPath:
+      '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}',
     method: 'get',
     successStatus: 200,
     request: (f) => ({
@@ -358,7 +375,8 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me',
+    specPath:
+      '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me',
     method: 'put',
     successStatus: 204,
     request: (f) => ({
@@ -367,7 +385,8 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me',
+    specPath:
+      '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/@me',
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
@@ -376,7 +395,8 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    specPath: '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}',
+    specPath:
+      '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}/{user_id}',
     method: 'delete',
     successStatus: 204,
     request: (f) => ({
@@ -933,8 +953,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     }),
   },
   {
-    specPath:
-      '/applications/{application_id}/activity-instances/{instance_id}',
+    specPath: '/applications/{application_id}/activity-instances/{instance_id}',
     method: 'get',
     successStatus: 200,
     request: (f) => ({
@@ -1672,22 +1691,717 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
       },
     }),
   },
+
+  // ─── Advanced guild and channel operations ────────────────────────────────
+  {
+    specPath:
+      '/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/messages/${f.reactedMessageId}/reactions/%F0%9F%91%8D`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/send-soundboard-sound',
+    method: 'post',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/send-soundboard-sound`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sound_id: f.guildSoundboardSoundId }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/templates/{code}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/templates/${f.guildTemplateCode}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/audit-logs',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/audit-logs` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/auto-moderation/rules',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/auto-moderation/rules`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/auto-moderation/rules',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/auto-moderation/rules`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Contract rule',
+          event_type: 1,
+          trigger_type: 4,
+          trigger_metadata: { allow_list: [], presets: [1] },
+          actions: [{ type: 1, metadata: { custom_message: 'blocked' } }],
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/auto-moderation/rules/{rule_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/auto-moderation/rules/${f.autoModerationRuleId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/auto-moderation/rules/{rule_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/auto-moderation/rules/${f.autoModerationRuleId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated contract rule' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/auto-moderation/rules/{rule_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/auto-moderation/rules/${f.autoModerationRuleId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/bulk-ban',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/bulk-ban`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: [f.addableMemberId] }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/channels',
+    method: 'patch',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/channels`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ id: f.channelId, position: 7 }]),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/incident-actions',
+    method: 'put',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/incident-actions`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invites_disabled_until: '2030-01-01T00:00:00.000Z',
+          dms_disabled_until: null,
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/integrations',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/integrations` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/integrations/{integration_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/integrations/${f.guildIntegrationId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/members/search',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/search?query=Test&limit=10`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/members/{user_id}',
+    method: 'put',
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/members/${f.addableMemberId}`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: 'local-contract-member',
+          nick: 'New contract member',
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/messages/search',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/messages/search?content=Test`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/new-member-welcome',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/new-member-welcome`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/onboarding',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/onboarding` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/onboarding',
+    method: 'put',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/onboarding`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompts: [],
+          default_channel_ids: [f.channelId],
+          enabled: false,
+          mode: 1,
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/preview',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/preview` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/prune',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/prune?days=7` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/prune',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/prune`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ days: 7 }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/regions',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/regions` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/requests',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/requests` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/requests/{request_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/requests/${f.joinRequestId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ application_status: 'APPROVED' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/roles',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/roles`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([{ id: f.roleId, position: 5 }]),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/roles/member-counts',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/roles/member-counts`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/roles/{role_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/roles/${f.roleId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/scheduled-events',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events?with_user_count=true`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/scheduled-events',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Contract external event',
+          privacy_level: 2,
+          entity_type: 3,
+          scheduled_start_time: '2030-02-01T00:00:00.000Z',
+          scheduled_end_time: '2030-02-01T01:00:00.000Z',
+          entity_metadata: { location: 'Fauxcord' },
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}?with_user_count=true`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated contract event' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath:
+      '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/exceptions',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}/exceptions`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scheduled_start_time: '2030-03-01T00:00:00.000Z',
+          scheduled_end_time: '2030-03-01T01:00:00.000Z',
+        }),
+      },
+    }),
+  },
+  {
+    specPath:
+      '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/exceptions/{exception_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}/exceptions/${f.scheduledEventExceptionId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_canceled: true }),
+      },
+    }),
+  },
+  {
+    specPath:
+      '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/exceptions/{exception_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}/exceptions/${f.scheduledEventExceptionId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath:
+      '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/users',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}/users?with_member=true`,
+    }),
+  },
+  {
+    specPath:
+      '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/users/counts',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}/users/counts`,
+    }),
+  },
+  {
+    specPath:
+      '/guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/{guild_scheduled_event_exception_id}/users',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/scheduled-events/${f.scheduledEventId}/${f.scheduledEventExceptionId}/users?with_member=true`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/soundboard-sounds',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/soundboard-sounds`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/soundboard-sounds',
+    method: 'post',
+    successStatus: 201,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/soundboard-sounds`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Created contract sound',
+          sound_id: '977777777777777777',
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/soundboard-sounds/${f.guildSoundboardSoundId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/soundboard-sounds/${f.guildSoundboardSoundId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated contract sound' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/soundboard-sounds/{sound_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/soundboard-sounds/${f.guildSoundboardSoundId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/stickers',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/stickers` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/stickers',
+    method: 'post',
+    successStatus: 201,
+    request: (f) => {
+      const body = new FormData()
+      body.set('name', 'created-sticker')
+      body.set('description', 'Created sticker')
+      body.set('tags', 'created')
+      body.set('file', new File(['png'], 'sticker.png', { type: 'image/png' }))
+      return {
+        path: `/api/v10/guilds/${f.guildId}/stickers`,
+        init: { method: 'POST', body },
+      }
+    },
+  },
+  {
+    specPath: '/guilds/{guild_id}/stickers/{sticker_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/stickers/${f.guildStickerId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/stickers/{sticker_id}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/stickers/${f.guildStickerId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'updated-sticker' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/stickers/{sticker_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/stickers/${f.guildStickerId}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/templates',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/templates` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/templates',
+    method: 'post',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/templates`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Created contract template' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/templates/{code}',
+    method: 'put',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/templates/${f.guildTemplateCode}`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/templates/{code}',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/templates/${f.guildTemplateCode}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated contract template' }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/templates/{code}',
+    method: 'delete',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/templates/${f.guildTemplateCode}`,
+      init: { method: 'DELETE' },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/threads/active',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/threads/active` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/vanity-url',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/vanity-url` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/voice-states/@me',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/voice-states/@me` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/voice-states/@me',
+    method: 'patch',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/voice-states/@me`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: f.voiceChannelId, suppress: true }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/voice-states/{user_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/voice-states/${f.memberId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/voice-states/{user_id}',
+    method: 'patch',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/voice-states/${f.memberId}`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: f.voiceChannelId, suppress: true }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/welcome-screen',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/welcome-screen` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/welcome-screen',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/welcome-screen`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: true,
+          description: 'Updated contract welcome',
+          welcome_channels: [],
+        }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/widget',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/widget` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/widget',
+    method: 'patch',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/widget`,
+      init: {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: false, channel_id: null }),
+      },
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/widget.json',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/widget.json` }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/widget.png',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/widget.png?style=shield`,
+    }),
+  },
 ]
 
 const MULTI_SUCCESS_STATUSES: Readonly<Record<string, readonly number[]>> = {
   'post /channels/{channel_id}/typing': [200, 204],
   'post /channels/{channel_id}/invites': [200, 204],
   'patch /guilds/{guild_id}/members/{user_id}': [200, 204],
+  'put /guilds/{guild_id}/members/{user_id}': [201, 204],
+  'get /guilds/{guild_id}/messages/search': [200, 202],
+  'get /guilds/{guild_id}/new-member-welcome': [200, 204],
   'post /applications/{application_id}/commands': [200, 201],
   'post /applications/{application_id}/guilds/{guild_id}/commands': [200, 201],
-  'post /interactions/{interaction_id}/{interaction_token}/callback': [200, 204],
+  'post /interactions/{interaction_id}/{interaction_token}/callback': [
+    200, 204,
+  ],
   'get /channels/{channel_id}/threads/search': [200, 202],
   'put /channels/{channel_id}/recipients/{user_id}': [201, 204],
   'post /webhooks/{webhook_id}/{webhook_token}': [200, 204],
 }
 
 function authenticationFor(entry: LegacySpecEndpoint): ContractAuthentication {
-  if (entry.specPath === '/gateway' || entry.specPath === '/oauth2/keys') {
+  if (
+    entry.specPath === '/gateway' ||
+    entry.specPath === '/oauth2/keys' ||
+    entry.specPath === '/guilds/templates/{code}'
+  ) {
     return 'public'
   }
   if (
@@ -1744,10 +2458,7 @@ function alternateRequest(
     )
     return { ...request, init: { method: 'POST', body } }
   }
-  if (
-    key === 'patch /guilds/{guild_id}/members/{user_id}' &&
-    status === 204
-  ) {
+  if (key === 'patch /guilds/{guild_id}/members/{user_id}' && status === 204) {
     return {
       ...request,
       init: {
@@ -1757,7 +2468,38 @@ function alternateRequest(
       },
     }
   }
-  if (key === 'post /applications/{application_id}/commands' && status === 200) {
+  if (key === 'put /guilds/{guild_id}/members/{user_id}' && status === 204) {
+    return {
+      ...request,
+      path: `/api/v10/guilds/${fixture.guildId}/members/${fixture.memberId}`,
+      init: {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: 'local-contract-member',
+          nick: 'Updated contract member',
+        }),
+      },
+    }
+  }
+  if (key === 'get /guilds/{guild_id}/messages/search' && status === 202) {
+    return {
+      ...request,
+      path: `/api/v10/guilds/${fixture.guildId}/messages/search?indexing=true`,
+    }
+  }
+  if (key === 'get /guilds/{guild_id}/new-member-welcome' && status === 204) {
+    fixture.db
+      .prepare(
+        'UPDATE guild_welcome_screen_settings SET enabled = 0 WHERE guild_id = ?'
+      )
+      .run(fixture.guildId)
+    return request
+  }
+  if (
+    key === 'post /applications/{application_id}/commands' &&
+    status === 200
+  ) {
     return {
       ...request,
       init: {
@@ -1771,8 +2513,7 @@ function alternateRequest(
     }
   }
   if (
-    key ===
-      'post /applications/{application_id}/guilds/{guild_id}/commands' &&
+    key === 'post /applications/{application_id}/guilds/{guild_id}/commands' &&
     status === 200
   ) {
     return {
@@ -1788,7 +2529,8 @@ function alternateRequest(
     }
   }
   if (
-    key === 'post /interactions/{interaction_id}/{interaction_token}/callback' &&
+    key ===
+      'post /interactions/{interaction_id}/{interaction_token}/callback' &&
     status === 200
   ) {
     return {
@@ -1810,13 +2552,19 @@ function alternateRequest(
       path: `/api/v10/channels/${fixture.unindexedChannelId}/threads/search`,
     }
   }
-  if (key === 'put /channels/{channel_id}/recipients/{user_id}' && status === 201) {
+  if (
+    key === 'put /channels/{channel_id}/recipients/{user_id}' &&
+    status === 201
+  ) {
     return {
       ...request,
       init: {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ access_token: 'contract-user-token', nick: 'member' }),
+        body: JSON.stringify({
+          access_token: 'contract-user-token',
+          nick: 'member',
+        }),
       },
     }
   }
@@ -1955,7 +2703,8 @@ function captureMutationEffect(
   const key = `${entry.method} ${entry.specPath} ${status}`
   // eslint-disable-next-line @typescript-eslint/no-use-before-define -- Capture setup stays before the exhaustive effect catalog.
   const effect = mutationEffectFor(key, fixture)
-  const effects = mutationEffects.get(fixture) ?? new Map<string, MutationEffect>()
+  const effects =
+    mutationEffects.get(fixture) ?? new Map<string, MutationEffect>()
   effects.set(key, effect)
   mutationEffects.set(fixture, effects)
 }
@@ -2026,7 +2775,10 @@ function mutationEffectFor(
       const channelId = key.endsWith('200') ? f.groupDmChannelId : f.channelId
       return predicateEffect(
         'target channel typing_at to be populated',
-        () => readRow(db, 'SELECT typing_at FROM channels WHERE id = ?', [channelId]),
+        () =>
+          readRow(db, 'SELECT typing_at FROM channels WHERE id = ?', [
+            channelId,
+          ]),
         (after) =>
           typeof (after as { typing_at?: unknown }).typing_at === 'string'
       )
@@ -2741,8 +3493,331 @@ function mutationEffectFor(
         [f.channelId, f.webhookId, 'contract test']
       )
     }
+    case 'delete /channels/{channel_id}/messages/{message_id}/reactions/{emoji_name} 204': {
+      return rowEffect(
+        f,
+        'all target emoji reactions to be absent',
+        'SELECT id FROM reactions WHERE message_id = ? AND emoji = ?',
+        [f.reactedMessageId, '👍'],
+        null
+      )
+    }
+    case 'post /channels/{channel_id}/send-soundboard-sound 204': {
+      return matchingRowCreatedEffect(
+        f,
+        'a channel soundboard playback to be recorded',
+        `SELECT COUNT(*) AS count FROM channel_soundboard_playbacks
+         WHERE channel_id = ? AND user_id = ? AND sound_id = ?`,
+        [f.channelId, f.userId, f.guildSoundboardSoundId]
+      )
+    }
+    case 'post /guilds/{guild_id}/auto-moderation/rules 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'the requested auto-moderation rule to be created',
+        `SELECT COUNT(*) AS count FROM auto_moderation_rules
+         WHERE guild_id = ? AND name = ?`,
+        [f.guildId, 'Contract rule']
+      )
+    }
+    case 'patch /guilds/{guild_id}/auto-moderation/rules/{rule_id} 200': {
+      return rowEffect(
+        f,
+        'the auto-moderation rule name to be updated',
+        'SELECT name FROM auto_moderation_rules WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.autoModerationRuleId],
+        { name: 'Updated contract rule' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/auto-moderation/rules/{rule_id} 204': {
+      return rowEffect(
+        f,
+        'the auto-moderation rule to be absent',
+        'SELECT id FROM auto_moderation_rules WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.autoModerationRuleId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/bulk-ban 200': {
+      return rowEffect(
+        f,
+        'the requested user to be banned',
+        'SELECT guild_id, user_id FROM guild_bans WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.addableMemberId],
+        { guild_id: f.guildId, user_id: f.addableMemberId }
+      )
+    }
+    case 'patch /guilds/{guild_id}/channels 204': {
+      return rowEffect(
+        f,
+        'the target channel position to be updated',
+        'SELECT position FROM channels WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.channelId],
+        { position: 7 }
+      )
+    }
+    case 'put /guilds/{guild_id}/incident-actions 200': {
+      return rowEffect(
+        f,
+        'incident actions to be persisted',
+        `SELECT invites_disabled_until, dms_disabled_until
+         FROM guild_incident_actions WHERE guild_id = ?`,
+        [f.guildId],
+        {
+          invites_disabled_until: '2030-01-01T00:00:00.000Z',
+          dms_disabled_until: null,
+        }
+      )
+    }
+    case 'delete /guilds/{guild_id}/integrations/{integration_id} 204': {
+      return rowEffect(
+        f,
+        'the target integration to be marked deleted',
+        'SELECT deleted FROM guild_integrations WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.guildIntegrationId],
+        { deleted: 1 }
+      )
+    }
+    case 'put /guilds/{guild_id}/members/{user_id} 201': {
+      return rowEffect(
+        f,
+        'the requested member to be added',
+        'SELECT nick FROM guild_members WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.addableMemberId],
+        { nick: 'New contract member' }
+      )
+    }
+    case 'put /guilds/{guild_id}/members/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the existing member nickname to be updated',
+        'SELECT nick FROM guild_members WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.memberId],
+        { nick: 'Updated contract member' }
+      )
+    }
+    case 'put /guilds/{guild_id}/onboarding 200': {
+      return rowEffect(
+        f,
+        'onboarding settings to be updated',
+        `SELECT enabled, mode FROM guild_onboarding_settings
+         WHERE guild_id = ?`,
+        [f.guildId],
+        { enabled: 0, mode: 1 }
+      )
+    }
+    case 'post /guilds/{guild_id}/prune 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'a guild prune run to be recorded',
+        'SELECT COUNT(*) AS count FROM guild_prune_runs WHERE guild_id = ? AND days = 7',
+        [f.guildId]
+      )
+    }
+    case 'patch /guilds/{guild_id}/requests/{request_id} 200': {
+      return rowEffect(
+        f,
+        'the guild join request status to be updated',
+        `SELECT application_status FROM guild_join_requests
+         WHERE guild_id = ? AND id = ?`,
+        [f.guildId, f.joinRequestId],
+        { application_status: 'APPROVED' }
+      )
+    }
+    case 'patch /guilds/{guild_id}/roles 200': {
+      return rowEffect(
+        f,
+        'the target role position to be updated',
+        'SELECT position FROM roles WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.roleId],
+        { position: 5 }
+      )
+    }
+    case 'post /guilds/{guild_id}/scheduled-events 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'the requested scheduled event to be created',
+        `SELECT COUNT(*) AS count FROM scheduled_events
+         WHERE guild_id = ? AND name = ?`,
+        [f.guildId, 'Contract external event']
+      )
+    }
+    case 'patch /guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id} 200': {
+      return rowEffect(
+        f,
+        'the target scheduled event name to be updated',
+        'SELECT name FROM scheduled_events WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.scheduledEventId],
+        { name: 'Updated contract event' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id} 204': {
+      return rowEffect(
+        f,
+        'the target scheduled event to be absent',
+        'SELECT id FROM scheduled_events WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.scheduledEventId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/exceptions 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'the requested scheduled event exception to be created',
+        `SELECT COUNT(*) AS count FROM scheduled_event_exceptions
+         WHERE event_id = ? AND scheduled_start_time = ?`,
+        [f.scheduledEventId, '2030-03-01T00:00:00.000Z']
+      )
+    }
+    case 'patch /guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/exceptions/{exception_id} 200': {
+      return rowEffect(
+        f,
+        'the event exception to be canceled',
+        `SELECT is_canceled FROM scheduled_event_exceptions
+         WHERE event_id = ? AND id = ?`,
+        [f.scheduledEventId, f.scheduledEventExceptionId],
+        { is_canceled: 1 }
+      )
+    }
+    case 'delete /guilds/{guild_id}/scheduled-events/{guild_scheduled_event_id}/exceptions/{exception_id} 204': {
+      return rowEffect(
+        f,
+        'the event exception to be absent',
+        `SELECT id FROM scheduled_event_exceptions
+         WHERE event_id = ? AND id = ?`,
+        [f.scheduledEventId, f.scheduledEventExceptionId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/soundboard-sounds 201': {
+      return rowEffect(
+        f,
+        'the requested soundboard sound to be created',
+        'SELECT name FROM soundboard_sounds WHERE guild_id = ? AND id = ?',
+        [f.guildId, '977777777777777777'],
+        { name: 'Created contract sound' }
+      )
+    }
+    case 'patch /guilds/{guild_id}/soundboard-sounds/{sound_id} 200': {
+      return rowEffect(
+        f,
+        'the target soundboard sound name to be updated',
+        'SELECT name FROM soundboard_sounds WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.guildSoundboardSoundId],
+        { name: 'Updated contract sound' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/soundboard-sounds/{sound_id} 204': {
+      return rowEffect(
+        f,
+        'the target soundboard sound to be absent',
+        'SELECT id FROM soundboard_sounds WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.guildSoundboardSoundId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/stickers 201': {
+      return matchingRowCreatedEffect(
+        f,
+        'the requested guild sticker to be created',
+        'SELECT COUNT(*) AS count FROM stickers WHERE guild_id = ? AND name = ?',
+        [f.guildId, 'created-sticker']
+      )
+    }
+    case 'patch /guilds/{guild_id}/stickers/{sticker_id} 200': {
+      return rowEffect(
+        f,
+        'the target guild sticker name to be updated',
+        'SELECT name FROM stickers WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.guildStickerId],
+        { name: 'updated-sticker' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/stickers/{sticker_id} 204': {
+      return rowEffect(
+        f,
+        'the target guild sticker to be absent',
+        'SELECT id FROM stickers WHERE guild_id = ? AND id = ?',
+        [f.guildId, f.guildStickerId],
+        null
+      )
+    }
+    case 'post /guilds/{guild_id}/templates 200': {
+      return matchingRowCreatedEffect(
+        f,
+        'the requested guild template to be created',
+        `SELECT COUNT(*) AS count FROM guild_templates
+         WHERE source_guild_id = ? AND name = ?`,
+        [f.guildId, 'Created contract template']
+      )
+    }
+    case 'put /guilds/{guild_id}/templates/{code} 200': {
+      return rowEffect(
+        f,
+        'the target guild template to be synchronized',
+        'SELECT is_dirty FROM guild_templates WHERE source_guild_id = ? AND code = ?',
+        [f.guildId, f.guildTemplateCode],
+        { is_dirty: 0 }
+      )
+    }
+    case 'patch /guilds/{guild_id}/templates/{code} 200': {
+      return rowEffect(
+        f,
+        'the target guild template name to be updated',
+        'SELECT name FROM guild_templates WHERE source_guild_id = ? AND code = ?',
+        [f.guildId, f.guildTemplateCode],
+        { name: 'Updated contract template' }
+      )
+    }
+    case 'delete /guilds/{guild_id}/templates/{code} 200': {
+      return rowEffect(
+        f,
+        'the target guild template to be absent',
+        'SELECT code FROM guild_templates WHERE source_guild_id = ? AND code = ?',
+        [f.guildId, f.guildTemplateCode],
+        null
+      )
+    }
+    case 'patch /guilds/{guild_id}/voice-states/@me 204': {
+      return rowEffect(
+        f,
+        'the bot voice state to be suppressed',
+        'SELECT suppress FROM guild_voice_states WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.userId],
+        { suppress: 1 }
+      )
+    }
+    case 'patch /guilds/{guild_id}/voice-states/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the member voice state to be suppressed',
+        'SELECT suppress FROM guild_voice_states WHERE guild_id = ? AND user_id = ?',
+        [f.guildId, f.memberId],
+        { suppress: 1 }
+      )
+    }
+    case 'patch /guilds/{guild_id}/welcome-screen 200': {
+      return rowEffect(
+        f,
+        'the welcome-screen description to be updated',
+        'SELECT description FROM guild_welcome_screen_settings WHERE guild_id = ?',
+        [f.guildId],
+        { description: 'Updated contract welcome' }
+      )
+    }
+    case 'patch /guilds/{guild_id}/widget 200': {
+      return rowEffect(
+        f,
+        'widget settings to be updated',
+        'SELECT enabled, channel_id FROM guild_widget_settings WHERE guild_id = ?',
+        [f.guildId],
+        { enabled: 0, channel_id: null }
+      )
+    }
     default: {
-      throw new Error(`No operation-specific mutation effect declared for ${key}`)
+      throw new Error(
+        `No operation-specific mutation effect declared for ${key}`
+      )
     }
   }
 }
@@ -2769,7 +3844,9 @@ function createOperationAssertion(
       }
       const assetUrl = new URL(body.attachment.url)
       if (assetUrl.origin !== baseUrl) {
-        throw new Error(`${label} returned an attachment outside the test server`)
+        throw new Error(
+          `${label} returned an attachment outside the test server`
+        )
       }
       const asset = await fetch(assetUrl)
       if (
@@ -2803,8 +3880,9 @@ for (const entry of LEGACY_MANIFEST) {
 }
 
 /** All currently implemented Fauxcord operations in unique OpenAPI-key form. */
-export const MANIFEST: SpecEndpoint[] = uniqueLegacyEntries.values().map(
-  (entry: LegacySpecEndpoint) => {
+export const MANIFEST: SpecEndpoint[] = uniqueLegacyEntries
+  .values()
+  .map((entry: LegacySpecEndpoint) => {
     const key = `${entry.method} ${entry.specPath}`
     const statuses = MULTI_SUCCESS_STATUSES[key] ?? [entry.successStatus]
     return {
@@ -2824,5 +3902,5 @@ export const MANIFEST: SpecEndpoint[] = uniqueLegacyEntries.values().map(
         assert: createOperationAssertion(entry, status),
       })),
     }
-  }
-).toArray()
+  })
+  .toArray()

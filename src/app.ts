@@ -26,6 +26,10 @@ import { createApplicationCommandRoutes } from './routes/application-commands'
 import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
 import { createOAuth2Routes } from './routes/oauth2'
+import {
+  createGuildAdvancedPublicRoutes,
+  createGuildAdvancedRoutes,
+} from './routes/guild-advanced'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { createGatewayWebSocketHandler } from './gateway/server'
@@ -90,6 +94,7 @@ export function buildApp(
   // through the versioned base URL (e.g. `/api/v10/oauth2/token`).
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
     app.route(oauth2Prefix, createOAuth2Routes(db))
+    app.route(oauth2Prefix, createGuildAdvancedPublicRoutes(db))
   }
 
   // The Gateway WebSocket is mounted at "/" (matching real Discord's Gateway
@@ -128,6 +133,7 @@ export function buildApp(
   const routePrefix = ['/api/v10', '/api', '']
 
   for (const prefix of routePrefix) {
+    app.route(prefix, createGuildAdvancedRoutes(db))
     app.route(
       prefix,
       createChannelRoutes(db, config.baseUrl, config.uploadPath)
@@ -135,7 +141,7 @@ export function buildApp(
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, config.baseUrl))
-    app.route(prefix, createSoundboardRoutes())
+    app.route(prefix, createSoundboardRoutes(db))
     // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
     app.route(prefix, createWebhookRoutes(db, config.baseUrl))
     app.route(prefix, createInviteRoutes(db))

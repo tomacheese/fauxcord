@@ -30,6 +30,10 @@ import { createMockRoutes } from './routes/mock'
 import { createApplicationCommandRoutes } from './routes/application-commands'
 import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
+import {
+  createGuildAdvancedPublicRoutes,
+  createGuildAdvancedRoutes,
+} from './routes/guild-advanced'
 import { generateSnowflake } from './snowflake'
 import { buildApp } from './app'
 import { createCommand } from './services/application-commands'
@@ -113,6 +117,7 @@ export function createFullTestApp(): FullTestContext {
   // src/index.ts (see its comment for why it is exempt from auth here).
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
     app.route(oauth2Prefix, createOAuth2Routes(db))
+    app.route(oauth2Prefix, createGuildAdvancedPublicRoutes(db))
   }
 
   // Authentication middleware
@@ -122,11 +127,12 @@ export function createFullTestApp(): FullTestContext {
   // Discord API routes (mounted under all three prefixes)
   const routePrefixes = ['/api/v10', '/api', '']
   for (const prefix of routePrefixes) {
+    app.route(prefix, createGuildAdvancedRoutes(db))
     app.route(prefix, createChannelRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH))
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
-    app.route(prefix, createSoundboardRoutes())
+    app.route(prefix, createSoundboardRoutes(db))
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
     app.route(prefix, createInviteRoutes(db))
     app.route(
@@ -318,6 +324,133 @@ export function createContractFixture(db: Database): ContractFixture {
     guildId,
     'guildcontractcmd'
   )
+  const autoModerationRuleId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO auto_moderation_rules
+       (id, guild_id, creator_id, name, event_type, trigger_type,
+        trigger_metadata, actions)
+     VALUES (?, ?, ?, 'Fixture moderation', 1, 4, ?, ?)`
+  ).run(
+    autoModerationRuleId,
+    guildId,
+    userId,
+    JSON.stringify({ allow_list: [], presets: [1] }),
+    JSON.stringify([{ type: 1, metadata: { custom_message: 'blocked' } }])
+  )
+  const addableMemberId = generateSnowflake()
+  db.prepare(
+    "INSERT INTO users (id, username, discriminator, bot) VALUES (?, 'AddableMember', '0', 0)"
+  ).run(addableMemberId)
+  const { eventId: scheduledEventId } = seedScheduledEvent(
+    db,
+    guildId,
+    userId,
+    voiceChannelId
+  )
+  db.prepare(
+    `UPDATE scheduled_events SET channel_id = NULL, entity_type = 3,
+       entity_metadata = ?, scheduled_end_time = '2030-01-01T01:00:00.000Z'
+     WHERE id = ?`
+  ).run(JSON.stringify({ location: 'Fauxcord' }), scheduledEventId)
+  const scheduledEventExceptionId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO scheduled_event_exceptions
+       (id, event_id, scheduled_start_time, scheduled_end_time)
+     VALUES (?, ?, '2030-01-02T00:00:00.000Z', '2030-01-02T01:00:00.000Z')`
+  ).run(scheduledEventExceptionId, scheduledEventId)
+  db.prepare(
+    'INSERT INTO scheduled_event_users (event_id, user_id) VALUES (?, ?)'
+  ).run(scheduledEventId, userId)
+  db.prepare(
+    `INSERT INTO scheduled_event_exception_users (exception_id, user_id)
+     VALUES (?, ?)`
+  ).run(scheduledEventExceptionId, userId)
+  const guildSoundboardSoundId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO soundboard_sounds
+       (id, guild_id, user_id, name, volume)
+     VALUES (?, ?, ?, 'Fixture sound', 1)`
+  ).run(guildSoundboardSoundId, guildId, userId)
+  const guildStickerId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO stickers
+       (id, guild_id, user_id, name, description, tags, type, format_type)
+     VALUES (?, ?, ?, 'fixture-sticker', 'Fixture sticker', 'fixture', 2, 1)`
+  ).run(guildStickerId, guildId, userId)
+  const { templateCode: guildTemplateCode } = seedGuildTemplate(
+    db,
+    guildId,
+    userId
+  )
+  db.prepare('UPDATE guild_templates SET is_dirty = 1 WHERE code = ?').run(
+    guildTemplateCode
+  )
+  db.prepare(
+    `INSERT INTO guild_voice_states
+       (guild_id, user_id, channel_id, session_id)
+     VALUES (?, ?, ?, 'contract-session'), (?, ?, ?, 'member-session')`
+  ).run(guildId, userId, voiceChannelId, guildId, memberId, voiceChannelId)
+  db.prepare(
+    `INSERT INTO guild_onboarding_settings
+       (guild_id, prompts, default_channel_ids, enabled, mode)
+     VALUES (?, '[]', ?, 1, 0)`
+  ).run(guildId, JSON.stringify([channelId]))
+  db.prepare(
+    `INSERT INTO guild_widget_settings (guild_id, enabled, channel_id)
+     VALUES (?, 1, ?)`
+  ).run(guildId, channelId)
+  db.prepare(
+    `INSERT INTO guild_welcome_screen_settings
+       (guild_id, description, channels, enabled)
+     VALUES (?, 'Contract welcome', '[]', 1)`
+  ).run(guildId)
+  const joinRequestId = generateSnowflake()
+  const guildIntegrationId = generateSnowflake()
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_join_requests (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      application_status INTEGER,
+      rejection_reason TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS guild_integrations (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      name TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS guild_prune_runs (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      days INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS guild_incident_actions (
+      guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
+      invites_disabled_until TEXT,
+      dms_disabled_until TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS channel_soundboard_playbacks (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sound_id TEXT NOT NULL,
+      source_guild_id TEXT REFERENCES guilds(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+  db.prepare(
+    `INSERT INTO guild_join_requests (id, guild_id, user_id)
+     VALUES (?, ?, ?)`
+  ).run(joinRequestId, guildId, memberId)
+  db.prepare(
+    `INSERT INTO guild_integrations (id, guild_id, name)
+     VALUES (?, ?, 'Contract Integration')`
+  ).run(guildIntegrationId, guildId)
   const { interactionId, interactionToken } = seedInteraction(
     db,
     userId,
@@ -379,6 +512,15 @@ export function createContractFixture(db: Database): ContractFixture {
     removableRecipientId,
     commandId,
     guildCommandId,
+    autoModerationRuleId,
+    addableMemberId,
+    scheduledEventId,
+    scheduledEventExceptionId,
+    guildSoundboardSoundId,
+    guildStickerId,
+    guildTemplateCode,
+    joinRequestId,
+    guildIntegrationId,
     interactionId,
     interactionToken,
     originalInteractionId,
