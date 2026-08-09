@@ -62,10 +62,21 @@ const ajv = new Ajv2020({
   validateFormats: true,
 })
 addFormats(ajv)
+ajv.addFormat('snowflake', /^[0-9]{17,20}$/)
+ajv.addFormat('nonce', true)
 
 // Register the entire spec document so internal $ref resolution works without
 // a separate dereference step. Ajv resolves "#/components/schemas/Foo" automatically.
 ajv.addSchema(spec, 'https://discord.com/spec')
+
+describe('Discord custom schema formats', () => {
+  it('validates Discord snowflake formats', () => {
+    const validate = ajv.compile({ type: 'string', format: 'snowflake' })
+
+    expect(validate('1234567890123456')).toBe(false)
+    expect(validate('12345678901234567')).toBe(true)
+  })
+})
 
 /**
  * Derives the response schema name from the spec for a given path and method.
