@@ -58,7 +58,12 @@ export function createMockRoutes(db: Database, uploadPath: string): Hono {
       return c.json({ message: '404: Not Found', code: 0 }, 404)
     }
 
-    const contentType = guessContentType(filename)
+    const attachment = db
+      .prepare(
+        'SELECT content_type FROM attachments WHERE message_id = ? AND filename = ?'
+      )
+      .get(messageId, filename) as { content_type: string } | undefined
+    const contentType = attachment?.content_type ?? guessContentType(filename)
     c.header('Content-Type', contentType)
     c.header('Content-Length', String(data.length))
     // Buffer can be returned directly as BodyInit, but Hono's type definitions require ReadableStream,

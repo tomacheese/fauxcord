@@ -140,7 +140,7 @@ fi
 node - "$RESULT_JSON" "$LIB" <<'NODE'
 const fs = require('fs')
 const [, , file, lib] = process.argv
-const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+const data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''))
 const counts = {}
 const failing = []
 for (const r of data.results) {

@@ -71,6 +71,22 @@ describe('attachments service', () => {
     expect(info.size).toBe(3)
   })
 
+  it('URL-encodes attachment filenames', async () => {
+    const info = await saveAttachment(
+      db,
+      uploadPath,
+      BASE_URL,
+      'c1',
+      'm1',
+      'a-special',
+      'proof#?.txt',
+      'text/plain',
+      new TextEncoder().encode('encoded')
+    )
+
+    expect(info.url).toBe(`${BASE_URL}/_mock/attachments/c1/m1/proof%23%3F.txt`)
+  })
+
   it('reads back a saved attachment', async () => {
     const data = new TextEncoder().encode('roundtrip')
     await saveAttachment(

@@ -422,6 +422,7 @@ async function verifyGateway() {
   })
 
   try {
+    const ready = new Promise((resolve) => djs.once('clientReady', resolve))
     // Race login()+ready against a single timeout guard rather than awaiting
     // them sequentially: if login() itself never settles (e.g. discord.js
     // silently retries the Gateway connection instead of rejecting), a
@@ -432,7 +433,7 @@ async function verifyGateway() {
     await Promise.race([
       (async () => {
         await djs.login('compat-token')
-        await new Promise((resolve) => djs.once('ready', resolve))
+        await ready
       })(),
       new Promise((_resolve, reject) =>
         setTimeout(() => reject(new Error('ready timeout')), 20000)
@@ -455,6 +456,7 @@ async function verifyGateway() {
         ? 'Fauxcord gateway IDENTIFY rejected the token; resolveBotForIdentify() (src/gateway/server.ts) normalizes the raw IDENTIFY token against the "Bot "-prefixed bots.token, so a failure here indicates a regression'
         : message.slice(0, 300),
     })
+    await djs.destroy()
     return { status: isAuthFailure ? 'fauxcord-fix' : 'lib-issue', steps }
   }
 

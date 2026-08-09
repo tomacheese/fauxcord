@@ -54,13 +54,13 @@ describe('Mock infrastructure API', () => {
         'm1',
         'a1',
         'hello.txt',
-        'text/plain',
+        'image/png',
         new TextEncoder().encode('served')
       )
 
       const res = await app.request('/_mock/attachments/c1/m1/hello.txt')
       expect(res.status).toBe(200)
-      expect(res.headers.get('content-type')).toBe('text/plain')
+      expect(res.headers.get('content-type')).toBe('image/png')
       expect(await res.text()).toBe('served')
     })
 

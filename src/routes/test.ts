@@ -118,7 +118,7 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
   app.get('/_test/webhooks/:channelId', (c) => {
     const { channelId } = c.req.param()
     const webhooks = getChannelWebhooks(db, channelId)
-    return c.json(webhooks)
+    return c.json({ webhooks })
   })
 
   // POST /_test/channels/:channelId/messages — Inject a message authored by

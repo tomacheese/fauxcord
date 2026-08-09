@@ -36,7 +36,7 @@ const ajv = new Ajv2020({
   validateFormats: true,
 })
 addFormats(ajv)
-ajv.addFormat('snowflake', /^[0-9]{17,20}$/)
+ajv.addFormat('snowflake', /^(0|[1-9][0-9]*)$/)
 ajv.addFormat('nonce', true)
 ajv.addSchema(spec, 'https://discord.com/spec')
 

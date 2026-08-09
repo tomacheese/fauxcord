@@ -2,7 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createTestRoutes } from './test'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
+import {
+  seedBot,
+  seedGuild,
+  seedChannel,
+  seedMessage,
+  seedWebhook,
+} from '../test-helpers'
 import { createTestUser } from '../services/test-control'
 import { createPoll } from '../services/polls'
 import type { Database } from '../db'
@@ -239,6 +245,33 @@ describe('Test Control API', () => {
       const body = (await res.json()) as Record<string, unknown>
       expect(body).toHaveProperty('messages')
       expect(Array.isArray(body.messages)).toBe(true)
+    })
+  })
+
+  describe('GET /_test/webhooks/:channelId', () => {
+    it('returns the documented webhook envelope', async () => {
+      const token = seedBot(db)
+      const guildId = seedGuild(db, token)
+      const channelId = seedChannel(db, guildId)
+      const { webhookId, webhookToken } = seedWebhook(
+        db,
+        channelId,
+        guildId,
+        'Control Webhook'
+      )
+
+      const res = await app.request(`/_test/webhooks/${channelId}`)
+
+      expect(res.status).toBe(200)
+      const body = (await res.json()) as {
+        webhooks?: { id: string; name: string; token: string }[]
+      }
+      expect(body.webhooks).toHaveLength(1)
+      expect(body.webhooks?.[0]).toMatchObject({
+        id: webhookId,
+        name: 'Control Webhook',
+        token: webhookToken,
+      })
     })
   })
 
