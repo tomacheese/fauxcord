@@ -66,7 +66,7 @@ export async function saveAttachment(
      VALUES (?, ?, ?, ?, ?, ?)`
   ).run(attachmentId, messageId, filename, size, contentType, relativePath)
 
-  const url = `${baseUrl}/_mock/attachments/${channelId}/${messageId}/${filename}`
+  const url = `${baseUrl}/_mock/attachments/${channelId}/${messageId}/${encodeURIComponent(filename)}`
 
   return {
     id: attachmentId,

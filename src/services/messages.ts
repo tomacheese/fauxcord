@@ -239,8 +239,8 @@ export function toMessageObject(
       id: a.id,
       filename: a.filename,
       size: a.size,
-      url: `${baseUrl}/_mock/attachments/${row.channel_id}/${row.id}/${a.filename}`,
-      proxy_url: `${baseUrl}/_mock/attachments/${row.channel_id}/${row.id}/${a.filename}`,
+      url: `${baseUrl}/_mock/attachments/${row.channel_id}/${row.id}/${encodeURIComponent(a.filename)}`,
+      proxy_url: `${baseUrl}/_mock/attachments/${row.channel_id}/${row.id}/${encodeURIComponent(a.filename)}`,
       content_type: a.content_type,
     })),
     embeds: embeds

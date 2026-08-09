@@ -136,6 +136,11 @@ describe('Fauxcord control APIs over a real server', () => {
         response.json()
       )
     ).resolves.toEqual({ messages: [] })
+    await expect(
+      fetch(`${server.baseUrl}/_test/webhooks/${channelId}`).then((response) =>
+        response.json()
+      )
+    ).resolves.toEqual({ webhooks: [] })
   })
 
   it('serves message attachments and accepts a poll vote', async () => {
@@ -163,7 +168,7 @@ describe('Fauxcord control APIs over a real server', () => {
     attachmentForm.set('payload_json', JSON.stringify({ content: 'with file' }))
     attachmentForm.set(
       'files[0]',
-      new File(['attachment body'], 'proof.txt', { type: 'text/plain' })
+      new File(['attachment body'], 'proof#?.txt', { type: 'image/png' })
     )
     const attachmentMessage = await fetch(
       `${server.baseUrl}/channels/${channelId}/messages`,
@@ -179,7 +184,7 @@ describe('Fauxcord control APIs over a real server', () => {
     }
     const attachment = await fetch(uploaded.attachments[0].url)
     expect(attachment.status).toBe(200)
-    expect(attachment.headers.get('content-type')).toContain('text/plain')
+    expect(attachment.headers.get('content-type')).toContain('image/png')
     await expect(attachment.text()).resolves.toBe('attachment body')
 
     const pollMessage = await fetch(
@@ -216,6 +221,15 @@ describe('Fauxcord control APIs over a real server', () => {
       body: JSON.stringify({ answer_id: 1, user_id: voter.id }),
     })
     expect(vote.status).toBe(204)
+
+    const voters = await fetch(
+      `${server.baseUrl}/channels/${channelId}/polls/${poll.id}/answers/1`,
+      { headers: { Authorization: token } }
+    )
+    expect(voters.status).toBe(200)
+    await expect(voters.json()).resolves.toMatchObject({
+      users: [{ id: voter.id }],
+    })
   })
 
   it('delivers a simulated interaction to a real Gateway client', async () => {

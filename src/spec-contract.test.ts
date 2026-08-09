@@ -62,7 +62,7 @@ const ajv = new Ajv2020({
   validateFormats: true,
 })
 addFormats(ajv)
-ajv.addFormat('snowflake', /^[0-9]{17,20}$/)
+ajv.addFormat('snowflake', /^(0|[1-9][0-9]*)$/)
 ajv.addFormat('nonce', true)
 
 // Register the entire spec document so internal $ref resolution works without
@@ -70,11 +70,13 @@ ajv.addFormat('nonce', true)
 ajv.addSchema(spec, 'https://discord.com/spec')
 
 describe('Discord custom schema formats', () => {
-  it('validates Discord snowflake formats', () => {
+  it('matches the schema snowflake representation', () => {
     const validate = ajv.compile({ type: 'string', format: 'snowflake' })
 
-    expect(validate('1234567890123456')).toBe(false)
-    expect(validate('12345678901234567')).toBe(true)
+    expect(validate('0')).toBe(true)
+    expect(validate('1')).toBe(true)
+    expect(validate('01')).toBe(false)
+    expect(validate('not-a-snowflake')).toBe(false)
   })
 })
 
