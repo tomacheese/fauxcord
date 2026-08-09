@@ -84,9 +84,7 @@ describe('attachments service', () => {
       new TextEncoder().encode('encoded')
     )
 
-    expect(info.url).toBe(
-      `${BASE_URL}/_mock/attachments/c1/m1/proof%23%3F.txt`
-    )
+    expect(info.url).toBe(`${BASE_URL}/_mock/attachments/c1/m1/proof%23%3F.txt`)
   })
 
   it('reads back a saved attachment', async () => {
