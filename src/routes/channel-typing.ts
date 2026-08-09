@@ -2,7 +2,7 @@
  * Channel typing indicator API routing
  *
  * Implements the trigger-typing-indicator endpoint. Fauxcord has no Gateway,
- * so this is a no-op that only validates the channel exists and returns 204.
+ * so this records the latest indicator without simulating its expiry.
  */
 
 import { Hono } from 'hono'
@@ -20,7 +20,6 @@ export function createChannelTypingRoutes(db: Database): Hono {
   const app = new Hono()
 
   // POST /channels/:channelId/typing — Trigger the typing indicator.
-  // Discord returns 204 No Content (see the module jsdoc for the no-op rationale).
   app.post('/channels/:channelId/typing', (c) => {
     const { channelId } = c.req.param()
     const channel = requireEntity(
@@ -30,6 +29,10 @@ export function createChannelTypingRoutes(db: Database): Hono {
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
+    db.prepare(
+      "UPDATE channels SET typing_at = datetime('now') WHERE id = ?"
+    ).run(channelId)
+    if (channel.type === 3) return c.json({})
     return c.body(null, 204)
   })
 

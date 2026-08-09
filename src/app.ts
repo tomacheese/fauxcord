@@ -23,8 +23,23 @@ import { createSoundboardRoutes } from './routes/soundboard'
 import { createWebhookRoutes } from './routes/webhooks'
 import { createInviteRoutes } from './routes/invites'
 import { createApplicationCommandRoutes } from './routes/application-commands'
+import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
 import { createOAuth2Routes } from './routes/oauth2'
+import { createLobbyRoutes } from './routes/lobbies'
+import { createStageInstanceRoutes } from './routes/stage-instances'
+import {
+  createCatalogPublicRoutes,
+  createCatalogRoutes,
+} from './routes/catalog'
+import {
+  createPartnerSdkPublicRoutes,
+  createPartnerSdkRoutes,
+} from './routes/partner-sdk'
+import {
+  createGuildAdvancedPublicRoutes,
+  createGuildAdvancedRoutes,
+} from './routes/guild-advanced'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { createGatewayWebSocketHandler } from './gateway/server'
@@ -41,6 +56,8 @@ export interface BuildAppConfig {
   disableAuth: boolean
   /** Artificial latency (ms) applied to all responses */
   latencyMs?: number
+  /** Existing no-server WebSocket server when HTTP is bound before assembly. */
+  wss?: WebSocketServer
 }
 
 /**
@@ -67,7 +84,7 @@ export function buildApp(
   // `noServer: true` is required because `@hono/node-server`'s
   // `serve({ websocket: { server: wss } })` takes over handling the
   // upgrade event.
-  const wss = new WebSocketServer({ noServer: true })
+  const wss = config.wss ?? new WebSocketServer({ noServer: true })
 
   // Configure middleware (applied to all requests)
   app.use('*', corsMiddleware)
@@ -87,6 +104,9 @@ export function buildApp(
   // through the versioned base URL (e.g. `/api/v10/oauth2/token`).
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
     app.route(oauth2Prefix, createOAuth2Routes(db))
+    app.route(oauth2Prefix, createGuildAdvancedPublicRoutes(db))
+    app.route(oauth2Prefix, createCatalogPublicRoutes(db))
+    app.route(oauth2Prefix, createPartnerSdkPublicRoutes(db))
   }
 
   // The Gateway WebSocket is mounted at "/" (matching real Discord's Gateway
@@ -125,6 +145,7 @@ export function buildApp(
   const routePrefix = ['/api/v10', '/api', '']
 
   for (const prefix of routePrefix) {
+    app.route(prefix, createGuildAdvancedRoutes(db))
     app.route(
       prefix,
       createChannelRoutes(db, config.baseUrl, config.uploadPath)
@@ -132,12 +153,20 @@ export function buildApp(
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, config.baseUrl))
-    app.route(prefix, createSoundboardRoutes())
+    app.route(prefix, createSoundboardRoutes(db))
     // Webhook routes are also enabled for all prefixes (to support /api/v10/webhooks/...)
     app.route(prefix, createWebhookRoutes(db, config.baseUrl))
     app.route(prefix, createInviteRoutes(db))
+    app.route(
+      prefix,
+      createApplicationRoutes(db, config.baseUrl, config.uploadPath)
+    )
     app.route(prefix, createApplicationCommandRoutes(db))
     app.route(prefix, createInteractionRoutes(db, config.baseUrl))
+    app.route(prefix, createLobbyRoutes(db))
+    app.route(prefix, createStageInstanceRoutes(db))
+    app.route(prefix, createCatalogRoutes(db))
+    app.route(prefix, createPartnerSdkRoutes(db))
   }
 
   // Global error handler

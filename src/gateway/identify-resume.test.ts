@@ -8,6 +8,7 @@ import {
   seedChannel,
 } from '../test-helpers'
 import { GatewayOp, GatewayCloseCode } from './opcodes'
+import { sendReconnect } from './server'
 
 /**
  * Waits for the next JSON message frame on a websocket.
@@ -242,8 +243,13 @@ describe('RESUME payload validation', () => {
     ws.close()
   })
 
-  it('resumes on a new connection: replays missed events then sends RESUMED', async () => {
-    const { db, url, close: c } = await createTestGatewayServer()
+  it('replays an HTTP-sourced dispatch missed during a forced reconnect before RESUMED', async () => {
+    const {
+      db,
+      url,
+      sessionManager,
+      close: c,
+    } = await createTestGatewayServer()
     close = c
     const bot = seedBot(db, 'Bot resumetoken')
     const guild = seedGuild(db, bot, 'ResumeGuild')
@@ -270,25 +276,33 @@ describe('RESUME payload validation', () => {
     // READY's own `s`, not a hardcoded 0.
     const lastSeq = ready.s as number
 
-    const messageCreatePromise = nextMessage(ws1)
-    const httpUrl = url.replace('ws://', 'http://')
-    await fetch(`${httpUrl}/api/v10/channels/${channel}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bot resumetoken',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ content: 'resume me' }),
-    })
-    const messageCreate = await messageCreatePromise
-    expect(messageCreate.t).toBe('MESSAGE_CREATE')
-
-    // Genuinely disconnect ws1: the server no longer removes a session when
-    // its socket closes (see server.ts), so the session and its replay buffer
-    // survive a transient disconnect and remain resumable on a new socket.
+    const session = sessionManager.get(sessionId)
+    expect(session).toBeDefined()
+    if (!session) return
+    const reconnectPromise = nextMessage(ws1)
     const ws1ClosePromise = nextClose(ws1)
-    ws1.close()
+    sendReconnect(session)
+    const reconnect = await reconnectPromise
+    expect(reconnect.op).toBe(GatewayOp.Reconnect)
     await ws1ClosePromise
+
+    // The service emits MESSAGE_CREATE through gatewayBus after the original
+    // socket has been closed. `sendDispatch` must retain this missed dispatch
+    // in the session replay buffer even though sending to the closed socket
+    // throws, so RESUME can replay the exact HTTP-caused event.
+    const httpUrl = url.replace('ws://', 'http://')
+    const created = await fetch(
+      `${httpUrl}/api/v10/channels/${channel}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bot resumetoken',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: 'resume me' }),
+      }
+    )
+    expect(created.status).toBe(200)
 
     const ws2 = new WebSocket(url)
     await nextMessage(ws2) // HELLO
@@ -312,6 +326,31 @@ describe('RESUME payload validation', () => {
 
     expect(received[0]?.t).toBe('MESSAGE_CREATE')
     expect(received.at(-1)?.t).toBe('RESUMED')
+    const replaySequence = received[0]?.s as number
+    const resumedSequence = received.at(-1)?.s as number
+    expect(ready.s as number).toBeLessThan(replaySequence)
+    expect(replaySequence).toBeLessThan(resumedSequence)
+
+    const nextDispatch = new Promise<Record<string, unknown>>((resolve) => {
+      ws2.on('message', (raw: Buffer) => {
+        const payload = JSON.parse(raw.toString()) as Record<string, unknown>
+        if (payload.t === 'MESSAGE_CREATE') resolve(payload)
+      })
+    })
+    const createdAfterResume = await fetch(
+      `${httpUrl}/api/v10/channels/${channel}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bot resumetoken',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: 'after resume' }),
+      }
+    )
+    expect(createdAfterResume.status).toBe(200)
+    const dispatchedAfterResume = await nextDispatch
+    expect(dispatchedAfterResume.s as number).toBeGreaterThan(resumedSequence)
 
     ws1.close()
     ws2.close()

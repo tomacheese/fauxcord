@@ -95,11 +95,13 @@ describe('Guild Members API', () => {
           Authorization: token,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ roles: [roleId] }),
+        body: JSON.stringify({ roles: [roleId], mute: false }),
       })
-      expect(res.status).toBe(200)
-      const body = (await res.json()) as Record<string, unknown>
-      expect(body.roles).toEqual([roleId])
+      expect(res.status).toBe(204)
+      const member = await app.request(`/guilds/${guildId}/members/${userId}`, {
+        headers: { Authorization: token },
+      })
+      await expect(member.json()).resolves.toMatchObject({ roles: [roleId] })
     })
 
     it('returns 404 (10011) when a non-existent role is specified', async () => {

@@ -4,7 +4,7 @@
  * Implements the /users/* and /applications/* endpoints.
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import type { Database } from '../db'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import {
@@ -22,6 +22,74 @@ import { validateCurrentUserUpdate } from '../validators/user'
 import { requiredError } from '../validators/common'
 import { parseJsonBody } from '../lib/route-helpers'
 import type { AppEnv } from '../middleware/auth'
+import { listEntitlements } from '../services/applications'
+
+const BROAD_OAUTH2_SCOPES = new Set([
+  'activities.invites.write',
+  'activities.read',
+  'activities.write',
+  'applications.builds.read',
+  'applications.builds.upload',
+  'applications.commands',
+  'applications.commands.permissions.update',
+  'applications.commands.update',
+  'applications.entitlements',
+  'applications.store.update',
+  'bot',
+  'connections',
+  'dm_channels.read',
+  'email',
+  'gdm.join',
+  'guilds',
+  'guilds.join',
+  'guilds.members.read',
+  'identify',
+  'messages.read',
+  'openid',
+  'relationships.read',
+  'role_connections.write',
+  'rpc',
+  'rpc.activities.write',
+  'rpc.notifications.read',
+  'rpc.screenshare.read',
+  'rpc.screenshare.write',
+  'rpc.video.read',
+  'rpc.video.write',
+  'rpc.voice.read',
+  'rpc.voice.write',
+  'voice',
+  'webhook.incoming',
+])
+
+function hasOAuthScope(scope: string, allowed: ReadonlySet<string>): boolean {
+  return scope.split(' ').some((item) => allowed.has(item))
+}
+
+/** Ensures a Bearer token can only operate on its own OAuth2 application. */
+function requireOAuthApplicationAccess(
+  c: Context<AppEnv>,
+  db: Database,
+  applicationId: string,
+  requiredScopes: ReadonlySet<string>
+): Response | undefined {
+  const accessToken = c.get('accessToken')
+  if (!accessToken?.user_id) {
+    return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+  }
+  if (!hasOAuthScope(accessToken.scope, requiredScopes)) {
+    return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+  }
+  const application = db
+    .prepare('SELECT 1 FROM applications WHERE id = ?')
+    .get(applicationId)
+  if (!application) {
+    return c.json(discordError(10_002, 'Unknown Application', 404).body, 404)
+  }
+  if (accessToken.client_id !== applicationId) {
+    return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+  }
+  return undefined
+}
 
 /**
  * Creates the Users API routes.
@@ -114,6 +182,203 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
 
     const guilds = getBotGuilds(db, bot.token)
     return c.json(guilds)
+  })
+
+  app.get('/users/@me/applications/:applicationId/entitlements', (c) => {
+    const applicationId = c.req.param('applicationId')
+    const denied = requireOAuthApplicationAccess(
+      c,
+      db,
+      applicationId,
+      BROAD_OAUTH2_SCOPES
+    )
+    if (denied) return denied
+    const accessToken = c.get('accessToken')
+    if (!accessToken?.user_id)
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    return c.json(
+      listEntitlements(db, applicationId, {
+        userId: accessToken.user_id,
+        excludeDeleted: true,
+      })
+    )
+  })
+
+  app.get('/users/@me/applications/:applicationId/role-connection', (c) => {
+    const applicationId = c.req.param('applicationId')
+    const denied = requireOAuthApplicationAccess(
+      c,
+      db,
+      applicationId,
+      new Set(['role_connections.write'])
+    )
+    if (denied) return denied
+    const accessToken = c.get('accessToken')
+    if (!accessToken?.user_id)
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    const row = db
+      .prepare(
+        'SELECT platform_name, platform_username, metadata FROM user_application_role_connections WHERE application_id = ? AND user_id = ?'
+      )
+      .get(applicationId, accessToken.user_id) as
+      | {
+          platform_name: string | null
+          platform_username: string | null
+          metadata: string
+        }
+      | undefined
+    return c.json(
+      row
+        ? {
+            platform_name: row.platform_name ?? '',
+            platform_username: row.platform_username,
+            metadata: JSON.parse(row.metadata),
+          }
+        : { platform_name: '', platform_username: null, metadata: {} }
+    )
+  })
+
+  app.put(
+    '/users/@me/applications/:applicationId/role-connection',
+    async (c) => {
+      const applicationId = c.req.param('applicationId')
+      const denied = requireOAuthApplicationAccess(
+        c,
+        db,
+        applicationId,
+        new Set(['role_connections.write'])
+      )
+      if (denied) return denied
+      const accessToken = c.get('accessToken')
+      if (!accessToken?.user_id)
+        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+      const body = await c.req
+        .json<{
+          platform_name?: string
+          platform_username?: string | null
+          metadata?: Record<string, string>
+        }>()
+        .catch(
+          (): {
+            platform_name?: string
+            platform_username?: string | null
+            metadata?: Record<string, string>
+          } => ({})
+        )
+      db.prepare(
+        `INSERT INTO user_application_role_connections (application_id, user_id, platform_name, platform_username, metadata) VALUES (?, ?, ?, ?, ?) ON CONFLICT(application_id, user_id) DO UPDATE SET platform_name = excluded.platform_name, platform_username = excluded.platform_username, metadata = excluded.metadata, updated_at = datetime('now')`
+      ).run(
+        applicationId,
+        accessToken.user_id,
+        body.platform_name ?? '',
+        body.platform_username ?? null,
+        JSON.stringify(body.metadata ?? {})
+      )
+      return c.json({
+        platform_name: body.platform_name ?? '',
+        platform_username: body.platform_username ?? null,
+        metadata: body.metadata ?? {},
+      })
+    }
+  )
+
+  app.delete('/users/@me/applications/:applicationId/role-connection', (c) => {
+    const applicationId = c.req.param('applicationId')
+    const denied = requireOAuthApplicationAccess(
+      c,
+      db,
+      applicationId,
+      new Set(['role_connections.write'])
+    )
+    if (denied) return denied
+    const accessToken = c.get('accessToken')
+    if (!accessToken?.user_id)
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    db.prepare(
+      'DELETE FROM user_application_role_connections WHERE application_id = ? AND user_id = ?'
+    ).run(applicationId, accessToken.user_id)
+    return c.body(null, 204)
+  })
+
+  app.get('/users/@me/connections', (c) => {
+    const accessToken = c.get('accessToken')
+    if (!accessToken && !c.get('bot'))
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    if (
+      accessToken &&
+      !hasOAuthScope(accessToken.scope, new Set(['connections']))
+    )
+      return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+    return c.json([])
+  })
+
+  app.delete('/users/@me/guilds/:guildId', (c) => {
+    const bot = c.get('bot')
+    if (!bot) return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    db.prepare(
+      'DELETE FROM guild_members WHERE guild_id = ? AND user_id = ?'
+    ).run(c.req.param('guildId'), bot.user_id)
+    return c.body(null, 204)
+  })
+
+  app.get('/users/@me/guilds/:guildId/member', (c) => {
+    const accessToken = c.get('accessToken')
+    if (
+      !accessToken?.user_id ||
+      !accessToken.scope.split(' ').includes('guilds.members.read')
+    )
+      return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+    const row = db
+      .prepare(
+        'SELECT guild_members.*, users.id, users.username, users.discriminator, users.avatar, users.bot FROM guild_members JOIN users ON users.id = guild_members.user_id WHERE guild_id = ? AND user_id = ?'
+      )
+      .get(c.req.param('guildId'), accessToken.user_id) as
+      | {
+          nick: string | null
+          joined_at: string
+          mute: number
+          deaf: number
+          flags: number
+          id: string
+          username: string
+          discriminator: string
+          avatar: string | null
+          bot: number
+        }
+      | undefined
+    if (!row)
+      return c.json(
+        discordError(DiscordErrorCode.UNKNOWN_MEMBER, 'Unknown Member', 404)
+          .body,
+        404
+      )
+    return c.json({
+      avatar: null,
+      avatar_decoration_data: null,
+      banner: null,
+      communication_disabled_until: null,
+      flags: row.flags,
+      joined_at: new Date(`${row.joined_at}Z`).toISOString(),
+      nick: row.nick,
+      pending: false,
+      premium_since: null,
+      roles: [],
+      collectibles: null,
+      user: {
+        id: row.id,
+        username: row.username,
+        discriminator: row.discriminator,
+        avatar: row.avatar,
+        bot: row.bot === 1,
+        public_flags: 0,
+        flags: 0,
+        global_name: null,
+        primary_guild: null,
+      },
+      mute: row.mute === 1,
+      deaf: row.deaf === 1,
+      permissions: '0',
+    })
   })
 
   // POST /users/@me/channels — Create a DM or group-DM channel

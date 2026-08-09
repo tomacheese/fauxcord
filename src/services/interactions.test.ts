@@ -91,7 +91,13 @@ describe('interactions service', () => {
       { type: 4, data: { content: 'pong' } },
       BASE_URL
     )
-    expect(result).toEqual({ ok: true })
+    expect(result).toMatchObject({
+      ok: true,
+      response: {
+        interaction: { id: 'int3', type: 2 },
+        resource: { type: 4, message: { content: 'pong' } },
+      },
+    })
 
     const target = getInteractionFollowupTarget(db, applicationId, 'token3')
     expect(target?.initialResponseMessageId).not.toBeNull()

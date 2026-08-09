@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createOAuth2Routes } from './oauth2'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot } from '../test-helpers'
+import { seedBearerCredential, seedBot } from '../test-helpers'
 import {
   createAuthCode,
   createClientCredentialsToken,
@@ -199,6 +199,51 @@ describe('OAuth2 API', () => {
       expect(res.status).toBe(200)
       const body = (await res.json()) as { scopes: string[] }
       expect(body.scopes).toEqual(['identify', 'email'])
+    })
+  })
+
+  describe('GET /oauth2/keys', () => {
+    it('returns the public key set without authentication', async () => {
+      const response = await app.request('/oauth2/keys')
+      expect(response.status).toBe(200)
+      await expect(response.json()).resolves.toMatchObject({
+        keys: [{ kid: 'fauxcord-local-key', alg: 'RS256' }],
+      })
+    })
+  })
+
+  describe('GET /oauth2/userinfo', () => {
+    it('returns OpenID identity for a seeded local Bearer credential', async () => {
+      const credential = seedBearerCredential(db)
+      db.prepare(
+        "UPDATE oauth2_access_tokens SET scope = 'identify openid' WHERE token = ?"
+      ).run(credential.bearerToken)
+
+      const response = await app.request('/oauth2/userinfo', {
+        headers: { Authorization: `Bearer ${credential.bearerToken}` },
+      })
+      expect(response.status).toBe(200)
+      await expect(response.json()).resolves.toEqual({
+        sub: credential.userId,
+        preferred_username: 'BearerUser',
+      })
+    })
+
+    it('rejects missing, Bot, invalid, and insufficient-scope credentials', async () => {
+      const botToken = 'Bot oauth-userinfo-test'
+      seedBot(db, botToken)
+      const credential = seedBearerCredential(db)
+      for (const authorization of [
+        undefined,
+        botToken,
+        'Bearer missing',
+        `Bearer ${credential.bearerToken}`,
+      ]) {
+        const response = await app.request('/oauth2/userinfo', {
+          headers: authorization ? { Authorization: authorization } : {},
+        })
+        expect(response.status, authorization).toBe(401)
+      }
     })
   })
 

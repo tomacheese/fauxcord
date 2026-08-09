@@ -62,6 +62,7 @@ export interface BotRecord {
 /** Type of an OAuth2 access token record fetched from the DB */
 export interface AccessTokenRecord {
   token: string
+  client_id: string
   user_id: string | null
   scope: string
 }
@@ -163,6 +164,7 @@ export const createAuthMiddleware =
       if (disableAuth) {
         c.set('accessToken', {
           token,
+          client_id: '000000000000000000',
           user_id: '000000000000000000',
           scope: '',
         } satisfies AccessTokenRecord)

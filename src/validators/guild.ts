@@ -170,6 +170,7 @@ const NICK_MAX = 32
 export interface GuildMemberUpdatePayload {
   nick?: string | null
   roles?: string[]
+  mute?: boolean | null
 }
 
 /**

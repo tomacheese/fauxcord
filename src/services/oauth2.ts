@@ -23,6 +23,10 @@ export interface OAuth2MeResponse {
     name: string
     icon: null
     description: string
+    type: null
+    verify_key: string
+    flags: number
+    flags_new: string
     bot_public: boolean
     bot_require_code_grant: boolean
   }
@@ -33,11 +37,72 @@ export interface OAuth2MeResponse {
     username: string
     discriminator: string
     avatar: string | null
+    public_flags: number
+    flags: number
+    global_name: null
+    primary_guild: null
   }
+}
+
+/** JSON Web Key Set returned by the local discovery endpoint. */
+export interface OAuth2KeysResponse {
+  keys: {
+    kty: string
+    use: string
+    kid: string
+    n: string
+    e: string
+    alg: string
+  }[]
+}
+
+/** OpenID Connect user information returned for a local Bearer token. */
+export interface OpenIdUserInfoResponse {
+  sub: string
+  preferred_username: string
 }
 
 /** Token expiration (7 days, in seconds) */
 const TOKEN_EXPIRES_IN = 604_800
+
+/** Returns the deterministic local public signing key description. */
+export function getPublicKeys(): OAuth2KeysResponse {
+  return {
+    keys: [
+      {
+        kty: 'RSA',
+        use: 'sig',
+        kid: 'fauxcord-local-key',
+        n: 'ZmF1eGNvcmQtbG9jYWwtbW9kdWx1cw',
+        e: 'AQAB',
+        alg: 'RS256',
+      },
+    ],
+  }
+}
+
+/** Retrieves OpenID identity for an unexpired token carrying `openid`. */
+export function getOpenIdUserInfo(
+  db: Database,
+  token: string
+): OpenIdUserInfoResponse | null {
+  const accessToken = db
+    .prepare(
+      `SELECT user_id, scope FROM oauth2_access_tokens
+       WHERE token = ? AND datetime(expires_at) > datetime('now')`
+    )
+    .get(token) as { user_id: string | null; scope: string } | undefined
+  if (
+    !accessToken?.user_id ||
+    !accessToken.scope.split(' ').includes('openid')
+  ) {
+    return null
+  }
+  const user = db
+    .prepare('SELECT id, username FROM users WHERE id = ?')
+    .get(accessToken.user_id) as { id: string; username: string } | undefined
+  return user ? { sub: user.id, preferred_username: user.username } : null
+}
 
 /**
  * Generates a random token string.
@@ -236,6 +301,10 @@ export function getOAuth2Me(
       name: bot?.username ?? 'MockApp',
       icon: null,
       description: '',
+      type: null,
+      verify_key: 'fauxcord-contract-verify-key',
+      flags: 0,
+      flags_new: '0',
       bot_public: true,
       bot_require_code_grant: false,
     },
@@ -247,6 +316,10 @@ export function getOAuth2Me(
       username: user.username,
       discriminator: user.discriminator,
       avatar: user.avatar,
+      public_flags: 0,
+      flags: 0,
+      global_name: null,
+      primary_guild: null,
     },
   }
 }

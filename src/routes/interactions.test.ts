@@ -45,6 +45,36 @@ describe('Interactions routes', () => {
     expect(res.status).toBe(204)
   })
 
+  it('returns the created callback resource when with_response is true', async () => {
+    createInteraction(db, {
+      interactionId: 'int-response',
+      applicationId: 'app1',
+      token: 'tok-response',
+      type: 2,
+      channelId: 'chan1',
+      userId: 'user1',
+    })
+
+    const res = await app.request(
+      '/interactions/int-response/tok-response/callback?with_response=true',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 4, data: { content: 'visible' } }),
+      }
+    )
+
+    expect(res.status).toBe(200)
+    const body = (await res.json()) as {
+      interaction: { id: string; response_message_id: string }
+      resource: { type: number; message: { id: string; content: string } }
+    }
+    expect(body.interaction.id).toBe('int-response')
+    expect(body.resource.type).toBe(4)
+    expect(body.resource.message.content).toBe('visible')
+    expect(body.interaction.response_message_id).toBe(body.resource.message.id)
+  })
+
   it('404s for an unknown interaction', async () => {
     const res = await app.request('/interactions/missing/missing/callback', {
       method: 'POST',

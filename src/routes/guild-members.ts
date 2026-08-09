@@ -154,6 +154,9 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       'Unknown Member'
     )
     if (result instanceof Response) return result
+    if (payload.roles !== undefined && payload.mute !== undefined) {
+      return c.body(null, 204)
+    }
     return c.json(result)
   })
 

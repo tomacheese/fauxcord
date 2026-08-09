@@ -223,7 +223,19 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       'Unknown Channel'
     )
     if (channel instanceof Response) return channel
-    return c.json(searchThreads(db, channelId))
+    const result = searchThreads(db, channelId)
+    if (result.total_results === 0) {
+      return c.json(
+        {
+          message: 'Search index is not ready',
+          code: 11_000,
+          documents_indexed: 0,
+          retry_after: 1,
+        },
+        202
+      )
+    }
+    return c.json(result)
   })
 
   // GET /channels/:channelId/thread-members — List members

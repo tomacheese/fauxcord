@@ -240,6 +240,51 @@ export function createCommand(
   return { ok: true, command: toApplicationCommandObject(row) }
 }
 
+/** Result of creating or replacing an application command by name. */
+export interface CommandUpsertResult {
+  command: ApplicationCommandObject
+  created: boolean
+}
+
+/**
+ * Creates a command or replaces the command with the same type and name.
+ * @param db - Database
+ * @param applicationId - Application ID
+ * @param guildId - Guild ID, or `null` for a global command
+ * @param payload - Validated command payload
+ * @returns Upserted command and whether a new row was created
+ */
+export function upsertCommand(
+  db: Database,
+  applicationId: string,
+  guildId: string | null,
+  payload: ApplicationCommandCreatePayload
+): CommandUpsertResult {
+  const type = payload.type ?? 1
+  const name = normalizeName(payload.name, type)
+  const existingId = findDuplicate(db, applicationId, guildId, type, name)
+  if (existingId) {
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define -- Upsert composes the exported update primitive declared below.
+    const updated = updateCommand(
+      db,
+      applicationId,
+      guildId,
+      existingId,
+      payload
+    )
+    if (!updated.ok) {
+      throw new Error('Failed to replace an existing application command')
+    }
+    return { command: updated.command, created: false }
+  }
+
+  const created = createCommand(db, applicationId, guildId, payload)
+  if (!created.ok) {
+    throw new Error('Failed to create a unique application command')
+  }
+  return { command: created.command, created: true }
+}
+
 /**
  * Updates a command in place (partial update).
  * @param db - Database

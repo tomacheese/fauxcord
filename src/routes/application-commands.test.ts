@@ -46,6 +46,32 @@ describe('Application Commands routes (global)', () => {
     expect(body.name).toBe('ping')
   })
 
+  it('updates an existing global command by name and returns 200', async () => {
+    const url = `/applications/${applicationId}/commands`
+    const headers = {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    }
+    const created = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'old' }),
+    })
+    const original = (await created.json()) as { id: string }
+
+    const updated = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'new' }),
+    })
+
+    expect(updated.status).toBe(200)
+    await expect(updated.json()).resolves.toMatchObject({
+      id: original.id,
+      description: 'new',
+    })
+  })
+
   it('403s when applicationId does not match the authenticated bot', async () => {
     const res = await app.request('/applications/999/commands', {
       method: 'GET',
@@ -171,6 +197,32 @@ describe('Application Commands routes (guild-scoped)', () => {
     expect(missingGuild.status).toBe(404)
   })
 
+  it('updates an existing guild command by name and returns 200', async () => {
+    const url = `/applications/${applicationId}/guilds/${guildId}/commands`
+    const headers = {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    }
+    const created = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'old' }),
+    })
+    const original = (await created.json()) as { id: string }
+
+    const updated = await app.request(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'ping', description: 'new' }),
+    })
+
+    expect(updated.status).toBe(200)
+    await expect(updated.json()).resolves.toMatchObject({
+      id: original.id,
+      description: 'new',
+    })
+  })
+
   it('bulk overwrites guild commands', async () => {
     const res = await app.request(
       `/applications/${applicationId}/guilds/${guildId}/commands`,
@@ -186,6 +238,39 @@ describe('Application Commands routes (guild-scoped)', () => {
     expect(res.status).toBe(200)
     const body = (await res.json()) as unknown[]
     expect(body).toHaveLength(1)
+  })
+
+  it('keeps global and guild command lists distinct after bulk overwrite', async () => {
+    const headers = {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    }
+    await app.request(`/applications/${applicationId}/commands`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'global', description: 'global command' }),
+    })
+    await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify([
+          { name: 'guild-only', description: 'guild command' },
+        ]),
+      }
+    )
+
+    const global = await app.request(
+      `/applications/${applicationId}/commands`,
+      { headers: { Authorization: token } }
+    )
+    const guild = await app.request(
+      `/applications/${applicationId}/guilds/${guildId}/commands`,
+      { headers: { Authorization: token } }
+    )
+    expect(await global.json()).toMatchObject([{ name: 'global' }])
+    expect(await guild.json()).toMatchObject([{ name: 'guild-only' }])
   })
 
   it('rejects a bulk-overwrite payload with a duplicate name/type with 400', async () => {

@@ -13,7 +13,7 @@ import { DiscordErrorCode, discordError, validationError } from '../errors'
 import {
   getCommands,
   getCommand,
-  createCommand,
+  upsertCommand,
   updateCommand,
   deleteCommand,
   bulkOverwriteCommands,
@@ -130,9 +130,8 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
       return c.json(validationError(errors).body, 400)
     }
 
-    const result = createCommand(db, applicationId, null, payload)
-    if (!result.ok) return c.json(DUPLICATE_NAME_ERROR, 400)
-    return c.json(result.command, 201)
+    const result = upsertCommand(db, applicationId, null, payload)
+    return c.json(result.command, result.created ? 201 : 200)
   })
 
   // GET /applications/:applicationId/commands/:commandId
@@ -263,9 +262,8 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
         return c.json(validationError(errors).body, 400)
       }
 
-      const result = createCommand(db, applicationId, guildId, payload)
-      if (!result.ok) return c.json(DUPLICATE_NAME_ERROR, 400)
-      return c.json(result.command, 201)
+      const result = upsertCommand(db, applicationId, guildId, payload)
+      return c.json(result.command, result.created ? 201 : 200)
     }
   )
 

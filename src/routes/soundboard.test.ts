@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
 import { createSoundboardRoutes } from './soundboard'
-import { createFullTestApp } from '../test-helpers'
+import {
+  createFullTestApp,
+  seedChannel,
+  seedGuild,
+  seedVoiceChannel,
+} from '../test-helpers'
 import { closeDatabase } from '../db'
 import type { AppEnv } from '../middleware/auth'
+import { countSoundboardPlaybacks } from '../services/soundboard'
 
 describe('Soundboard API', () => {
   describe('GET /soundboard-default-sounds', () => {
@@ -23,6 +29,174 @@ describe('Soundboard API', () => {
       const { app, db } = createFullTestApp()
       const res = await app.request('/api/v10/soundboard-default-sounds')
       expect(res.status).toBe(401)
+      closeDatabase(db)
+    })
+  })
+
+  describe('POST /channels/:channelId/send-soundboard-sound', () => {
+    it('records the requested playback for the authenticated bot', async () => {
+      const { app, db } = createFullTestApp()
+      const token = 'Bot soundboard-playback'
+      const userId = '811111111111111111'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'SoundboardBot', 1)"
+      ).run(userId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
+      ).run(token, userId)
+      const guildId = seedGuild(db, token, '822222222222222222')
+      const channelId = seedVoiceChannel(db, guildId, '833333333333333333')
+
+      const res = await app.request(
+        `/api/v10/channels/${channelId}/send-soundboard-sound`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sound_id: '844444444444444444' }),
+        }
+      )
+
+      expect(res.status).toBe(204)
+      expect(countSoundboardPlaybacks(db, channelId)).toBe(1)
+      closeDatabase(db)
+    })
+
+    it('rejects a different Bot and non-voice channel without recording playback', async () => {
+      const { app, db, cleanup } = createFullTestApp()
+      const ownerToken = 'Bot soundboard-owner'
+      const ownerId = '811111111111111113'
+      const otherToken = 'Bot soundboard-other'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'Owner', 1)"
+      ).run(ownerId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'Owner')"
+      ).run(ownerToken, ownerId)
+      const otherId = '811111111111111114'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'Other', 1)"
+      ).run(otherId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'Other')"
+      ).run(otherToken, otherId)
+      const guildId = seedGuild(db, ownerToken, '822222222222222223')
+      const voiceChannelId = seedVoiceChannel(db, guildId, '833333333333333334')
+      const textChannelId = seedChannel(db, guildId, '833333333333333335')
+      const request = (channelId: string, authorization: string) =>
+        app.request(`/api/v10/channels/${channelId}/send-soundboard-sound`, {
+          method: 'POST',
+          headers: {
+            Authorization: authorization,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sound_id: '844444444444444445' }),
+        })
+      const denied = await request(voiceChannelId, otherToken)
+      const nonVoice = await request(textChannelId, ownerToken)
+      expect(denied.status).toBe(403)
+      expect(nonVoice.status).toBe(404)
+      expect(countSoundboardPlaybacks(db, voiceChannelId)).toBe(0)
+      cleanup()
+    })
+
+    it('rejects a missing sound_id with Discord validation code 50035', async () => {
+      const { app, db } = createFullTestApp()
+      const token = 'Bot soundboard-validation'
+      const userId = '855555555555555555'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'SoundboardBot', 1)"
+      ).run(userId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
+      ).run(token, userId)
+      const guildId = seedGuild(db, token, '866666666666666666')
+      const channelId = seedVoiceChannel(db, guildId, '877777777777777777')
+
+      const res = await app.request(
+        `/api/v10/channels/${channelId}/send-soundboard-sound`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: '{}',
+        }
+      )
+
+      expect(res.status).toBe(400)
+      expect((await res.json()) as { code: number }).toMatchObject({
+        code: 50_035,
+      })
+      closeDatabase(db)
+    })
+
+    it('rejects a malformed channel Snowflake before looking up the channel', async () => {
+      const { app, db } = createFullTestApp()
+      const token = 'Bot soundboard-channel-validation'
+      const userId = '888888888888888888'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'SoundboardBot', 1)"
+      ).run(userId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
+      ).run(token, userId)
+
+      for (const malformedChannelId of ['01', '-1', 'not-a-snowflake']) {
+        const res = await app.request(
+          `/api/v10/channels/${malformedChannelId}/send-soundboard-sound`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sound_id: '899999999999999999' }),
+          }
+        )
+
+        expect(res.status, malformedChannelId).toBe(400)
+        expect(await res.json(), malformedChannelId).toMatchObject({
+          code: 50_035,
+        })
+      }
+      closeDatabase(db)
+    })
+
+    it('accepts OpenAPI Snowflake boundaries and continues to channel lookup', async () => {
+      const { app, db } = createFullTestApp()
+      const token = 'Bot soundboard-channel-boundaries'
+      const userId = '811111111111111112'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'SoundboardBot', 1)"
+      ).run(userId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
+      ).run(token, userId)
+
+      for (const channelId of [
+        '0',
+        '7',
+        '1234567890123456789012345678901234567890',
+      ]) {
+        const res = await app.request(
+          `/api/v10/channels/${channelId}/send-soundboard-sound`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: token,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ sound_id: '899999999999999999' }),
+          }
+        )
+
+        expect(res.status, channelId).toBe(404)
+        expect(await res.json(), channelId).toMatchObject({ code: 10_003 })
+      }
       closeDatabase(db)
     })
   })

@@ -11,7 +11,7 @@ import { generateSnowflake } from '../snowflake'
 import { gatewayBus } from '../gateway/bus'
 import { getGuildMember } from './guild-members'
 import { getUser } from './users'
-import { createMessage } from './messages'
+import { createMessage, type MessageObject } from './messages'
 
 /** Interaction object for API responses and Gateway dispatch */
 export interface InteractionObject {
@@ -190,8 +190,23 @@ export interface InteractionCallbackPayload {
 }
 
 /** Result of an interaction callback attempt */
+export interface InteractionCallbackResponse {
+  interaction: {
+    id: string
+    type: number
+    response_message_id?: string
+    channel_id?: string
+    guild_id?: string
+  }
+  resource?: {
+    type: number
+    message: MessageObject
+  }
+}
+
+/** Result of an interaction callback attempt. */
 export type InteractionCallbackResult =
-  | { ok: true }
+  | { ok: true; response: InteractionCallbackResponse }
   | { ok: false; reason: 'not_found' }
   | { ok: false; reason: 'already_responded' }
 
@@ -221,9 +236,17 @@ export function handleInteractionCallback(
   if (!row) return { ok: false, reason: 'not_found' }
   if (row.responded === 1) return { ok: false, reason: 'already_responded' }
 
+  const interaction: InteractionCallbackResponse['interaction'] = {
+    id: row.id,
+    type: row.type,
+  }
+  if (row.channel_id) interaction.channel_id = row.channel_id
+  if (row.guild_id) interaction.guild_id = row.guild_id
+
+  let resource: InteractionCallbackResponse['resource']
   if (payload.type === 4 && row.channel_id) {
     const messageId = generateSnowflake()
-    createMessage(
+    const message = createMessage(
       db,
       {
         messageId,
@@ -240,9 +263,14 @@ export function handleInteractionCallback(
     db.prepare(
       'UPDATE interactions SET responded = 1, initial_response_message_id = ? WHERE id = ?'
     ).run(messageId, row.id)
+    interaction.response_message_id = messageId
+    resource = { type: 4, message }
   } else {
     db.prepare('UPDATE interactions SET responded = 1 WHERE id = ?').run(row.id)
   }
 
-  return { ok: true }
+  return {
+    ok: true,
+    response: resource ? { interaction, resource } : { interaction },
+  }
 }

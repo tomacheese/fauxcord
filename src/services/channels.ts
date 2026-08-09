@@ -58,6 +58,7 @@ interface ChannelRow {
   parent_id: string | null
   last_message_id: string | null
   voice_status: string | null
+  owner_id: string | null
 }
 
 /** Channel permission overwrite object for API responses */
@@ -89,6 +90,8 @@ export interface ChannelObject {
   permission_overwrites: ChannelOverwriteObject[]
   voice_status?: string | null
   recipients?: ChannelRecipientUser[]
+  icon?: string | null
+  owner_id?: string
 }
 
 /** Recipient user object embedded in a DM/group-DM channel response */
@@ -98,6 +101,10 @@ export interface ChannelRecipientUser {
   discriminator: string
   avatar: string | null
   bot: boolean
+  public_flags: number
+  flags: number
+  global_name: string | null
+  primary_guild: null
 }
 
 /** DB record type for a channel recipient's joined user row */
@@ -133,6 +140,10 @@ export function getChannelRecipientUsers(
     discriminator: row.discriminator,
     avatar: row.avatar,
     bot: row.bot === 1,
+    public_flags: 0,
+    flags: 0,
+    global_name: null,
+    primary_guild: null,
   }))
 }
 
@@ -302,6 +313,10 @@ function toChannelObject(
 
   if (row.type === 1 || row.type === 3) {
     obj.recipients = recipients
+  }
+  if (row.type === 3) {
+    obj.icon = null
+    obj.owner_id = row.owner_id ?? recipients.at(0)?.id ?? row.id
   }
 
   return obj

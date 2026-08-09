@@ -12,6 +12,8 @@ import {
   createClientCredentialsToken,
   revokeToken,
   getOAuth2Me,
+  getOpenIdUserInfo,
+  getPublicKeys,
 } from '../services/oauth2'
 
 /**
@@ -21,6 +23,21 @@ import {
  */
 export function createOAuth2Routes(db: Database): Hono {
   const app = new Hono()
+
+  // GET /oauth2/keys — Public JSON Web Key discovery
+  app.get('/oauth2/keys', (c) => c.json(getPublicKeys()))
+
+  // GET /oauth2/userinfo — OpenID identity for a local Bearer credential
+  app.get('/oauth2/userinfo', (c) => {
+    const authorization = c.req.header('Authorization')
+    if (!authorization?.startsWith('Bearer ')) {
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+    }
+    const userInfo = getOpenIdUserInfo(db, authorization.slice(7))
+    return userInfo
+      ? c.json(userInfo)
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
+  })
 
   // GET /oauth2/@me — Retrieve OAuth2 access token information
   app.get('/oauth2/@me', (c) => {

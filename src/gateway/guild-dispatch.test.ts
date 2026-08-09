@@ -49,7 +49,7 @@ describe('CHANNEL_CREATE dispatch (integration)', () => {
     const { db, url, close: c } = await createTestGatewayServer()
     close = c
     const bot = seedBot(db, 'Bot gwtoken2')
-    const guild = seedGuild(db, bot, 'GWGuild2')
+    const guild = seedGuild(db, bot, '411111111111111111')
 
     const ws = new WebSocket(url)
     const nextMessage = createMessageReader(ws)

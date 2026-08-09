@@ -155,6 +155,28 @@ describe('application-commands service (guild scope + bulk overwrite)', () => {
 
     expect(getCommands(db, applicationId, guildId)).toHaveLength(1)
   })
+
+  it('bulk-overwrites one scope without changing the other scope', () => {
+    createCommand(db, applicationId, null, {
+      name: 'global',
+      description: 'global command',
+    })
+    createCommand(db, applicationId, guildId, {
+      name: 'guild',
+      description: 'old guild command',
+    })
+
+    bulkOverwriteCommands(db, applicationId, guildId, [
+      { name: 'guild-replacement', description: 'new guild command' },
+    ])
+
+    expect(getCommands(db, applicationId, null)).toMatchObject([
+      { name: 'global', description: 'global command' },
+    ])
+    expect(getCommands(db, applicationId, guildId)).toMatchObject([
+      { name: 'guild-replacement', description: 'new guild command' },
+    ])
+  })
 })
 
 describe('application-commands service (permissions)', () => {

@@ -7,6 +7,10 @@
  */
 
 import { Hono } from 'hono'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { WebSocketServer } from 'ws'
 import { serveWithGateway } from './http-server'
 import { initializeDatabase, closeDatabase } from './db'
 import type { Database } from './db'
@@ -24,12 +28,29 @@ import { createOAuth2Routes } from './routes/oauth2'
 import { createTestRoutes } from './routes/test'
 import { createMockRoutes } from './routes/mock'
 import { createApplicationCommandRoutes } from './routes/application-commands'
+import { createApplicationRoutes } from './routes/applications'
 import { createInteractionRoutes } from './routes/interactions'
+import { createLobbyRoutes } from './routes/lobbies'
+import { createStageInstanceRoutes } from './routes/stage-instances'
+import {
+  createCatalogPublicRoutes,
+  createCatalogRoutes,
+} from './routes/catalog'
+import {
+  createPartnerSdkPublicRoutes,
+  createPartnerSdkRoutes,
+} from './routes/partner-sdk'
+import {
+  createGuildAdvancedPublicRoutes,
+  createGuildAdvancedRoutes,
+} from './routes/guild-advanced'
 import { generateSnowflake } from './snowflake'
 import { buildApp } from './app'
 import { createCommand } from './services/application-commands'
 import { createInteraction } from './services/interactions'
+import { createPoll } from './services/polls'
 import type { SessionManager } from './gateway/session'
+import type { ContractFixture } from '../spec/manifest'
 
 const TEST_BASE_URL = 'http://localhost:3000'
 const TEST_UPLOAD_PATH = '/tmp/fauxcord-test-uploads'
@@ -46,6 +67,21 @@ export interface FullTestContext {
   db: Database
   app: Hono<AppEnv>
   cleanup: () => void
+}
+
+/** Real HTTP server context for network contract tests. */
+export interface RealServerContext {
+  db: Database
+  baseUrl: string
+  sessionManager: SessionManager
+  close: () => Promise<void>
+}
+
+/** Injectable startup controls used by failure-path tests. */
+export interface RealServerOptions {
+  uploadPath?: string
+  serve?: typeof serveWithGateway
+  onDatabaseCreated?: (db: Database) => void
 }
 
 /**
@@ -91,6 +127,9 @@ export function createFullTestApp(): FullTestContext {
   // src/index.ts (see its comment for why it is exempt from auth here).
   for (const oauth2Prefix of ['/api/v10', '/api', '']) {
     app.route(oauth2Prefix, createOAuth2Routes(db))
+    app.route(oauth2Prefix, createGuildAdvancedPublicRoutes(db))
+    app.route(oauth2Prefix, createCatalogPublicRoutes(db))
+    app.route(oauth2Prefix, createPartnerSdkPublicRoutes(db))
   }
 
   // Authentication middleware
@@ -100,15 +139,24 @@ export function createFullTestApp(): FullTestContext {
   // Discord API routes (mounted under all three prefixes)
   const routePrefixes = ['/api/v10', '/api', '']
   for (const prefix of routePrefixes) {
+    app.route(prefix, createGuildAdvancedRoutes(db))
     app.route(prefix, createChannelRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH))
     app.route(prefix, createGuildRoutes(db))
     app.route(prefix, createUserRoutes(db))
     app.route(prefix, createGatewayRoutes(db, TEST_BASE_URL))
-    app.route(prefix, createSoundboardRoutes())
+    app.route(prefix, createSoundboardRoutes(db))
     app.route(prefix, createWebhookRoutes(db, TEST_BASE_URL))
     app.route(prefix, createInviteRoutes(db))
+    app.route(
+      prefix,
+      createApplicationRoutes(db, TEST_BASE_URL, TEST_UPLOAD_PATH)
+    )
     app.route(prefix, createApplicationCommandRoutes(db))
     app.route(prefix, createInteractionRoutes(db, TEST_BASE_URL))
+    app.route(prefix, createLobbyRoutes(db))
+    app.route(prefix, createStageInstanceRoutes(db))
+    app.route(prefix, createCatalogRoutes(db))
+    app.route(prefix, createPartnerSdkRoutes(db))
   }
 
   return {
@@ -117,6 +165,568 @@ export function createFullTestApp(): FullTestContext {
     cleanup: () => {
       closeDatabase(db)
     },
+  }
+}
+
+/** Seeds the complete operation-contract fixture in a test database. */
+/* eslint-disable @typescript-eslint/no-use-before-define -- Public seed helpers are grouped below the app factories. */
+export function createContractFixture(db: Database): ContractFixture {
+  const token = 'Bot contract-test-token'
+  const userId = '555555555555555555'
+  const bearerToken = 'contract-test-bearer-token'
+  seedBot(db, token, userId)
+  db.prepare(
+    'INSERT INTO oauth2_clients (client_id, client_secret, bot_token) VALUES (?, ?, ?)'
+  ).run(userId, 'contract-secret', token)
+  db.prepare(
+    `INSERT INTO oauth2_access_tokens
+       (token, client_id, user_id, scope, expires_at)
+     VALUES (?, ?, ?, 'identify openid applications.commands applications.entitlements role_connections.write guilds.members.read', datetime('now', '+1 hour'))`
+  ).run(bearerToken, userId, userId)
+  const applicationId = userId
+  const activityInstanceId = 'contract-activity-instance'
+  db.prepare(
+    `INSERT INTO applications (id, owner_id, name, verify_key)
+     VALUES (?, ?, 'Contract Application', ?)`
+  ).run(applicationId, userId, `verify_${applicationId}`)
+  const applicationEmojiId = generateSnowflake()
+  const deletableApplicationEmojiId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO application_emojis (id, application_id, name, user_id)
+     VALUES (?, ?, 'contract_emoji', ?),
+            (?, ?, 'deletable_emoji', ?)`
+  ).run(
+    applicationEmojiId,
+    applicationId,
+    userId,
+    deletableApplicationEmojiId,
+    applicationId,
+    userId
+  )
+  const skuId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO skus (id, application_id, name, slug)
+     VALUES (?, ?, 'Contract SKU', ?)`
+  ).run(skuId, applicationId, `contract-sku-${skuId}`)
+  const entitlementId = generateSnowflake()
+  const deletableEntitlementId = generateSnowflake()
+  const consumableEntitlementId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO entitlements
+       (id, sku_id, application_id, user_id, type)
+     VALUES (?, ?, ?, ?, 8), (?, ?, ?, ?, 8), (?, ?, ?, ?, 8)`
+  ).run(
+    entitlementId,
+    skuId,
+    applicationId,
+    userId,
+    deletableEntitlementId,
+    skuId,
+    applicationId,
+    userId,
+    consumableEntitlementId,
+    skuId,
+    applicationId,
+    userId
+  )
+  const guildId = seedGuild(db, token, '666666666666666666')
+  db.prepare(
+    `INSERT OR IGNORE INTO roles
+       (id, guild_id, name, permissions, position, color, hoist, mentionable)
+     VALUES (?, ?, '@everyone', '1071698660929', 0, 0, 0, 0)`
+  ).run(guildId, guildId)
+  const channelId = seedChannel(db, guildId, '777777777777777777')
+  const unindexedChannelId = seedChannel(db, guildId, '777777777777777781')
+  const announcementChannelId = seedAnnouncementChannel(
+    db,
+    guildId,
+    '777777777777777778'
+  )
+  const voiceChannelId = seedVoiceChannel(db, guildId, '777777777777777779')
+  const groupDmChannelId = seedGroupDmChannel(db, '777777777777777780')
+  const { webhookId, webhookToken } = seedWebhook(db, channelId, guildId)
+  db.prepare(
+    "INSERT OR IGNORE INTO users (id, username, discriminator, bot) VALUES (?, 'WebhookUser', '0000', 1)"
+  ).run(webhookId)
+  const messageId = seedMessage(db, channelId, userId, token)
+  const announcementMessageId = seedMessage(
+    db,
+    announcementChannelId,
+    userId,
+    token
+  )
+  const deletableMessageId = seedMessage(db, channelId, userId, token)
+  const pinnedMessageId = seedMessage(db, channelId, userId, token)
+  db.prepare('INSERT INTO pins (channel_id, message_id) VALUES (?, ?)').run(
+    channelId,
+    pinnedMessageId
+  )
+  db.prepare('UPDATE messages SET pinned = 1 WHERE id = ?').run(pinnedMessageId)
+  const reactedMessageId = seedMessage(db, channelId, userId, token)
+  db.prepare(
+    'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+  ).run(reactedMessageId, userId, '👍')
+  const pollMessageId = seedMessage(db, channelId, userId, token)
+  createPoll(db, pollMessageId, {
+    question: 'Contract poll?',
+    answers: [{ text: 'Yes' }, { text: 'No' }],
+  })
+  const webhookMessageId = seedMessage(db, channelId, webhookId, 'webhook')
+  const roleId = seedRole(db, guildId)
+  const deletableRoleId = seedRole(db, guildId, 'deletable-role')
+  const assignedRoleId = seedRole(db, guildId, 'assigned-role')
+  const deletableOverwriteId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channel_overwrites (channel_id, id, type, allow, deny)
+     VALUES (?, ?, 0, '0', '0')`
+  ).run(channelId, deletableOverwriteId)
+  db.prepare(
+    'INSERT OR IGNORE INTO guild_members (guild_id, user_id) VALUES (?, ?)'
+  ).run(guildId, userId)
+  const memberId = seedMember(db, guildId)
+  db.prepare(
+    'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+  ).run(guildId, memberId, assignedRoleId)
+  const banTargetUserId = seedMember(db, guildId)
+  const removableRecipientId = seedMember(db, guildId)
+  db.prepare(
+    'INSERT INTO channel_recipients (channel_id, user_id) VALUES (?, ?)'
+  ).run(groupDmChannelId, removableRecipientId)
+  const emojiId = seedEmoji(db, guildId, userId)
+  const inviteCode = seedInvite(db, channelId, guildId, userId, 'contractcode')
+  const deletableInviteCode = seedInvite(
+    db,
+    channelId,
+    guildId,
+    userId,
+    'deletablecode'
+  )
+  const bannedUserId = seedBan(db, guildId, undefined, 'Contract test ban')
+  const threadId = '888888888888888888'
+  db.prepare(
+    `INSERT INTO channels
+       (id, guild_id, type, name, parent_id, owner_id, archived,
+        auto_archive_duration, archive_timestamp)
+     VALUES (?, ?, 11, 'contract-thread', ?, ?, 1, 1440, datetime('now'))`
+  ).run(threadId, guildId, channelId, userId)
+  db.prepare(
+    'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
+  ).run(threadId, userId)
+  const joinableThreadId = generateSnowflake()
+  const memberThreadId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channels
+       (id, guild_id, type, name, parent_id, owner_id, archived,
+        auto_archive_duration, archive_timestamp)
+     VALUES (?, ?, 11, 'joinable-thread', ?, ?, 1, 1440, datetime('now')),
+            (?, ?, 11, 'member-thread', ?, ?, 1, 1440, datetime('now'))`
+  ).run(
+    joinableThreadId,
+    guildId,
+    channelId,
+    userId,
+    memberThreadId,
+    guildId,
+    channelId,
+    userId
+  )
+  db.prepare(
+    'INSERT INTO thread_members (thread_id, user_id) VALUES (?, ?)'
+  ).run(memberThreadId, memberId)
+  const commandId = seedApplicationCommand(db, userId, null, 'contractcmd')
+  const guildCommandId = seedApplicationCommand(
+    db,
+    userId,
+    guildId,
+    'guildcontractcmd'
+  )
+  const autoModerationRuleId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO auto_moderation_rules
+       (id, guild_id, creator_id, name, event_type, trigger_type,
+        trigger_metadata, actions)
+     VALUES (?, ?, ?, 'Fixture moderation', 1, 4, ?, ?)`
+  ).run(
+    autoModerationRuleId,
+    guildId,
+    userId,
+    JSON.stringify({ allow_list: [], presets: [1] }),
+    JSON.stringify([{ type: 1, metadata: { custom_message: 'blocked' } }])
+  )
+  const addableMemberId = generateSnowflake()
+  db.prepare(
+    "INSERT INTO users (id, username, discriminator, bot) VALUES (?, 'AddableMember', '0', 0)"
+  ).run(addableMemberId)
+  const { eventId: scheduledEventId } = seedScheduledEvent(
+    db,
+    guildId,
+    userId,
+    voiceChannelId
+  )
+  db.prepare(
+    `UPDATE scheduled_events SET channel_id = NULL, entity_type = 3,
+       entity_metadata = ?, scheduled_end_time = '2030-01-01T01:00:00.000Z'
+     WHERE id = ?`
+  ).run(JSON.stringify({ location: 'Fauxcord' }), scheduledEventId)
+  const scheduledEventExceptionId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO scheduled_event_exceptions
+       (id, event_id, scheduled_start_time, scheduled_end_time)
+     VALUES (?, ?, '2030-01-02T00:00:00.000Z', '2030-01-02T01:00:00.000Z')`
+  ).run(scheduledEventExceptionId, scheduledEventId)
+  db.prepare(
+    'INSERT INTO scheduled_event_users (event_id, user_id) VALUES (?, ?)'
+  ).run(scheduledEventId, userId)
+  db.prepare(
+    `INSERT INTO scheduled_event_exception_users (exception_id, user_id)
+     VALUES (?, ?)`
+  ).run(scheduledEventExceptionId, userId)
+  const guildSoundboardSoundId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO soundboard_sounds
+       (id, guild_id, user_id, name, volume)
+     VALUES (?, ?, ?, 'Fixture sound', 1)`
+  ).run(guildSoundboardSoundId, guildId, userId)
+  const guildStickerId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO stickers
+       (id, guild_id, user_id, name, description, tags, type, format_type)
+     VALUES (?, ?, ?, 'fixture-sticker', 'Fixture sticker', 'fixture', 2, 1)`
+  ).run(guildStickerId, guildId, userId)
+  const { templateCode: guildTemplateCode } = seedGuildTemplate(
+    db,
+    guildId,
+    userId
+  )
+  db.prepare('UPDATE guild_templates SET is_dirty = 1 WHERE code = ?').run(
+    guildTemplateCode
+  )
+  db.prepare(
+    `INSERT INTO guild_voice_states
+       (guild_id, user_id, channel_id, session_id)
+     VALUES (?, ?, ?, 'contract-session'), (?, ?, ?, 'member-session')`
+  ).run(guildId, userId, voiceChannelId, guildId, memberId, voiceChannelId)
+  db.prepare(
+    `INSERT INTO guild_onboarding_settings
+       (guild_id, prompts, default_channel_ids, enabled, mode)
+     VALUES (?, '[]', ?, 1, 0)`
+  ).run(guildId, JSON.stringify([channelId]))
+  db.prepare(
+    `INSERT INTO guild_widget_settings (guild_id, enabled, channel_id)
+     VALUES (?, 1, ?)`
+  ).run(guildId, channelId)
+  db.prepare(
+    `INSERT INTO guild_welcome_screen_settings
+       (guild_id, description, channels, enabled)
+     VALUES (?, 'Contract welcome', '[]', 1)`
+  ).run(guildId)
+  const joinRequestId = generateSnowflake()
+  const guildIntegrationId = generateSnowflake()
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_join_requests (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      application_status INTEGER,
+      rejection_reason TEXT,
+      reviewed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS guild_integrations (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      name TEXT,
+      deleted INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS guild_prune_runs (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL REFERENCES guilds(id) ON DELETE CASCADE,
+      days INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS guild_incident_actions (
+      guild_id TEXT PRIMARY KEY REFERENCES guilds(id) ON DELETE CASCADE,
+      invites_disabled_until TEXT,
+      dms_disabled_until TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS channel_soundboard_playbacks (
+      id TEXT PRIMARY KEY,
+      channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sound_id TEXT NOT NULL,
+      source_guild_id TEXT REFERENCES guilds(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+  db.prepare(
+    `INSERT INTO guild_join_requests (id, guild_id, user_id)
+     VALUES (?, ?, ?)`
+  ).run(joinRequestId, guildId, memberId)
+  db.prepare(
+    `INSERT INTO guild_integrations (id, guild_id, name)
+     VALUES (?, ?, 'Contract Integration')`
+  ).run(guildIntegrationId, guildId)
+  const { interactionId, interactionToken } = seedInteraction(
+    db,
+    userId,
+    channelId,
+    memberId,
+    guildCommandId
+  )
+  const {
+    interactionId: originalInteractionId,
+    interactionToken: originalInteractionToken,
+  } = seedInteraction(db, userId, channelId, memberId, guildCommandId)
+  db.prepare(
+    `UPDATE interactions
+     SET responded = 1, initial_response_message_id = ?
+     WHERE id = ?`
+  ).run(webhookMessageId, originalInteractionId)
+  const { lobbyId } = seedLobby(db, applicationId, userId, channelId)
+  db.prepare(
+    `INSERT INTO user_application_role_connections
+    (application_id, user_id, platform_name, metadata) VALUES (?, ?, 'Contract', '{}')`
+  ).run(applicationId, userId)
+  const lobbyMessageId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO lobby_messages (id, lobby_id, channel_id, author_id, application_id, content)
+    VALUES (?, ?, ?, ?, ?, 'Contract lobby message')`
+  ).run(lobbyMessageId, lobbyId, channelId, userId, applicationId)
+  const { stageChannelId } = seedStageChannel(db, guildId)
+  db.prepare(
+    `INSERT INTO stage_instances (id, guild_id, channel_id, topic)
+    VALUES (?, ?, ?, 'Contract stage')`
+  ).run(generateSnowflake(), guildId, stageChannelId)
+  const newStageChannelId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channels (id, guild_id, type, name)
+    VALUES (?, ?, 13, 'new-contract-stage')`
+  ).run(newStageChannelId, guildId)
+  const { skuId: subscriptionSkuId, subscriptionId } = seedSkuSubscription(
+    db,
+    applicationId,
+    userId
+  )
+  const stickerPackId = generateSnowflake()
+  const catalogStickerId = generateSnowflake()
+  db.prepare(
+    "INSERT INTO sticker_packs (id, sku_id, name) VALUES (?, ?, 'Contract Pack')"
+  ).run(stickerPackId, skuId)
+  db.prepare(
+    "INSERT INTO stickers (id, name, tags, type, format_type, pack_id, sort_value) VALUES (?, 'Contract Sticker', 'contract', 1, 1, ?, 0)"
+  ).run(catalogStickerId, stickerPackId)
+
+  return {
+    db,
+    token,
+    userId,
+    bearerToken,
+    applicationId,
+    activityInstanceId,
+    applicationEmojiId,
+    deletableApplicationEmojiId,
+    skuId,
+    entitlementId,
+    deletableEntitlementId,
+    consumableEntitlementId,
+    guildId,
+    channelId,
+    unindexedChannelId,
+    announcementChannelId,
+    announcementMessageId,
+    voiceChannelId,
+    groupDmChannelId,
+    messageId,
+    deletableMessageId,
+    pinnedMessageId,
+    reactedMessageId,
+    pollMessageId,
+    webhookMessageId,
+    webhookId,
+    webhookToken,
+    roleId,
+    deletableRoleId,
+    assignedRoleId,
+    deletableOverwriteId,
+    memberId,
+    emojiId,
+    inviteCode,
+    deletableInviteCode,
+    bannedUserId,
+    banTargetUserId,
+    threadId,
+    joinableThreadId,
+    memberThreadId,
+    removableRecipientId,
+    commandId,
+    guildCommandId,
+    autoModerationRuleId,
+    addableMemberId,
+    scheduledEventId,
+    scheduledEventExceptionId,
+    guildSoundboardSoundId,
+    guildStickerId,
+    guildTemplateCode,
+    joinRequestId,
+    guildIntegrationId,
+    interactionId,
+    interactionToken,
+    originalInteractionId,
+    originalInteractionToken,
+    lobbyId,
+    stageChannelId,
+    subscriptionId,
+    subscriptionSkuId,
+    stickerPackId,
+    catalogStickerId,
+    lobbyMessageId,
+    newStageChannelId,
+  }
+}
+/* eslint-enable @typescript-eslint/no-use-before-define */
+
+/**
+ * Starts the production application assembly on an OS-assigned HTTP port.
+ * @returns Real server context and deterministic teardown.
+ */
+/* eslint-disable @typescript-eslint/no-use-before-define -- Lifecycle helpers are grouped immediately below the public factory. */
+export async function createRealServer(
+  options: RealServerOptions = {}
+): Promise<RealServerContext> {
+  const uploadPath =
+    options.uploadPath ??
+    (await mkdtemp(path.join(tmpdir(), 'fauxcord-contract-')))
+  let db: Database | undefined
+  let unsubscribeGateway: (() => void) | undefined
+  let server: ReturnType<typeof serveWithGateway> | undefined
+  try {
+    db = initializeDatabase(':memory:')
+    const database = db
+    options.onDatabaseCreated?.(database)
+    const wss = new WebSocketServer({ noServer: true })
+    let appFetch: Hono['fetch'] = () =>
+      Promise.resolve(new Response('Server is starting', { status: 503 }))
+    const serve = options.serve ?? serveWithGateway
+    const started = await startNodeServer(
+      serve,
+      {
+        fetch: (request, env, executionContext) =>
+          appFetch(request, env, executionContext),
+        port: 0,
+        hostname: '127.0.0.1',
+        wss,
+      },
+      (createdServer) => {
+        server = createdServer
+      }
+    )
+    server = started.server
+    const baseUrl = `http://127.0.0.1:${started.port}`
+    const built = buildApp(database, {
+      baseUrl,
+      uploadPath,
+      disableAuth: false,
+      latencyMs: 0,
+      wss,
+    })
+    appFetch = built.app.fetch
+    unsubscribeGateway = built.unsubscribeGateway
+
+    let closePromise: Promise<void> | undefined
+    return {
+      db: database,
+      baseUrl,
+      sessionManager: built.sessionManager,
+      close: () => {
+        closePromise ??= runCleanupSteps([
+          () => {
+            unsubscribeGateway?.()
+            unsubscribeGateway = undefined
+          },
+          () => {
+            for (const client of built.wss.clients) client.terminate()
+          },
+          () => closeNodeServer(server),
+          () => {
+            closeDatabase(database)
+          },
+          () => rm(uploadPath, { recursive: true, force: true }),
+        ])
+        return closePromise
+      },
+    }
+  } catch (error) {
+    try {
+      await runCleanupSteps([
+        () => unsubscribeGateway?.(),
+        () => closeNodeServer(server),
+        () => {
+          if (db) closeDatabase(db)
+        },
+        () => rm(uploadPath, { recursive: true, force: true }),
+      ])
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'Real HTTP test server startup and cleanup failed'
+      )
+    }
+    throw error
+  }
+}
+/* eslint-enable @typescript-eslint/no-use-before-define */
+
+async function startNodeServer(
+  serve: typeof serveWithGateway,
+  options: Parameters<typeof serveWithGateway>[0],
+  onServerCreated: (server: ReturnType<typeof serveWithGateway>) => void
+): Promise<{ server: ReturnType<typeof serveWithGateway>; port: number }> {
+  return new Promise((resolve, reject) => {
+    let startedServer: ReturnType<typeof serveWithGateway>
+    const handleError = (error: Error) => {
+      reject(error)
+    }
+    try {
+      startedServer = serve(options, (address) => {
+        startedServer.off('error', handleError)
+        resolve({ server: startedServer, port: address.port })
+      })
+      onServerCreated(startedServer)
+      startedServer.once('error', handleError)
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
+}
+
+async function closeNodeServer(
+  server: ReturnType<typeof serveWithGateway> | undefined
+): Promise<void> {
+  if (!server) return
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error && 'code' in error && error.code === 'ERR_SERVER_NOT_RUNNING') {
+        resolve()
+      } else if (error) reject(error)
+      else resolve()
+    })
+  })
+}
+
+async function runCleanupSteps(
+  steps: (() => void | Promise<void>)[]
+): Promise<void> {
+  const errors: unknown[] = []
+  for (const step of steps) {
+    try {
+      await step()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Real HTTP test server cleanup failed')
   }
 }
 
@@ -509,4 +1119,271 @@ export function seedInteraction(
     userId,
   })
   return { interactionId, interactionToken }
+}
+
+/**
+ * Seeds an application with a distinct owning user.
+ * @param db - Database
+ * @param applicationId - Application ID, generated when omitted
+ * @param ownerId - Owner user ID, generated when omitted
+ * @returns Seeded application and owner IDs
+ */
+export function seedApplicationOwner(
+  db: Database,
+  applicationId = generateSnowflake(),
+  ownerId = generateSnowflake()
+): { applicationId: string; ownerId: string } {
+  db.prepare(
+    `INSERT INTO users (id, username, discriminator, bot)
+     VALUES (?, 'ApplicationOwner', '0', 0)`
+  ).run(ownerId)
+  db.prepare(
+    `INSERT INTO applications (id, owner_id, name, verify_key)
+     VALUES (?, ?, 'Fixture Application', ?)`
+  ).run(applicationId, ownerId, `verify_${applicationId}`)
+  return { applicationId, ownerId }
+}
+
+/**
+ * Seeds a local OAuth2 Bearer credential and its user/client principals.
+ * @param db - Database
+ * @param userId - Credential user ID, generated when omitted
+ * @param clientId - OAuth2 client ID, generated when omitted
+ * @returns Bearer token and principal IDs
+ */
+export function seedBearerCredential(
+  db: Database,
+  userId = generateSnowflake(),
+  clientId = generateSnowflake()
+): { bearerToken: string; clientId: string; userId: string } {
+  const bearerToken = `fixture_bearer_${generateSnowflake()}`
+  db.prepare(
+    `INSERT OR IGNORE INTO users (id, username, discriminator, bot)
+     VALUES (?, 'BearerUser', '0', 0)`
+  ).run(userId)
+  db.prepare(
+    `INSERT INTO oauth2_clients (client_id, client_secret)
+     VALUES (?, ?)`
+  ).run(clientId, `fixture_secret_${clientId}`)
+  db.prepare(
+    `INSERT INTO oauth2_access_tokens
+       (token, client_id, user_id, scope, expires_at)
+     VALUES (?, ?, ?, 'identify role_connections.write', datetime('now', '+1 day'))`
+  ).run(bearerToken, clientId, userId)
+  return { bearerToken, clientId, userId }
+}
+
+/**
+ * Seeds a distinct non-bot user.
+ * @param db - Database
+ * @param userId - User ID, generated when omitted
+ * @returns Seeded user ID
+ */
+export function seedSecondUser(
+  db: Database,
+  userId = generateSnowflake()
+): { userId: string } {
+  db.prepare(
+    `INSERT INTO users (id, username, discriminator, bot)
+     VALUES (?, 'SecondUser', '0', 0)`
+  ).run(userId)
+  return { userId }
+}
+
+/**
+ * Seeds a lobby and its owner membership.
+ * @param db - Database
+ * @param applicationId - Parent application ID
+ * @param ownerId - Owning user ID
+ * @param linkedChannelId - Initially linked channel ID
+ * @returns Seeded lobby ID
+ */
+export function seedLobby(
+  db: Database,
+  applicationId: string,
+  ownerId: string,
+  linkedChannelId: string
+): { lobbyId: string } {
+  const lobbyId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO lobbies
+       (id, application_id, owner_id, linked_channel_id, metadata)
+     VALUES (?, ?, ?, ?, '{}')`
+  ).run(lobbyId, applicationId, ownerId, linkedChannelId)
+  db.prepare(
+    `INSERT INTO lobby_members (lobby_id, user_id, metadata)
+     VALUES (?, ?, '{}')`
+  ).run(lobbyId, ownerId)
+  return { lobbyId }
+}
+
+/**
+ * Seeds a stage channel without creating a stage instance.
+ * @param db - Database
+ * @param guildId - Parent guild ID
+ * @returns Seeded stage channel ID
+ */
+export function seedStageChannel(
+  db: Database,
+  guildId: string
+): { stageChannelId: string } {
+  const stageChannelId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO channels (id, guild_id, type, name)
+     VALUES (?, ?, 13, 'fixture-stage')`
+  ).run(stageChannelId, guildId)
+  return { stageChannelId }
+}
+
+/**
+ * Seeds a SKU and one active subscription for a user.
+ * @param db - Database
+ * @param applicationId - Parent application ID
+ * @param userId - Subscriber user ID
+ * @returns Seeded SKU and subscription IDs
+ */
+export function seedSkuSubscription(
+  db: Database,
+  applicationId: string,
+  userId: string
+): { skuId: string; subscriptionId: string } {
+  const skuId = generateSnowflake()
+  const subscriptionId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO skus (id, application_id, name, slug)
+     VALUES (?, ?, 'Fixture Subscription', ?)`
+  ).run(skuId, applicationId, `fixture-subscription-${skuId}`)
+  db.prepare(
+    `INSERT INTO subscriptions
+       (id, sku_id, user_id, sku_ids, entitlement_ids,
+        current_period_start, current_period_end, status)
+     VALUES (?, ?, ?, ?, '[]', '2030-01-01T00:00:00.000Z',
+             '2030-02-01T00:00:00.000Z', 0)`
+  ).run(subscriptionId, skuId, userId, JSON.stringify([skuId]))
+  return { skuId, subscriptionId }
+}
+
+/**
+ * Seeds a guild template.
+ * @param db - Database
+ * @param guildId - Source guild ID
+ * @param creatorId - Template creator user ID
+ * @returns Seeded template code
+ */
+export function seedGuildTemplate(
+  db: Database,
+  guildId: string,
+  creatorId: string
+): { templateCode: string } {
+  const templateCode = `fixture-${generateSnowflake()}`
+  const guild = db
+    .prepare('SELECT name FROM guilds WHERE id = ?')
+    .get(guildId) as { name: string } | undefined
+  db.prepare(
+    `INSERT INTO guild_templates
+       (code, source_guild_id, creator_id, name, serialized_source_guild)
+     VALUES (?, ?, ?, 'Fixture Template', ?)`
+  ).run(
+    templateCode,
+    guildId,
+    creatorId,
+    JSON.stringify({ id: guildId, name: guild?.name ?? 'Fixture Guild' })
+  )
+  return { templateCode }
+}
+
+/**
+ * Seeds a scheduled voice event.
+ * @param db - Database
+ * @param guildId - Parent guild ID
+ * @param creatorId - Creator user ID
+ * @param channelId - Event voice or stage channel ID
+ * @returns Seeded event ID
+ */
+export function seedScheduledEvent(
+  db: Database,
+  guildId: string,
+  creatorId: string,
+  channelId: string
+): { eventId: string } {
+  const eventId = generateSnowflake()
+  db.prepare(
+    `INSERT INTO scheduled_events
+       (id, guild_id, channel_id, creator_id, name, scheduled_start_time,
+        privacy_level, status, entity_type)
+     VALUES (?, ?, ?, ?, 'Fixture Event', '2030-01-01T00:00:00.000Z', 2, 1, 2)`
+  ).run(eventId, guildId, channelId, creatorId)
+  return { eventId }
+}
+
+/**
+ * Seeds an interaction response addressed by the webhook `@original` route.
+ * @param db - Database
+ * @param applicationId - Interaction application ID used as the webhook ID
+ * @param channelId - Destination channel ID
+ * @param userId - Interaction user and response author ID
+ * @returns Webhook credentials and original message ID
+ */
+export function seedWebhookOriginalMessage(
+  db: Database,
+  applicationId: string,
+  channelId: string,
+  userId: string
+): {
+  interactionId: string
+  originalMessageId: string
+  webhookId: string
+  webhookToken: string
+} {
+  const { interactionId, interactionToken } = seedInteraction(
+    db,
+    applicationId,
+    channelId,
+    userId
+  )
+  const originalMessageId = seedMessage(
+    db,
+    channelId,
+    userId,
+    'interaction',
+    'Original interaction response'
+  )
+  db.prepare(
+    `UPDATE interactions
+     SET responded = 1, initial_response_message_id = ?
+     WHERE id = ?`
+  ).run(originalMessageId, interactionId)
+  return {
+    interactionId,
+    originalMessageId,
+    webhookId: applicationId,
+    webhookToken: interactionToken,
+  }
+}
+
+/**
+ * Creates a disposable upload fixture in its own temporary directory.
+ * @param content - UTF-8 fixture file contents
+ * @returns File paths and an idempotent cleanup function
+ */
+export async function seedDisposableUploadedFile(
+  content = 'fixture upload'
+): Promise<{
+  cleanup: () => Promise<void>
+  filePath: string
+  filename: string
+  uploadDirectory: string
+}> {
+  const uploadDirectory = await mkdtemp(
+    path.join(tmpdir(), 'fauxcord-upload-fixture-')
+  )
+  const filename = 'fixture.txt'
+  const filePath = path.join(uploadDirectory, filename)
+  await writeFile(filePath, content, 'utf8')
+  return {
+    cleanup: () => rm(uploadDirectory, { recursive: true, force: true }),
+    filePath,
+    filename,
+    uploadDirectory,
+  }
 }
