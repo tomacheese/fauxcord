@@ -38,4 +38,34 @@ describe('partner SDK routes', () => {
       scope: 'identify',
     })
   })
+
+  it('unmerges only the provisional identity and keeps the client credential valid', async () => {
+    const payload = {
+      client_id: clientId,
+      client_secret: 'partner-secret',
+      external_auth_token: 'external-account',
+      external_auth_type: 1,
+    }
+    const issued = await app.request('/partner-sdk/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    expect(issued.status).toBe(200)
+    const unmerge = await app.request(
+      '/partner-sdk/provisional-accounts/unmerge',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    )
+    expect(unmerge.status).toBe(204)
+    const tokenAfterUnmerge = await app.request('/partner-sdk/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    expect(tokenAfterUnmerge.status).toBe(200)
+  })
 })

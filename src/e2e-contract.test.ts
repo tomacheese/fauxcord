@@ -45,9 +45,7 @@ function responseSchema(
   branch: SpecSuccessBranch
 ): { $ref: string } | undefined {
   const response =
-    spec.paths[entry.specPath]?.[entry.method]?.responses?.[
-      String(branch.status)
-    ]
+    spec.paths[entry.specPath][entry.method].responses?.[String(branch.status)]
   if (!response?.content?.['application/json']) return undefined
   const escapedPath = entry.specPath.replaceAll('~', '~0').replaceAll('/', '~1')
   return {
@@ -210,7 +208,7 @@ describe('real HTTP contract fixture', () => {
         fixture,
         response,
       })
-    ).rejects.toThrow('did not apply its expected operation effect')
+    ).rejects.toThrow('follow-up HTTP resource is still present')
   })
 
   it('rejects the Partner SDK token assertion for an unrelated provisional token', async () => {
@@ -233,11 +231,11 @@ describe('real HTTP contract fixture', () => {
          VALUES (?, ?, ?, 'identify', datetime('now', '+1 hour'))`
       )
       .run('provisional_unrelated', fixture.applicationId, fixture.memberId)
-    const response = new Response(
-      JSON.stringify({
+    const response = Response.json(
+      {
         access_token: 'provisional_unrelated',
         id_token: `provisional-id-${fixture.memberId}`,
-      }),
+      },
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )
     Object.defineProperty(response, 'url', {

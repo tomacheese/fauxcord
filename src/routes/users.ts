@@ -4,7 +4,7 @@
  * Implements the /users/* and /applications/* endpoints.
  */
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import type { Database } from '../db'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import {
@@ -63,6 +63,32 @@ const BROAD_OAUTH2_SCOPES = new Set([
 
 function hasOAuthScope(scope: string, allowed: ReadonlySet<string>): boolean {
   return scope.split(' ').some((item) => allowed.has(item))
+}
+
+/** Ensures a Bearer token can only operate on its own OAuth2 application. */
+function requireOAuthApplicationAccess(
+  c: Context<AppEnv>,
+  db: Database,
+  applicationId: string,
+  requiredScopes: ReadonlySet<string>
+): Response | undefined {
+  const accessToken = c.get('accessToken')
+  if (!accessToken?.user_id) {
+    return c.json({ message: '401: Unauthorized', code: 0 }, 401)
+  }
+  if (!hasOAuthScope(accessToken.scope, requiredScopes)) {
+    return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+  }
+  const application = db
+    .prepare('SELECT 1 FROM applications WHERE id = ?')
+    .get(applicationId)
+  if (!application) {
+    return c.json(discordError(10_002, 'Unknown Application', 404).body, 404)
+  }
+  if (accessToken.client_id !== applicationId) {
+    return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+  }
+  return undefined
 }
 
 /**
@@ -159,13 +185,19 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
   })
 
   app.get('/users/@me/applications/:applicationId/entitlements', (c) => {
+    const applicationId = c.req.param('applicationId')
+    const denied = requireOAuthApplicationAccess(
+      c,
+      db,
+      applicationId,
+      BROAD_OAUTH2_SCOPES
+    )
+    if (denied) return denied
     const accessToken = c.get('accessToken')
     if (!accessToken?.user_id)
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    if (!hasOAuthScope(accessToken.scope, BROAD_OAUTH2_SCOPES))
-      return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
     return c.json(
-      listEntitlements(db, c.req.param('applicationId'), {
+      listEntitlements(db, applicationId, {
         userId: accessToken.user_id,
         excludeDeleted: true,
       })
@@ -173,17 +205,22 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
   })
 
   app.get('/users/@me/applications/:applicationId/role-connection', (c) => {
-    const accessToken = c.get('accessToken')
-    if (
-      !accessToken?.user_id ||
-      !accessToken.scope.split(' ').includes('role_connections.write')
+    const applicationId = c.req.param('applicationId')
+    const denied = requireOAuthApplicationAccess(
+      c,
+      db,
+      applicationId,
+      new Set(['role_connections.write'])
     )
-      return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+    if (denied) return denied
+    const accessToken = c.get('accessToken')
+    if (!accessToken?.user_id)
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     const row = db
       .prepare(
         'SELECT platform_name, platform_username, metadata FROM user_application_role_connections WHERE application_id = ? AND user_id = ?'
       )
-      .get(c.req.param('applicationId'), accessToken.user_id) as
+      .get(applicationId, accessToken.user_id) as
       | {
           platform_name: string | null
           platform_username: string | null
@@ -204,12 +241,17 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
   app.put(
     '/users/@me/applications/:applicationId/role-connection',
     async (c) => {
-      const accessToken = c.get('accessToken')
-      if (
-        !accessToken?.user_id ||
-        !accessToken.scope.split(' ').includes('role_connections.write')
+      const applicationId = c.req.param('applicationId')
+      const denied = requireOAuthApplicationAccess(
+        c,
+        db,
+        applicationId,
+        new Set(['role_connections.write'])
       )
-        return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+      if (denied) return denied
+      const accessToken = c.get('accessToken')
+      if (!accessToken?.user_id)
+        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
       const body = await c.req
         .json<{
           platform_name?: string
@@ -217,17 +259,16 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
           metadata?: Record<string, string>
         }>()
         .catch(
-          () =>
-            ({}) as {
-              platform_name?: string
-              platform_username?: string | null
-              metadata?: Record<string, string>
-            }
+          (): {
+            platform_name?: string
+            platform_username?: string | null
+            metadata?: Record<string, string>
+          } => ({})
         )
       db.prepare(
         `INSERT INTO user_application_role_connections (application_id, user_id, platform_name, platform_username, metadata) VALUES (?, ?, ?, ?, ?) ON CONFLICT(application_id, user_id) DO UPDATE SET platform_name = excluded.platform_name, platform_username = excluded.platform_username, metadata = excluded.metadata, updated_at = datetime('now')`
       ).run(
-        c.req.param('applicationId'),
+        applicationId,
         accessToken.user_id,
         body.platform_name ?? '',
         body.platform_username ?? null,
@@ -242,15 +283,20 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
   )
 
   app.delete('/users/@me/applications/:applicationId/role-connection', (c) => {
-    const accessToken = c.get('accessToken')
-    if (
-      !accessToken?.user_id ||
-      !accessToken.scope.split(' ').includes('role_connections.write')
+    const applicationId = c.req.param('applicationId')
+    const denied = requireOAuthApplicationAccess(
+      c,
+      db,
+      applicationId,
+      new Set(['role_connections.write'])
     )
-      return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+    if (denied) return denied
+    const accessToken = c.get('accessToken')
+    if (!accessToken?.user_id)
+      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
     db.prepare(
       'DELETE FROM user_application_role_connections WHERE application_id = ? AND user_id = ?'
-    ).run(c.req.param('applicationId'), accessToken.user_id)
+    ).run(applicationId, accessToken.user_id)
     return c.body(null, 204)
   })
 

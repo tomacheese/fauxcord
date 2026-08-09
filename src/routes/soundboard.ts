@@ -9,7 +9,6 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../middleware/auth'
 import type { Database } from '../db'
 import { DiscordErrorCode, validationError } from '../errors'
-import { getChannel } from '../services/channels'
 import {
   getDefaultSoundboardSounds,
   recordSoundboardPlayback,
@@ -48,8 +47,24 @@ export function createSoundboardRoutes(db?: Database): Hono<AppEnv> {
         400
       )
     }
-    if (!getChannel(db, channelId)) {
+    const channel = db
+      .prepare(
+        `SELECT c.guild_id, c.type, g.bot_token
+         FROM channels c LEFT JOIN guilds g ON g.id = c.guild_id
+         WHERE c.id = ?`
+      )
+      .get(channelId) as
+      | { guild_id: string | null; type: number; bot_token: string | null }
+      | undefined
+    if (!channel?.guild_id) {
       return c.json({ message: 'Unknown Channel', code: 10_003 }, 404)
+    }
+    if (channel.type !== 2 && channel.type !== 13) {
+      return c.json({ message: 'Unknown Channel', code: 10_003 }, 404)
+    }
+    const bot = c.get('bot')
+    if (bot?.token !== channel.bot_token) {
+      return c.json({ message: 'Missing Access', code: 50_001 }, 403)
     }
     const payload = await parseJsonBody(c)
     if (typeof payload.sound_id !== 'string' || payload.sound_id.length === 0) {
@@ -67,11 +82,10 @@ export function createSoundboardRoutes(db?: Database): Hono<AppEnv> {
         400
       )
     }
-    const bot = c.get('bot')
     recordSoundboardPlayback(
       db,
       channelId,
-      bot?.user_id ?? '000000000000000000',
+      bot.user_id,
       payload.sound_id,
       typeof payload.source_guild_id === 'string'
         ? payload.source_guild_id

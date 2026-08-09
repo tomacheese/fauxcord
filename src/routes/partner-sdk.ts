@@ -5,9 +5,20 @@ import type { AppEnv } from '../middleware/auth'
 import {
   acceptsPartnerClient,
   issueProvisionalToken,
+  unmergeProvisionalIdentity,
 } from '../services/partner-sdk'
 
 const SNOWFLAKE = /^(0|[1-9][0-9]*)$/
+interface PartnerCredentialPayload {
+  client_id?: string
+  client_secret?: string | null
+  external_auth_token?: string
+  external_auth_type?: number
+}
+interface PartnerBotTokenPayload {
+  external_user_id?: string
+  provisional_user_id?: string | null
+}
 const invalid = (field = 'body') =>
   validationError({
     [field]: {
@@ -31,21 +42,8 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
       if (unauthorized) return unauthorized
     }
     const payload = await c.req
-      .json<{
-        client_id?: string
-        client_secret?: string | null
-        external_auth_token?: string
-        external_auth_type?: number
-      }>()
-      .catch(
-        () =>
-          ({}) as {
-            client_id?: string
-            client_secret?: string | null
-            external_auth_token?: string
-            external_auth_type?: number
-          }
-      )
+      .json<PartnerCredentialPayload>()
+      .catch((): PartnerCredentialPayload => ({}))
     if (
       !payload.client_id ||
       !SNOWFLAKE.test(payload.client_id) ||
@@ -73,17 +71,8 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
     const unauthorized = requireBot(c)
     if (unauthorized) return unauthorized
     const payload = await c.req
-      .json<{
-        external_user_id?: string
-        provisional_user_id?: string | null
-      }>()
-      .catch(
-        () =>
-          ({}) as {
-            external_user_id?: string
-            provisional_user_id?: string | null
-          }
-      )
+      .json<PartnerBotTokenPayload>()
+      .catch((): PartnerBotTokenPayload => ({}))
     if (!payload.external_user_id) return c.json(invalid(), 400)
     const client = db
       .prepare('SELECT client_id FROM oauth2_clients WHERE bot_token = ?')
@@ -98,21 +87,8 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
   })
   app.post('/partner-sdk/provisional-accounts/unmerge', async (c) => {
     const payload = await c.req
-      .json<{
-        client_id?: string
-        client_secret?: string | null
-        external_auth_token?: string
-        external_auth_type?: number
-      }>()
-      .catch(
-        () =>
-          ({}) as {
-            client_id?: string
-            client_secret?: string | null
-            external_auth_token?: string
-            external_auth_type?: number
-          }
-      )
+      .json<PartnerCredentialPayload>()
+      .catch((): PartnerCredentialPayload => ({}))
     if (
       !payload.client_id ||
       !payload.external_auth_token ||
@@ -124,9 +100,11 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
       )
     )
       return c.json(invalid(), 400)
-    db.prepare(
-      "UPDATE oauth2_clients SET client_secret = client_secret || ':unmerged' WHERE client_id = ?"
-    ).run(payload.client_id)
+    unmergeProvisionalIdentity(
+      db,
+      payload.client_id,
+      payload.external_auth_token
+    )
     return c.body(null, 204)
   })
   app.post('/partner-sdk/provisional-accounts/unmerge/bot', async (c) => {
@@ -134,12 +112,14 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
     if (unauthorized) return unauthorized
     const payload = await c.req
       .json<{ external_user_id?: string }>()
-      .catch(() => ({}) as { external_user_id?: string })
+      .catch((): { external_user_id?: string } => ({}))
     if (!payload.external_user_id)
       return c.json(invalid('external_user_id'), 400)
-    db.prepare(
-      "UPDATE oauth2_clients SET client_secret = client_secret || ':bot-unmerged' WHERE bot_token = ?"
-    ).run(c.get('bot')?.token)
+    const client = db
+      .prepare('SELECT client_id FROM oauth2_clients WHERE bot_token = ?')
+      .get(c.get('bot')?.token) as { client_id: string } | undefined
+    if (client)
+      unmergeProvisionalIdentity(db, client.client_id, payload.external_user_id)
     return c.body(null, 204)
   })
   app.put(
@@ -152,7 +132,7 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
         return c.json(invalid(), 400)
       const metadata = await c.req
         .json<Record<string, string>>()
-        .catch(() => ({}) as Record<string, string>)
+        .catch((): Record<string, string> => ({}))
       db.prepare(
         'CREATE TABLE IF NOT EXISTS partner_sdk_moderation (user_id_1 TEXT, user_id_2 TEXT, message_id TEXT PRIMARY KEY, metadata TEXT NOT NULL)'
       ).run()
@@ -170,21 +150,8 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
   const publicToken = async (c: Context<AppEnv>) => {
     const payload = await c.req
-      .json<{
-        client_id?: string
-        client_secret?: string | null
-        external_auth_token?: string
-        external_auth_type?: number
-      }>()
-      .catch(
-        () =>
-          ({}) as {
-            client_id?: string
-            client_secret?: string | null
-            external_auth_token?: string
-            external_auth_type?: number
-          }
-      )
+      .json<PartnerCredentialPayload>()
+      .catch((): PartnerCredentialPayload => ({}))
     if (
       !payload.client_id ||
       !SNOWFLAKE.test(payload.client_id) ||
@@ -210,21 +177,8 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
   app.post('/partner-sdk/token', publicToken)
   app.post('/partner-sdk/provisional-accounts/unmerge', async (c) => {
     const payload = await c.req
-      .json<{
-        client_id?: string
-        client_secret?: string | null
-        external_auth_token?: string
-        external_auth_type?: number
-      }>()
-      .catch(
-        () =>
-          ({}) as {
-            client_id?: string
-            client_secret?: string | null
-            external_auth_token?: string
-            external_auth_type?: number
-          }
-      )
+      .json<PartnerCredentialPayload>()
+      .catch((): PartnerCredentialPayload => ({}))
     if (
       !payload.client_id ||
       !payload.external_auth_token ||
@@ -236,9 +190,11 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
       )
     )
       return c.json(invalid(), 400)
-    db.prepare(
-      "UPDATE oauth2_clients SET client_secret = client_secret || ':unmerged' WHERE client_id = ?"
-    ).run(payload.client_id)
+    unmergeProvisionalIdentity(
+      db,
+      payload.client_id,
+      payload.external_auth_token
+    )
     return c.body(null, 204)
   })
   return app

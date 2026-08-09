@@ -384,14 +384,9 @@ function handleResume(
   for (const entry of replay) {
     ws.send(encodePayload(entry.event))
   }
-  ws.send(
-    encodePayload({
-      op: GatewayOp.Dispatch,
-      t: 'RESUMED',
-      s: session.seq,
-      d: {},
-    })
-  )
+  // RESUMED is itself a Dispatch, so it consumes a distinct sequence number
+  // after every replayed dispatch and is retained for any subsequent resume.
+  sendDispatch(sessionManager, session, 'RESUMED', {})
 }
 
 /**

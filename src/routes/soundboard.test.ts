@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
 import { createSoundboardRoutes } from './soundboard'
-import { createFullTestApp, seedChannel, seedGuild } from '../test-helpers'
+import {
+  createFullTestApp,
+  seedChannel,
+  seedGuild,
+  seedVoiceChannel,
+} from '../test-helpers'
 import { closeDatabase } from '../db'
 import type { AppEnv } from '../middleware/auth'
 import { countSoundboardPlaybacks } from '../services/soundboard'
@@ -40,7 +45,7 @@ describe('Soundboard API', () => {
         "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
       ).run(token, userId)
       const guildId = seedGuild(db, token, '822222222222222222')
-      const channelId = seedChannel(db, guildId, '833333333333333333')
+      const channelId = seedVoiceChannel(db, guildId, '833333333333333333')
 
       const res = await app.request(
         `/api/v10/channels/${channelId}/send-soundboard-sound`,
@@ -59,6 +64,44 @@ describe('Soundboard API', () => {
       closeDatabase(db)
     })
 
+    it('rejects a different Bot and non-voice channel without recording playback', async () => {
+      const { app, db, cleanup } = createFullTestApp()
+      const ownerToken = 'Bot soundboard-owner'
+      const ownerId = '811111111111111113'
+      const otherToken = 'Bot soundboard-other'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'Owner', 1)"
+      ).run(ownerId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'Owner')"
+      ).run(ownerToken, ownerId)
+      const otherId = '811111111111111114'
+      db.prepare(
+        "INSERT INTO users (id, username, bot) VALUES (?, 'Other', 1)"
+      ).run(otherId)
+      db.prepare(
+        "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'Other')"
+      ).run(otherToken, otherId)
+      const guildId = seedGuild(db, ownerToken, '822222222222222223')
+      const voiceChannelId = seedVoiceChannel(db, guildId, '833333333333333334')
+      const textChannelId = seedChannel(db, guildId, '833333333333333335')
+      const request = (channelId: string, authorization: string) =>
+        app.request(`/api/v10/channels/${channelId}/send-soundboard-sound`, {
+          method: 'POST',
+          headers: {
+            Authorization: authorization,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ sound_id: '844444444444444445' }),
+        })
+      const denied = await request(voiceChannelId, otherToken)
+      const nonVoice = await request(textChannelId, ownerToken)
+      expect(denied.status).toBe(403)
+      expect(nonVoice.status).toBe(404)
+      expect(countSoundboardPlaybacks(db, voiceChannelId)).toBe(0)
+      cleanup()
+    })
+
     it('rejects a missing sound_id with Discord validation code 50035', async () => {
       const { app, db } = createFullTestApp()
       const token = 'Bot soundboard-validation'
@@ -70,7 +113,7 @@ describe('Soundboard API', () => {
         "INSERT INTO bots (token, user_id, username) VALUES (?, ?, 'SoundboardBot')"
       ).run(token, userId)
       const guildId = seedGuild(db, token, '866666666666666666')
-      const channelId = seedChannel(db, guildId, '877777777777777777')
+      const channelId = seedVoiceChannel(db, guildId, '877777777777777777')
 
       const res = await app.request(
         `/api/v10/channels/${channelId}/send-soundboard-sound`,

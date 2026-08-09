@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { createFullTestApp, seedBot } from '../test-helpers'
+import {
+  createFullTestApp,
+  seedApplicationOwner,
+  seedBearerCredential,
+  seedBot,
+} from '../test-helpers'
 import { createTestUser } from '../services/test-control'
 import type { Database } from '../db'
 
@@ -144,14 +149,8 @@ describe('PATCH /users/@me', () => {
 describe('Task 5 current-user OAuth2 resources', () => {
   it('stores a Bearer user role connection and lists their entitlements', async () => {
     const ctx = createFullTestApp()
-    const { applicationId, ownerId } = (
-      await import('../test-helpers')
-    ).seedApplicationOwner(ctx.db)
-    const credential = (await import('../test-helpers')).seedBearerCredential(
-      ctx.db,
-      ownerId,
-      applicationId
-    )
+    const { applicationId, ownerId } = seedApplicationOwner(ctx.db)
+    const credential = seedBearerCredential(ctx.db, ownerId, applicationId)
     ctx.db
       .prepare(
         "UPDATE oauth2_access_tokens SET scope = 'role_connections.write guilds.members.read' WHERE token = ?"
@@ -179,19 +178,55 @@ describe('Task 5 current-user OAuth2 resources', () => {
     expect(listed.status).toBe(200)
     ctx.cleanup()
   })
+
+  it('does not let a Bearer token cross application boundaries', async () => {
+    const ctx = createFullTestApp()
+    const first = seedApplicationOwner(ctx.db)
+    const second = seedApplicationOwner(ctx.db)
+    const credential = seedBearerCredential(
+      ctx.db,
+      first.ownerId,
+      first.applicationId
+    )
+    ctx.db
+      .prepare(
+        "UPDATE oauth2_access_tokens SET scope = 'role_connections.write applications.entitlements' WHERE token = ?"
+      )
+      .run(credential.bearerToken)
+    const headers = {
+      Authorization: `Bearer ${credential.bearerToken}`,
+      'Content-Type': 'application/json',
+    }
+    for (const init of [
+      { method: 'GET' },
+      { method: 'PUT', body: JSON.stringify({ platform_name: 'Denied' }) },
+      { method: 'DELETE' },
+    ]) {
+      const response = await ctx.app.request(
+        `/users/@me/applications/${second.applicationId}/role-connection`,
+        { ...init, headers }
+      )
+      expect(response.status).toBe(403)
+    }
+    const entitlementDenied = await ctx.app.request(
+      `/users/@me/applications/${second.applicationId}/entitlements`,
+      { headers }
+    )
+    expect(entitlementDenied.status).toBe(403)
+    const unknownApplication = await ctx.app.request(
+      '/users/@me/applications/999999999999999999/role-connection',
+      { headers }
+    )
+    expect(unknownApplication.status).toBe(404)
+    ctx.cleanup()
+  })
 })
 
 describe('Task 5 OAuth2 scope authorization', () => {
   it('rejects unlisted Bearer scopes while accepting the exact OpenAPI scopes', async () => {
     const ctx = createFullTestApp()
-    const { applicationId, ownerId } = (
-      await import('../test-helpers')
-    ).seedApplicationOwner(ctx.db)
-    const credential = (await import('../test-helpers')).seedBearerCredential(
-      ctx.db,
-      ownerId,
-      applicationId
-    )
+    const { applicationId, ownerId } = seedApplicationOwner(ctx.db)
+    const credential = seedBearerCredential(ctx.db, ownerId, applicationId)
     const deniedHeaders = { Authorization: `Bearer ${credential.bearerToken}` }
     ctx.db
       .prepare(
@@ -203,37 +238,28 @@ describe('Task 5 OAuth2 scope authorization', () => {
       '/users/@me/connections',
       `/skus/${applicationId}/subscriptions`,
     ]) {
-      expect(
-        (await ctx.app.request(path, { headers: deniedHeaders })).status
-      ).toBe(403)
+      const response = await ctx.app.request(path, { headers: deniedHeaders })
+      expect(response.status).toBe(403)
     }
     ctx.db
       .prepare(
         "UPDATE oauth2_access_tokens SET scope = 'connections applications.entitlements' WHERE token = ?"
       )
       .run(credential.bearerToken)
-    expect(
-      (
-        await ctx.app.request(
-          `/users/@me/applications/${applicationId}/entitlements`,
-          { headers: deniedHeaders }
-        )
-      ).status
-    ).toBe(200)
-    expect(
-      (
-        await ctx.app.request('/users/@me/connections', {
-          headers: deniedHeaders,
-        })
-      ).status
-    ).toBe(200)
-    expect(
-      (
-        await ctx.app.request(`/skus/${applicationId}/subscriptions`, {
-          headers: deniedHeaders,
-        })
-      ).status
-    ).toBe(200)
+    const entitlements = await ctx.app.request(
+      `/users/@me/applications/${applicationId}/entitlements`,
+      { headers: deniedHeaders }
+    )
+    expect(entitlements.status).toBe(200)
+    const connections = await ctx.app.request('/users/@me/connections', {
+      headers: deniedHeaders,
+    })
+    expect(connections.status).toBe(200)
+    const subscriptions = await ctx.app.request(
+      `/skus/${applicationId}/subscriptions`,
+      { headers: deniedHeaders }
+    )
+    expect(subscriptions.status).toBe(200)
     ctx.cleanup()
   })
 })

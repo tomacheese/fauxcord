@@ -282,7 +282,8 @@ describe('RESUME payload validation', () => {
     const reconnectPromise = nextMessage(ws1)
     const ws1ClosePromise = nextClose(ws1)
     sendReconnect(session)
-    expect((await reconnectPromise).op).toBe(GatewayOp.Reconnect)
+    const reconnect = await reconnectPromise
+    expect(reconnect.op).toBe(GatewayOp.Reconnect)
     await ws1ClosePromise
 
     // The service emits MESSAGE_CREATE through gatewayBus after the original
@@ -325,6 +326,31 @@ describe('RESUME payload validation', () => {
 
     expect(received[0]?.t).toBe('MESSAGE_CREATE')
     expect(received.at(-1)?.t).toBe('RESUMED')
+    const replaySequence = received[0]?.s as number
+    const resumedSequence = received.at(-1)?.s as number
+    expect(ready.s as number).toBeLessThan(replaySequence)
+    expect(replaySequence).toBeLessThan(resumedSequence)
+
+    const nextDispatch = new Promise<Record<string, unknown>>((resolve) => {
+      ws2.on('message', (raw: Buffer) => {
+        const payload = JSON.parse(raw.toString()) as Record<string, unknown>
+        if (payload.t === 'MESSAGE_CREATE') resolve(payload)
+      })
+    })
+    const createdAfterResume = await fetch(
+      `${httpUrl}/api/v10/channels/${channel}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bot resumetoken',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: 'after resume' }),
+      }
+    )
+    expect(createdAfterResume.status).toBe(200)
+    const dispatchedAfterResume = await nextDispatch
+    expect(dispatchedAfterResume.s as number).toBeGreaterThan(resumedSequence)
 
     ws1.close()
     ws2.close()

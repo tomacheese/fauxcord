@@ -353,6 +353,16 @@ export function initializeDatabase(dbPath: string): Database {
       refresh_token TEXT UNIQUE
     );
 
+    CREATE TABLE IF NOT EXISTS partner_sdk_provisional_identities (
+      client_id           TEXT NOT NULL REFERENCES oauth2_clients(client_id) ON DELETE CASCADE,
+      external_auth_token TEXT NOT NULL,
+      user_id             TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (client_id, external_auth_token)
+    );
+    CREATE INDEX IF NOT EXISTS idx_partner_sdk_provisional_identities_user
+      ON partner_sdk_provisional_identities(user_id);
+
     CREATE TABLE IF NOT EXISTS invites (
       code        TEXT PRIMARY KEY,
       channel_id  TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,

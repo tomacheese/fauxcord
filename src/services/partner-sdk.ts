@@ -27,6 +27,12 @@ export function issueProvisionalToken(
     `INSERT INTO oauth2_access_tokens (token, client_id, user_id, scope, expires_at)
      VALUES (?, ?, ?, 'identify', ?)`
   ).run(accessToken, clientId, userId, expiresAt.toISOString())
+  db.prepare(
+    `INSERT INTO partner_sdk_provisional_identities
+       (client_id, external_auth_token, user_id)
+     VALUES (?, ?, ?)
+     ON CONFLICT(client_id, external_auth_token) DO UPDATE SET user_id = excluded.user_id`
+  ).run(clientId, externalUserId, userId)
   return {
     token_type: 'Bearer',
     access_token: accessToken,
@@ -37,6 +43,20 @@ export function issueProvisionalToken(
     scopes: ['identify'],
     expires_at_s: Math.floor(expiresAt.getTime() / 1000),
   }
+}
+
+/** Removes only the provisional identity association, preserving OAuth credentials. */
+export function unmergeProvisionalIdentity(
+  db: Database,
+  clientId: string,
+  externalAuthToken: string
+): void {
+  db.transaction(() => {
+    db.prepare(
+      `DELETE FROM partner_sdk_provisional_identities
+       WHERE client_id = ? AND external_auth_token = ?`
+    ).run(clientId, externalAuthToken)
+  })()
 }
 
 export function acceptsPartnerClient(

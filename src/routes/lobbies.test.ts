@@ -13,13 +13,11 @@ import { createLobbyRoutes } from './lobbies'
 describe('lobby routes', () => {
   let app: Hono<AppEnv>
   let token: string
-  let applicationId: string
   let channelId: string
 
   beforeEach(() => {
     const db = initializeDatabase(':memory:')
     const application = seedApplicationOwner(db)
-    applicationId = application.applicationId
     token = seedBot(db, 'Bot lobby-routes', application.ownerId)
     const guildId = seedGuild(db, token)
     channelId = seedChannel(db, guildId)

@@ -1716,7 +1716,7 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     method: 'post',
     successStatus: 204,
     request: (f) => ({
-      path: `/api/v10/channels/${f.channelId}/send-soundboard-sound`,
+      path: `/api/v10/channels/${f.voiceChannelId}/send-soundboard-sound`,
       init: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3512,7 +3512,7 @@ function mutationEffectFor(
         'a channel soundboard playback to be recorded',
         `SELECT COUNT(*) AS count FROM channel_soundboard_playbacks
          WHERE channel_id = ? AND user_id = ? AND sound_id = ?`,
-        [f.channelId, f.userId, f.guildSoundboardSoundId]
+        [f.voiceChannelId, f.userId, f.guildSoundboardSoundId]
       )
     }
     case 'post /guilds/{guild_id}/auto-moderation/rules 200': {
@@ -3826,6 +3826,116 @@ function mutationEffectFor(
   }
 }
 
+/**
+ * Reads the affected API surface again after every mutation.  The SQL effect
+ * catalog below remains a supplemental persistence invariant; this HTTP read
+ * is the contract-level observation so route authorization and response
+ * mapping cannot be bypassed by an in-process database assertion.
+ */
+async function observeMutationOverHttp(
+  entry: LegacySpecEndpoint,
+  baseUrl: string,
+  fixture: ContractFixture
+): Promise<void> {
+  const observation = (() => {
+    if (entry.specPath === '/channels/{channel_id}/send-soundboard-sound')
+      return {
+        path: `/api/v10/channels/${fixture.voiceChannelId}`,
+        expectedId: fixture.voiceChannelId,
+        absent: false,
+      }
+    if (entry.specPath.includes('/applications/{application_id}/emojis'))
+      return { path: `/api/v10/applications/${fixture.applicationId}/emojis`, absent: false }
+    if (entry.specPath.includes('/applications/{application_id}/entitlements'))
+      return { path: `/api/v10/applications/${fixture.applicationId}/entitlements`, absent: false }
+    if (
+      entry.specPath.includes(
+        '/applications/{application_id}/role-connections/metadata'
+      )
+    )
+      return { path: `/api/v10/applications/${fixture.applicationId}/role-connections/metadata`, absent: false }
+    if (entry.specPath.startsWith('/applications/'))
+      return { path: `/api/v10/applications/${fixture.applicationId}`, expectedId: fixture.applicationId, absent: false }
+    if (entry.specPath.includes('/channels/{channel_id}/messages'))
+      return { path: `/api/v10/channels/${fixture.channelId}/messages`, absent: false }
+    if (entry.specPath.startsWith('/channels/'))
+      return {
+        path: `/api/v10/channels/${fixture.channelId}`,
+        expectedId: fixture.channelId,
+        absent:
+          entry.method === 'delete' &&
+          entry.specPath === '/channels/{channel_id}',
+      }
+    if (entry.specPath.includes('/guilds/{guild_id}/scheduled-events'))
+      return { path: `/api/v10/guilds/${fixture.guildId}/scheduled-events`, absent: false }
+    if (entry.specPath.includes('/guilds/{guild_id}/soundboard-sounds'))
+      return { path: `/api/v10/guilds/${fixture.guildId}/soundboard-sounds`, absent: false }
+    if (entry.specPath.includes('/guilds/{guild_id}/stickers'))
+      return { path: `/api/v10/guilds/${fixture.guildId}/stickers`, absent: false }
+    if (entry.specPath.includes('/guilds/{guild_id}/templates'))
+      return { path: `/api/v10/guilds/${fixture.guildId}/templates`, absent: false }
+    if (entry.specPath.includes('/guilds/{guild_id}/members'))
+      return { path: `/api/v10/guilds/${fixture.guildId}/members`, absent: false }
+    if (entry.specPath.startsWith('/guilds/'))
+      return {
+        path: `/api/v10/guilds/${fixture.guildId}`,
+        expectedId: fixture.guildId,
+        absent:
+          entry.method === 'delete' && entry.specPath === '/guilds/{guild_id}',
+      }
+    if (entry.specPath.startsWith('/invites/')) {
+      const code = entry.method === 'delete' ? fixture.deletableInviteCode : fixture.inviteCode
+      return { path: `/api/v10/invites/${code}`, absent: entry.method === 'delete' }
+    }
+    if (entry.specPath.startsWith('/interactions/'))
+      return { path: `/api/v10/webhooks/${fixture.applicationId}/${fixture.originalInteractionToken}/messages/@original`, absent: false }
+    if (entry.specPath.startsWith('/oauth2/'))
+      return { path: '/api/v10/oauth2/applications/@me', absent: false }
+    if (entry.specPath.startsWith('/users/')) return { path: '/api/v10/users/@me', expectedId: fixture.userId, absent: false }
+    if (entry.specPath.startsWith('/webhooks/'))
+      return {
+        path: `/api/v10/webhooks/${fixture.webhookId}`,
+        expectedId: fixture.webhookId,
+        absent:
+          entry.method === 'delete' &&
+          (entry.specPath === '/webhooks/{webhook_id}' ||
+            entry.specPath === '/webhooks/{webhook_id}/{webhook_token}'),
+      }
+    throw new Error(`No HTTP observation route declared for ${entry.specPath}`)
+  })()
+  const headers = new Headers()
+  const authentication = authenticationFor(entry)
+  if (authentication === 'bearer') {
+    headers.set('Authorization', `Bearer ${fixture.bearerToken}`)
+  } else if (authentication !== 'public') {
+    headers.set('Authorization', fixture.token)
+  }
+  const observed = await fetch(`${baseUrl}${observation.path}`, { headers })
+  if (observation.absent) {
+    if (observed.status !== 404) {
+      throw new Error(`${entry.method.toUpperCase()} ${entry.specPath} follow-up HTTP resource is still present`)
+    }
+    return
+  }
+  if (!observed.ok) {
+    throw new Error(
+      `${entry.method.toUpperCase()} ${entry.specPath} follow-up HTTP observation returned ${observed.status}`
+    )
+  }
+  const body: unknown = await observed.json().catch(() => null)
+  if (!body || (typeof body !== 'object' && !Array.isArray(body))) {
+    throw new Error(`${entry.method.toUpperCase()} ${entry.specPath} follow-up HTTP response was not observable JSON`)
+  }
+  if (
+    observation.expectedId &&
+    (typeof body !== 'object' ||
+      Array.isArray(body) ||
+      Reflect.get(body, 'id') !== observation.expectedId)
+  ) {
+    throw new Error(`${entry.method.toUpperCase()} ${entry.specPath} follow-up HTTP resource identity differed`)
+  }
+}
+
 function createOperationAssertion(
   entry: LegacySpecEndpoint,
   status: number
@@ -3863,6 +3973,7 @@ function createOperationAssertion(
     }
 
     if (entry.method === 'get') return
+    await observeMutationOverHttp(entry, baseUrl, fixture)
     const effect = mutationEffects
       .get(fixture)
       ?.get(`${entry.method} ${entry.specPath} ${status}`)
@@ -3916,39 +4027,11 @@ interface Task5Precondition {
 
 const task5Preconditions = new WeakMap<ContractFixture, Task5Precondition>()
 
-function task5Entry(
-  specPath: string,
-  method: SpecEndpoint['method'],
-  authentication: ContractAuthentication,
-  status: number,
-  body: ContractBodyMode,
-  request: (fixture: ContractFixture) => ContractRequest
-): SpecEndpoint {
-  const key = `${method} ${specPath} ${status}`
-  return {
-    specPath,
-    method,
-    authentication,
-    createFixture: (factory) => factory.create(),
-    successBranches: [{
-      status,
-      contentType: body === 'empty' ? null : 'application/json',
-      body,
-      request: (fixture) => {
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define -- Captures request-specific state in the assertion helper below.
-        captureTask5Precondition(key, fixture)
-        return request(fixture)
-      },
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define -- The operation assertion table is kept immediately below the manifest factory.
-      assert: ({ fixture, response }) => task5Assertion(key, fixture, response),
-    }],
-  }
-}
-
 const task5Json = { headers: { 'Content-Type': 'application/json' } }
 
 async function task5Assertion(
   key: string,
+  baseUrl: string,
   f: ContractFixture,
   response: Response
 ): Promise<void> {
@@ -3997,12 +4080,27 @@ async function task5Assertion(
         : JSON.stringify(body.metadata) !== expected.metadata) ||
       body.flags !== 0 ||
       !Array.isArray(body.members) ||
-      !body.members.some(
+      body.members.every(
         (member) =>
-          member &&
+          !(member &&
           typeof member === 'object' &&
-          (member as { id?: unknown }).id === f.userId
+          (member as { id?: unknown }).id === f.userId)
       )
+    )
+      failure()
+    const observed = await fetch(`${baseUrl}/api/v10/lobbies/${lobbyId}`, {
+      headers: { Authorization: f.token },
+    })
+    const observedBody = (await observed.json().catch(() => null)) as Record<
+      string,
+      unknown
+    > | null
+    if (
+      observed.status !== 200 ||
+      observedBody?.id !== lobbyId ||
+      observedBody.application_id !== f.applicationId ||
+      observedBody.owner_id !== f.userId ||
+      observedBody.channel_id !== expected.linkedChannelId
     )
       failure()
     one(
@@ -4047,8 +4145,7 @@ async function task5Assertion(
         }
       | undefined
     if (
-      !row ||
-      row.client_id !== f.applicationId ||
+      row?.client_id !== f.applicationId ||
       row.scope !== 'identify' ||
       row.username !== `provisional-${externalUserId}` ||
       idToken !== `provisional-id-${row.user_id}`
@@ -4060,11 +4157,11 @@ async function task5Assertion(
     const body = await jsonValue()
     const members = Array.isArray(body) ? body : [body]
     if (
-      !members.some(
+      members.every(
         (member) =>
-          member &&
+          !(member &&
           typeof member === 'object' &&
-          (member as { id?: unknown }).id === f.memberId
+          (member as { id?: unknown }).id === f.memberId)
       )
     )
       failure()
@@ -4145,9 +4242,21 @@ async function task5Assertion(
     }
     case 'put /partner-sdk/dms/{user_id_1}/{user_id_2}/messages/{message_id}/moderation-metadata 204': { one('SELECT user_id_1, user_id_2, metadata FROM partner_sdk_moderation WHERE message_id = ?', [f.messageId], { user_id_1: f.userId, user_id_2: f.memberId, metadata: '{"state":"ok"}' }); break
     }
-    case 'post /partner-sdk/provisional-accounts/unmerge 204': { one('SELECT client_secret FROM oauth2_clients WHERE client_id = ?', [f.applicationId], { client_secret: 'contract-secret:unmerged' }); break
+    case 'post /partner-sdk/provisional-accounts/unmerge 204': {
+      one(
+        'SELECT user_id FROM partner_sdk_provisional_identities WHERE client_id = ? AND external_auth_token = ?',
+        [f.applicationId, 'external'],
+        undefined
+      )
+      break
     }
-    case 'post /partner-sdk/provisional-accounts/unmerge/bot 204': { one('SELECT client_secret FROM oauth2_clients WHERE client_id = ?', [f.applicationId], { client_secret: 'contract-secret:bot-unmerged' }); break
+    case 'post /partner-sdk/provisional-accounts/unmerge/bot 204': {
+      one(
+        'SELECT user_id FROM partner_sdk_provisional_identities WHERE client_id = ? AND external_auth_token = ?',
+        [f.applicationId, f.userId],
+        undefined
+      )
+      break
     }
     case 'post /partner-sdk/token 200': {
       await provisionalToken('external')
@@ -4195,6 +4304,81 @@ async function task5Assertion(
     }
   }
 }
+
+/** Re-reads the changed resource through the production HTTP API. */
+async function observeTask5MutationOverHttp(
+  key: string,
+  baseUrl: string,
+  f: ContractFixture
+): Promise<void> {
+  if (key.startsWith('put /lobbies') || key.startsWith('post /lobbies')) {
+    return
+  }
+  let path: string | undefined
+  let init: RequestInit | undefined
+  let authorization: string | undefined = f.token
+  if (key.includes('/stage-instances')) {
+    path = `/api/v10/stage-instances/${
+      key === 'post /stage-instances 200' ? f.newStageChannelId : f.stageChannelId
+    }`
+  } else if (key.includes('/role-connection')) {
+    path = `/api/v10/users/@me/applications/${f.applicationId}/role-connection`
+    authorization = `Bearer ${f.bearerToken}`
+  } else if (key.includes('/webhooks/') && key.includes('@original')) {
+    path = `/api/v10/webhooks/${f.userId}/${f.originalInteractionToken}/messages/@original`
+    authorization = undefined
+  } else if (key === 'post /partner-sdk/provisional-accounts/unmerge 204') {
+    path = '/api/v10/partner-sdk/token'
+    authorization = undefined
+    init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: f.applicationId,
+        client_secret: 'contract-secret',
+        external_auth_token: 'after-unmerge',
+        external_auth_type: 1,
+      }),
+    }
+  } else if (key === 'post /partner-sdk/provisional-accounts/unmerge/bot 204') {
+    path = '/api/v10/partner-sdk/token/bot'
+    init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: f.token },
+      body: JSON.stringify({ external_user_id: f.userId }),
+    }
+    authorization = undefined
+  } else if (key.includes('/lobbies/')) {
+    path = `/api/v10/lobbies/${f.lobbyId}`
+  } else if (key.includes('/users/@me/guilds/')) {
+    path = '/api/v10/users/@me/guilds'
+  }
+  if (!path) return
+  const headers = new Headers(init?.headers)
+  if (authorization) headers.set('Authorization', authorization)
+  const observed = await fetch(`${baseUrl}${path}`, { ...init, headers })
+  const expectsAbsentResource =
+    key === 'delete /stage-instances/{channel_id} 204' ||
+    key === 'delete /lobbies/{lobby_id} 204' ||
+    key ===
+      'delete /webhooks/{webhook_id}/{webhook_token}/messages/@original 204'
+  if (expectsAbsentResource) {
+    if (observed.status !== 404) {
+      throw new Error(`${key} follow-up HTTP resource is still present`)
+    }
+    return
+  }
+  if (!observed.ok) {
+    throw new Error(`${key} follow-up HTTP observation returned ${observed.status}`)
+  }
+  const body: unknown = await observed.json().catch(() => null)
+  if (!body || typeof body !== 'object') {
+    throw new Error(`${key} follow-up HTTP response was not observable JSON`)
+  }
+  if (key === 'post /stage-instances 200' && (body as { channel_id?: unknown }).channel_id !== f.newStageChannelId) {
+    throw new Error(`${key} follow-up HTTP resource identity differed`)
+  }
+}
 function captureTask5Precondition(key: string, f: ContractFixture): void {
   const precondition = task5Preconditions.get(f) ?? {}
   if (key === 'put /lobbies 200' || key === 'post /lobbies 201')
@@ -4203,19 +4387,73 @@ function captureTask5Precondition(key: string, f: ContractFixture): void {
         ({ id }) => id
       )
     )
-  if (
-    key === 'post /partner-sdk/token 200' ||
-    key === 'post /partner-sdk/token/bot 200'
-  )
-    precondition.existingProvisionalTokens = new Set(
-      (
-        f.db
-          .prepare("SELECT token FROM oauth2_access_tokens WHERE token LIKE 'provisional_%'")
-          .all() as { token: string }[]
-      ).map(({ token }) => token)
-    )
+  switch (key) {
+    case 'post /partner-sdk/token 200':
+    case 'post /partner-sdk/token/bot 200': {
+      precondition.existingProvisionalTokens = new Set(
+        (
+          f.db
+            .prepare("SELECT token FROM oauth2_access_tokens WHERE token LIKE 'provisional_%'")
+            .all() as { token: string }[]
+        ).map(({ token }) => token)
+      )
+      break
+    }
+    case 'post /partner-sdk/provisional-accounts/unmerge 204': {
+      f.db
+        .prepare(
+          `INSERT INTO partner_sdk_provisional_identities
+             (client_id, external_auth_token, user_id) VALUES (?, ?, ?)`
+        )
+        .run(f.applicationId, 'external', f.memberId)
+      break
+    }
+    case 'post /partner-sdk/provisional-accounts/unmerge/bot 204': {
+      f.db
+        .prepare(
+          `INSERT INTO partner_sdk_provisional_identities
+             (client_id, external_auth_token, user_id) VALUES (?, ?, ?)`
+        )
+        .run(f.applicationId, f.userId, f.userId)
+      break
+    }
+    default: {
+      break
+    }
+  }
   task5Preconditions.set(f, precondition)
 }
+
+function task5Entry(
+  specPath: string,
+  method: SpecEndpoint['method'],
+  authentication: ContractAuthentication,
+  status: number,
+  body: ContractBodyMode,
+  request: (fixture: ContractFixture) => ContractRequest
+): SpecEndpoint {
+  const key = `${method} ${specPath} ${status}`
+  return {
+    specPath,
+    method,
+    authentication,
+    createFixture: (factory) => factory.create(),
+    successBranches: [{
+      status,
+      contentType: body === 'empty' ? null : 'application/json',
+      body,
+      request: (fixture) => {
+        captureTask5Precondition(key, fixture)
+        return request(fixture)
+      },
+      assert: async ({ baseUrl, fixture, response }) => {
+        await task5Assertion(key, baseUrl, fixture, response)
+        await observeTask5MutationOverHttp(key, baseUrl, fixture)
+      },
+    }],
+  }
+}
+
 const TASK5_MANIFEST: SpecEndpoint[] = [
   task5Entry('/lobbies', 'put', 'bot', 200, 'json', () => ({ path: '/api/v10/lobbies', init: { method: 'PUT', ...task5Json, body: JSON.stringify({ secret: 'contract' }) } })),
   task5Entry('/lobbies', 'post', 'bot', 201, 'json', (f) => ({ path: '/api/v10/lobbies', init: { method: 'POST', ...task5Json, body: JSON.stringify({ channel_id: f.channelId, metadata: { mode: 'contract' } }) } })),
