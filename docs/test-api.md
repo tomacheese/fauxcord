@@ -276,6 +276,18 @@ If `db` is not `"ok"`, there is a problem with SQLite.
 
 ---
 
+## `GET /_mock/attachments/:channelId/:messageId/:filename` — Download an attachment
+
+Message and application attachment responses contain a public `url` and `proxy_url` under this path. Fetch the returned URL without an Authorization header to verify the uploaded bytes in your test.
+
+```bash
+curl http://localhost:3000/_mock/attachments/333333333333333333/1513052391153471489/proof.txt
+```
+
+The response uses the uploaded file's content type and returns the original bytes. An attachment that does not exist returns `404` with Fauxcord's standard error response.
+
+---
+
 ## Typical test flow
 
 ```

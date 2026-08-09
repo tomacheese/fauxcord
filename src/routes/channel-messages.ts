@@ -216,9 +216,11 @@ export function createChannelMessageRoutes(
       }
     }
 
+    const responseMessage = getMessage(db, messageId, baseUrl) ?? msg
+
     if (hasPoll) {
       const pollField = payload.poll as PollCreatePayloadField
-      createPoll(db, msg.id, {
+      createPoll(db, responseMessage.id, {
         question: pollField.question.text,
         answers: pollField.answers.map((a) => ({
           text: a.poll_media.text,
@@ -227,11 +229,11 @@ export function createChannelMessageRoutes(
         allowMultiselect: pollField.allow_multiselect,
         durationHours: pollField.duration,
       })
-      const poll = getPollForMessage(db, msg.id)
-      return c.json({ ...msg, poll })
+      const poll = getPollForMessage(db, responseMessage.id)
+      return c.json({ ...responseMessage, poll })
     }
 
-    return c.json(msg)
+    return c.json(responseMessage)
   })
 
   // PATCH /channels/:channelId/messages/:messageId — Edit a message
