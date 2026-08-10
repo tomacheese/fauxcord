@@ -40,7 +40,7 @@
     "@hono/node-server": "2.1.0",
     "better-sqlite3": "13.0.3",
     "discord-api-types": "0.38.53",
-    "hono": "4.13.0",
+    "hono": "4.13.1",
     "tsx": "4.23.9",
     "ws": "8.21.2"
   }
