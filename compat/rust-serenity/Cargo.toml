@@ -48,7 +48,7 @@ serde = { version = "1", features = ["derive"] }
 # impl this file imports (0.10's) didn't match the trait `Webhook.token`
 # (0.8's `Secret<String>`) actually implements, and `cargo build` rejected
 # `.expose_secret()` as "method not found".
-secrecy = "0.8"
+secrecy = "0.10"
 # Used directly for the health-check poll and the /_test/setup POST (the same
 # role fetch() plays in the JS verifiers) — kept independent of whatever
 # internal HTTP client serenity's "http" feature pulls in. `rustls-tls`
