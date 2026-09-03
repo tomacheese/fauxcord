@@ -62,7 +62,7 @@ secrecy = "0.8"
 # to `HttpBuilder::client()` (0.13's type) didn't match the type that method
 # actually expects (serenity's own 0.12 `reqwest::Client`), and `cargo build`
 # rejected it as a type mismatch.
-reqwest = { version = "0.12", default-features = false, features = [
+reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
