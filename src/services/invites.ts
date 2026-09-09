@@ -7,6 +7,7 @@
 import type { Database } from '../db'
 import { getUser, type UserObject } from './users'
 import { toDiscordTimestamp } from '../timestamp'
+import { TARGET_USERS_CSV_HEADER } from '../validators/invite-target-users'
 // Used for compile-time type drift detection.
 import type { APIInvite } from 'discord-api-types/v10'
 
@@ -367,20 +368,36 @@ export function getInviteTargetUsersCsv(
 }
 
 /**
- * Sets (replaces) the target users for an invite. The mock processes the
- * file synchronously and immediately marks the job COMPLETED — Fauxcord is
- * a deterministic mock and does not simulate asynchronous delay.
+ * Reads the current target-user IDs for an invite from its stored CSV.
  * @param db - Database
  * @param code - Invite code (caller must have already verified the invite exists)
- * @param rawCsv - The raw CSV file content, stored verbatim for later GET
- * @param userIds - The validated user IDs parsed from the CSV
+ * @returns The current user IDs, in stored order (empty array if never set)
  */
-export function setInviteTargetUsers(
+function currentTargetUserIds(db: Database, code: string): string[] {
+  const row = db
+    .prepare('SELECT raw_csv FROM invite_target_users WHERE code = ?')
+    .get(code) as { raw_csv: string } | undefined
+  if (!row) return []
+  const lines = row.raw_csv
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  return lines.slice(1)
+}
+
+/**
+ * Persists the full list of target user IDs for an invite, regenerating
+ * the canonical CSV representation and marking the job COMPLETED.
+ * @param db - Database
+ * @param code - Invite code (caller must have already verified the invite exists)
+ * @param userIds - The complete list of target user IDs to store
+ */
+function persistTargetUserIds(
   db: Database,
   code: string,
-  rawCsv: string,
   userIds: string[]
 ): void {
+  const rawCsv = `${TARGET_USERS_CSV_HEADER}\n${userIds.map((id) => `${id}\n`).join('')}`
   db.prepare(
     `INSERT INTO invite_target_users
        (code, raw_csv, total_users, processed_users, status, created_at, completed_at, error_message)
@@ -394,6 +411,66 @@ export function setInviteTargetUsers(
        completed_at = excluded.completed_at,
        error_message = excluded.error_message`
   ).run(code, rawCsv, userIds.length, userIds.length)
+}
+
+/**
+ * Sets (replaces) the target users for an invite. The mock processes the
+ * file synchronously and immediately marks the job COMPLETED — Fauxcord is
+ * a deterministic mock and does not simulate asynchronous delay.
+ * @param db - Database
+ * @param code - Invite code (caller must have already verified the invite exists)
+ * @param userIds - The validated user IDs parsed from the uploaded CSV
+ */
+export function setInviteTargetUsers(
+  db: Database,
+  code: string,
+  userIds: string[]
+): void {
+  persistTargetUserIds(db, code, userIds)
+}
+
+/**
+ * Adds target users to an existing invite (deduplicated, existing order
+ * preserved, new IDs appended). No-op success when an ID is already present.
+ * @param db - Database
+ * @param code - Invite code
+ * @param userIds - User IDs to add
+ * @returns false if the invite does not exist; true otherwise
+ */
+export function addInviteTargetUsers(
+  db: Database,
+  code: string,
+  userIds: string[]
+): boolean {
+  const invite = db.prepare('SELECT 1 FROM invites WHERE code = ?').get(code)
+  if (!invite) return false
+  const merged = new Set(currentTargetUserIds(db, code))
+  for (const id of userIds) merged.add(id)
+  persistTargetUserIds(db, code, [...merged])
+  return true
+}
+
+/**
+ * Removes target users from an existing invite. No-op success when an ID
+ * is not present.
+ * @param db - Database
+ * @param code - Invite code
+ * @param userIds - User IDs to remove
+ * @returns false if the invite does not exist; true otherwise
+ */
+export function removeInviteTargetUsers(
+  db: Database,
+  code: string,
+  userIds: string[]
+): boolean {
+  const invite = db.prepare('SELECT 1 FROM invites WHERE code = ?').get(code)
+  if (!invite) return false
+  const toRemove = new Set(userIds)
+  const remaining = currentTargetUserIds(db, code).filter(
+    (id) => !toRemove.has(id)
+  )
+  persistTargetUserIds(db, code, remaining)
+  return true
 }
 
 /**

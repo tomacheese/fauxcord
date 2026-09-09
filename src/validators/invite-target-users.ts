@@ -7,7 +7,7 @@
  */
 
 /** Matches a Discord Snowflake ID (17-20 digits). */
-const SNOWFLAKE_PATTERN = /^\d{17,20}$/
+export const SNOWFLAKE_PATTERN = /^\d{17,20}$/
 
 /** The required CSV header line. */
 export const TARGET_USERS_CSV_HEADER = 'user_id'

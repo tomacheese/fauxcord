@@ -301,6 +301,12 @@ export function createContractFixture(db: Database): ContractFixture {
     userId,
     'deletablecode'
   )
+  const existingTargetUserId = '999999999999999990'
+  db.prepare(
+    `INSERT INTO invite_target_users
+       (code, raw_csv, total_users, processed_users, status, created_at, completed_at, error_message)
+     VALUES (?, ?, 1, 1, 2, datetime('now'), datetime('now'), NULL)`
+  ).run(inviteCode, `user_id\n${existingTargetUserId}\n`)
   const bannedUserId = seedBan(db, guildId, undefined, 'Contract test ban')
   const threadId = '888888888888888888'
   db.prepare(
@@ -553,6 +559,7 @@ export function createContractFixture(db: Database): ContractFixture {
     emojiId,
     inviteCode,
     deletableInviteCode,
+    existingTargetUserId,
     bannedUserId,
     banTargetUserId,
     threadId,

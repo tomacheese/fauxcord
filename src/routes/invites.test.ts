@@ -265,4 +265,205 @@ describe('Invites API', () => {
       expect(body.code).toBe(10_006)
     })
   })
+
+  describe('POST /invites/:code/target-users/bulk-add', () => {
+    it('adds target users and returns 204', async () => {
+      const res = await app.request(`/invites/${code}/target-users/bulk-add`, {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_ids: ['111111111111111111'] }),
+      })
+      expect(res.status).toBe(204)
+
+      const csvRes = await app.request(`/invites/${code}/target-users`, {
+        headers: { Authorization: token },
+      })
+      expect(await csvRes.text()).toBe('user_id\n111111111111111111\n')
+    })
+
+    it('returns 400 for an empty user_ids array', async () => {
+      const res = await app.request(`/invites/${code}/target-users/bulk-add`, {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_ids: [] }),
+      })
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 400 for a malformed (non-Snowflake) user ID', async () => {
+      const res = await app.request(`/invites/${code}/target-users/bulk-add`, {
+        method: 'POST',
+        headers: {
+          Authorization: token,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_ids: ['123'] }),
+      })
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 for an unknown code', async () => {
+      const res = await app.request(
+        '/invites/nonexistent/target-users/bulk-add',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_ids: ['111111111111111111'] }),
+        }
+      )
+      expect(res.status).toBe(404)
+    })
+  })
+
+  describe('POST /invites/:code/target-users/bulk-delete', () => {
+    it('removes target users and returns 204', async () => {
+      await app.request(`/invites/${code}/target-users/bulk-add`, {
+        method: 'POST',
+        headers: { Authorization: token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: ['111111111111111111'] }),
+      })
+
+      const res = await app.request(
+        `/invites/${code}/target-users/bulk-delete`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_ids: ['111111111111111111'] }),
+        }
+      )
+      expect(res.status).toBe(204)
+
+      const csvRes = await app.request(`/invites/${code}/target-users`, {
+        headers: { Authorization: token },
+      })
+      expect(await csvRes.text()).toBe('user_id\n')
+    })
+
+    it('returns 400 for a user_ids array exceeding 1000 entries', async () => {
+      const userIds = Array.from({ length: 1001 }, (_, i) =>
+        String(100_000_000_000_000_000n + BigInt(i))
+      )
+      const res = await app.request(
+        `/invites/${code}/target-users/bulk-delete`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_ids: userIds }),
+        }
+      )
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 400 for a malformed (non-Snowflake) user ID', async () => {
+      const res = await app.request(
+        `/invites/${code}/target-users/bulk-delete`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_ids: ['123'] }),
+        }
+      )
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 for an unknown code', async () => {
+      const res = await app.request(
+        '/invites/nonexistent/target-users/bulk-delete',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_ids: ['111111111111111111'] }),
+        }
+      )
+      expect(res.status).toBe(404)
+    })
+  })
+
+  describe('PUT /invites/:code/target-users/:user_id', () => {
+    it('adds a single target user and returns 204', async () => {
+      const res = await app.request(
+        `/invites/${code}/target-users/111111111111111111`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(204)
+
+      const csvRes = await app.request(`/invites/${code}/target-users`, {
+        headers: { Authorization: token },
+      })
+      expect(await csvRes.text()).toBe('user_id\n111111111111111111\n')
+    })
+
+    it('returns 400 for a malformed (non-Snowflake) user ID', async () => {
+      const res = await app.request(`/invites/${code}/target-users/123`, {
+        method: 'PUT',
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 for an unknown code', async () => {
+      const res = await app.request(
+        '/invites/nonexistent/target-users/111111111111111111',
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(404)
+    })
+  })
+
+  describe('DELETE /invites/:code/target-users/:user_id', () => {
+    it('removes a single target user and returns 204', async () => {
+      await app.request(`/invites/${code}/target-users/111111111111111111`, {
+        method: 'PUT',
+        headers: { Authorization: token },
+      })
+
+      const res = await app.request(
+        `/invites/${code}/target-users/111111111111111111`,
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(204)
+
+      const csvRes = await app.request(`/invites/${code}/target-users`, {
+        headers: { Authorization: token },
+      })
+      expect(await csvRes.text()).toBe('user_id\n')
+    })
+
+    it('returns 400 for a malformed (non-Snowflake) user ID', async () => {
+      const res = await app.request(`/invites/${code}/target-users/123`, {
+        method: 'DELETE',
+        headers: { Authorization: token },
+      })
+      expect(res.status).toBe(400)
+    })
+
+    it('returns 404 for an unknown code', async () => {
+      const res = await app.request(
+        '/invites/nonexistent/target-users/111111111111111111',
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+      expect(res.status).toBe(404)
+    })
+  })
 })

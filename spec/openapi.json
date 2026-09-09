@@ -7460,8 +7460,7 @@
             "name": "after",
             "in": "query",
             "schema": {
-              "type": "integer",
-              "minimum": 0
+              "$ref": "#/components/schemas/SnowflakeType"
             }
           }
         ],
@@ -7548,7 +7547,7 @@
                       "string",
                       "null"
                     ],
-                    "maxLength": 190
+                    "maxLength": 300
                   },
                   "banner": {
                     "type": [
@@ -12328,6 +12327,154 @@
         ]
       }
     },
+    "/invites/{code}/target-users/bulk-add": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "maxLength": 152133
+          },
+          "required": true
+        }
+      ],
+      "post": {
+        "description": "Add multiple target users to an existing invite.",
+        "operationId": "bulk_add_invite_target_users",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_ids": {
+                    "type": "array",
+                    "description": "The IDs of the users to target.",
+                    "items": {
+                      "$ref": "#/components/schemas/SnowflakeType"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "user_ids"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "204 response for bulk_add_invite_target_users",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
+    "/invites/{code}/target-users/bulk-delete": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "maxLength": 152133
+          },
+          "required": true
+        }
+      ],
+      "post": {
+        "description": "Remove multiple target users from an existing invite.",
+        "operationId": "bulk_remove_invite_target_users",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_ids": {
+                    "type": "array",
+                    "description": "The IDs of the users to stop targeting.",
+                    "items": {
+                      "$ref": "#/components/schemas/SnowflakeType"
+                    },
+                    "minItems": 1,
+                    "maxItems": 1000
+                  }
+                },
+                "required": [
+                  "user_ids"
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "204 response for bulk_remove_invite_target_users",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
     "/invites/{code}/target-users/job-status": {
       "parameters": [
         {
@@ -12368,6 +12515,101 @@
                 "schema": {
                   "$ref": "#/components/schemas/TargetUsersJobStatusResponse"
                 }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
+    "/invites/{code}/target-users/{user_id}": {
+      "parameters": [
+        {
+          "name": "code",
+          "in": "path",
+          "schema": {
+            "type": "string",
+            "maxLength": 152133
+          },
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        }
+      ],
+      "put": {
+        "description": "Add a target user to an existing invite.",
+        "operationId": "add_invite_target_user",
+        "responses": {
+          "204": {
+            "description": "204 response for add_invite_target_user",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      },
+      "delete": {
+        "description": "Remove a target user from an existing invite.",
+        "operationId": "remove_invite_target_user",
+        "responses": {
+          "204": {
+            "description": "204 response for remove_invite_target_user",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
               }
             }
           },
@@ -17545,6 +17787,19 @@
               "boolean",
               "null"
             ]
+          },
+          "file_types": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "maxItems": 10,
+            "uniqueItems": true
           }
         },
         "required": [
@@ -17600,6 +17855,14 @@
           },
           "required": {
             "type": "boolean"
+          },
+          "file_types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 16
+            },
+            "uniqueItems": true
           }
         },
         "required": [
@@ -20474,11 +20737,21 @@
           "primary_sku_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
+          "flags": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flags_new": {
+            "type": "string"
+          },
           "bot": {
             "$ref": "#/components/schemas/UserResponse"
           },
           "slug": {
             "type": "string"
+          },
+          "vibegrations_project_id": {
+            "$ref": "#/components/schemas/SnowflakeType"
           },
           "guild_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -20519,13 +20792,6 @@
           "verify_key": {
             "type": "string"
           },
-          "flags": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "flags_new": {
-            "type": "string"
-          },
           "max_participants": {
             "type": [
               "integer",
@@ -20547,9 +20813,9 @@
           "icon",
           "description",
           "type",
-          "verify_key",
           "flags",
-          "flags_new"
+          "flags_new",
+          "verify_key"
         ]
       },
       "ApplicationRoleConnectionsMetadataItemRequest": {
@@ -21610,6 +21876,13 @@
           "primary_sku_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
+          "flags": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flags_new": {
+            "type": "string"
+          },
           "bot": {
             "$ref": "#/components/schemas/UserResponse"
           }
@@ -21619,7 +21892,9 @@
           "name",
           "icon",
           "description",
-          "type"
+          "type",
+          "flags",
+          "flags_new"
         ]
       },
       "BasicGuildMemberResponse": {
@@ -22163,12 +22438,6 @@
               }
             ]
           },
-          "remove_member": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
           "additional_name": {
             "type": [
               "string",
@@ -22176,6 +22445,12 @@
             ],
             "minLength": 1,
             "maxLength": 80
+          },
+          "remove_member": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         },
         "required": [
@@ -25526,6 +25801,19 @@
               "boolean",
               "null"
             ]
+          },
+          "file_types": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 16
+            },
+            "maxItems": 10,
+            "uniqueItems": true
           }
         },
         "required": [
@@ -27158,16 +27446,6 @@
           "target_message_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
-          "liveliness": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/GuildLivelinessResponse"
-              }
-            ]
-          },
           "uses": {
             "type": "integer",
             "format": "int32"
@@ -27348,28 +27626,6 @@
             }
           }
         }
-      },
-      "GuildLivelinessResponse": {
-        "type": "object",
-        "properties": {
-          "msg_activity_bins": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          "last_updated_ts": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "msg_activity_bins"
-        ]
       },
       "GuildMFALevel": {
         "type": "integer",
@@ -29956,6 +30212,13 @@
           "primary_sku_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
+          "flags": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flags_new": {
+            "type": "string"
+          },
           "bot": {
             "$ref": "#/components/schemas/UserResponse"
           }
@@ -29965,7 +30228,9 @@
           "name",
           "icon",
           "description",
-          "type"
+          "type",
+          "flags",
+          "flags_new"
         ]
       },
       "IntegrationExpireBehaviorTypes": {
@@ -30295,11 +30560,21 @@
           "primary_sku_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
+          "flags": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flags_new": {
+            "type": "string"
+          },
           "bot": {
             "$ref": "#/components/schemas/UserResponse"
           },
           "slug": {
             "type": "string"
+          },
+          "vibegrations_project_id": {
+            "$ref": "#/components/schemas/SnowflakeType"
           },
           "guild_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -30340,13 +30615,6 @@
           "verify_key": {
             "type": "string"
           },
-          "flags": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "flags_new": {
-            "type": "string"
-          },
           "max_participants": {
             "type": [
               "integer",
@@ -30368,9 +30636,9 @@
           "icon",
           "description",
           "type",
-          "verify_key",
           "flags",
-          "flags_new"
+          "flags_new",
+          "verify_key"
         ]
       },
       "InviteChannelRecipientResponse": {
@@ -31119,6 +31387,14 @@
                 ]
               }
             ]
+          },
+          "additional_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "maxLength": 80
           }
         },
         "required": [
@@ -32288,12 +32564,6 @@
             "maxLength": 1024
           },
           "is_spoiler": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "is_remix": {
             "type": [
               "boolean",
               "null"
@@ -35278,11 +35548,21 @@
           "primary_sku_id": {
             "$ref": "#/components/schemas/SnowflakeType"
           },
+          "flags": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "flags_new": {
+            "type": "string"
+          },
           "bot": {
             "$ref": "#/components/schemas/UserResponse"
           },
           "slug": {
             "type": "string"
+          },
+          "vibegrations_project_id": {
+            "$ref": "#/components/schemas/SnowflakeType"
           },
           "guild_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -35321,13 +35601,6 @@
             }
           },
           "verify_key": {
-            "type": "string"
-          },
-          "flags": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "flags_new": {
             "type": "string"
           },
           "max_participants": {
@@ -35442,9 +35715,9 @@
           "icon",
           "description",
           "type",
-          "verify_key",
           "flags",
           "flags_new",
+          "verify_key",
           "redirect_uris",
           "interactions_endpoint_url",
           "role_connections_verification_url",

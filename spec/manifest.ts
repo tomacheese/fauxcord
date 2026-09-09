@@ -131,6 +131,12 @@ export interface ContractFixture {
    * inviteCode fixture that GET /invites/{code} relies on.
    */
   deletableInviteCode: string
+  /**
+   * Seeded target user ID already present in inviteCode's target-users
+   * list, used by add/remove operations to exercise a non-empty starting
+   * state.
+   */
+  existingTargetUserId: string
   /** Seeded banned user ID (a user with a ban record in the guild) */
   bannedUserId: string
   /** Seeded unbanned user used by the ban-creation branch. */
@@ -580,6 +586,51 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
         init: { method: 'PUT', body: formData },
       }
     },
+  },
+  {
+    // 204 response, only the status code and DB side effect are asserted.
+    specPath: '/invites/{code}/target-users/bulk-add',
+    method: 'post',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}/target-users/bulk-add`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: ['999999999999999999'] }),
+      },
+    }),
+  },
+  {
+    specPath: '/invites/{code}/target-users/bulk-delete',
+    method: 'post',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}/target-users/bulk-delete`,
+      init: {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: [f.existingTargetUserId] }),
+      },
+    }),
+  },
+  {
+    specPath: '/invites/{code}/target-users/{user_id}',
+    method: 'put',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}/target-users/999999999999999999`,
+      init: { method: 'PUT' },
+    }),
+  },
+  {
+    specPath: '/invites/{code}/target-users/{user_id}',
+    method: 'delete',
+    successStatus: 204,
+    request: (f) => ({
+      path: `/api/v10/invites/${f.inviteCode}/target-users/${f.existingTargetUserId}`,
+      init: { method: 'DELETE' },
+    }),
   },
   {
     specPath: '/invites/{code}/target-users/job-status',
@@ -2902,6 +2953,29 @@ function mutationEffectFor(
         { total_users: 1, raw_csv: 'user_id\n999999999999999999\n' }
       )
     }
+    case 'post /invites/{code}/target-users/bulk-add 204':
+    case 'put /invites/{code}/target-users/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the target invite job to include the newly targeted user alongside the existing one',
+        `SELECT total_users, raw_csv FROM invite_target_users WHERE code = ?`,
+        [f.inviteCode],
+        {
+          total_users: 2,
+          raw_csv: `user_id\n${f.existingTargetUserId}\n999999999999999999\n`,
+        }
+      )
+    }
+    case 'post /invites/{code}/target-users/bulk-delete 204':
+    case 'delete /invites/{code}/target-users/{user_id} 204': {
+      return rowEffect(
+        f,
+        'the target invite job to no longer include the pre-existing targeted user',
+        `SELECT total_users, raw_csv FROM invite_target_users WHERE code = ?`,
+        [f.inviteCode],
+        { total_users: 0, raw_csv: 'user_id\n' }
+      )
+    }
     case 'patch /guilds/{guild_id} 200': {
       return rowEffect(
         f,
@@ -3884,8 +3958,13 @@ async function observeMutationOverHttp(
           entry.method === 'delete' && entry.specPath === '/guilds/{guild_id}',
       }
     if (entry.specPath.startsWith('/invites/')) {
-      const code = entry.method === 'delete' ? fixture.deletableInviteCode : fixture.inviteCode
-      return { path: `/api/v10/invites/${code}`, absent: entry.method === 'delete' }
+      // Only DELETE /invites/{code} removes the invite.
+      // The target-users sub-resource endpoints (DELETE/PUT/bulk-*) mutate the
+      // target-user list without deleting the invite.
+      const deletesInvite =
+        entry.method === 'delete' && entry.specPath === '/invites/{code}'
+      const code = deletesInvite ? fixture.deletableInviteCode : fixture.inviteCode
+      return { path: `/api/v10/invites/${code}`, absent: deletesInvite }
     }
     if (entry.specPath.startsWith('/interactions/'))
       return { path: `/api/v10/webhooks/${fixture.applicationId}/${fixture.originalInteractionToken}/messages/@original`, absent: false }

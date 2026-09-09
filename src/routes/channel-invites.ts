@@ -147,12 +147,7 @@ export function createChannelInviteRoutes(db: Database): Hono<AppEnv> {
     })
 
     if (targetUsers) {
-      setInviteTargetUsers(
-        db,
-        invite.code,
-        targetUsers.rawCsv,
-        targetUsers.userIds
-      )
+      setInviteTargetUsers(db, invite.code, targetUsers.userIds)
       return c.body(null, 204)
     }
 
