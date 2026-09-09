@@ -16,7 +16,7 @@ repositories {
 }
 
 dependencies {
-    implementation("net.dv8tion:JDA:6.5.0")
+    implementation("net.dv8tion:JDA:6.6.0")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.22.2")
     // JDA logs a "no SLF4J binding" warning without one; slf4j-simple silences it.
     implementation("org.slf4j:slf4j-simple:2.0.19")
