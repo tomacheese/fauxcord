@@ -27,14 +27,14 @@
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "25.9.7",
     "@types/ws": "8.18.1",
-    "@vitest/coverage-v8": "5.0.0",
+    "@vitest/coverage-v8": "5.0.1",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "eslint": "10.10.0",
     "npm-run-all2": "9.0.3",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
-    "vitest": "5.0.0"
+    "vitest": "5.0.1"
   },
   "dependencies": {
     "@hono/node-server": "2.1.1",
