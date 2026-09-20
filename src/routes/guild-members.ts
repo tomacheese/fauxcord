@@ -88,8 +88,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_MEMBER,
       'Unknown Member'
     )
-    if (result instanceof Response) return result
-    return c.json(result)
+    return result instanceof Response ? result : c.json(result)
   })
 
   // GET /guilds/:guildId/members/:userId — Retrieve a specific guild member
@@ -110,8 +109,7 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_MEMBER,
       'Unknown Member'
     )
-    if (member instanceof Response) return member
-    return c.json(member)
+    return member instanceof Response ? member : c.json(member)
   })
 
   // PATCH /guilds/:guildId/members/:userId — Update member information
@@ -154,10 +152,9 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       'Unknown Member'
     )
     if (result instanceof Response) return result
-    if (payload.roles !== undefined && payload.mute !== undefined) {
-      return c.body(null, 204)
-    }
-    return c.json(result)
+    return payload.roles !== undefined && payload.mute !== undefined
+      ? c.body(null, 204)
+      : c.json(result)
   })
 
   // PUT /guilds/:guildId/members/:userId/roles/:roleId — Add a role to a member

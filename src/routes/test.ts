@@ -60,10 +60,9 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
     // Decode the path parameter manually (Bot tokens may contain spaces)
     const token = decodeURIComponent(c.req.path.replace('/_test/setup/', ''))
     const deleted = deleteTestSetup(db, token)
-    if (!deleted) {
-      return c.json({ message: '404: Not Found', code: 0 }, 404)
-    }
-    return c.body(null, 204)
+    return deleted
+      ? c.body(null, 204)
+      : c.json({ message: '404: Not Found', code: 0 }, 404)
   })
 
   // POST /_test/users — Register a non-bot user for testing
@@ -141,11 +140,9 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
       baseUrl
     )
 
-    if (result === 'UNKNOWN_CHANNEL' || result === 'UNKNOWN_USER') {
-      return c.json({ message: '404: Not Found', code: 0 }, 404)
-    }
-
-    return c.json(result, 201)
+    return result === 'UNKNOWN_CHANNEL' || result === 'UNKNOWN_USER'
+      ? c.json({ message: '404: Not Found', code: 0 }, 404)
+      : c.json(result, 201)
   })
 
   // POST /_test/interactions — Simulate an interaction against a registered
@@ -153,10 +150,9 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
   app.post('/_test/interactions', async (c) => {
     const body = await c.req.json<TestInteractionRequest>()
     const result = createTestInteraction(db, body)
-    if (!result.ok) {
-      return c.json({ message: '404: Not Found', code: 0 }, 404)
-    }
-    return c.json(result.interaction, 201)
+    return result.ok
+      ? c.json(result.interaction, 201)
+      : c.json({ message: '404: Not Found', code: 0 }, 404)
   })
 
   // POST /_test/polls/:messageId/votes — Inject a poll vote for testing
@@ -177,11 +173,9 @@ export function createTestRoutes(db: Database, baseUrl: string): Hono {
       payload.answer_id,
       payload.user_id
     )
-    if (result === 'UNKNOWN_MESSAGE' || result === 'UNKNOWN_ANSWER') {
-      return c.json({ message: '404: Not Found', code: 0 }, 404)
-    }
-
-    return c.body(null, 204)
+    return result === 'UNKNOWN_MESSAGE' || result === 'UNKNOWN_ANSWER'
+      ? c.json({ message: '404: Not Found', code: 0 }, 404)
+      : c.body(null, 204)
   })
 
   return app

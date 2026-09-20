@@ -609,14 +609,14 @@ export function getCommandPermissions(
   const command =
     getCommand(db, applicationId, guildId, commandId) ??
     getCommand(db, applicationId, null, commandId)
-  if (!command) return null
-
-  return {
-    id: commandId,
-    application_id: applicationId,
-    guild_id: guildId,
-    permissions: [],
-  }
+  return command
+    ? {
+        id: commandId,
+        application_id: applicationId,
+        guild_id: guildId,
+        permissions: [],
+      }
+    : null
 }
 
 /**

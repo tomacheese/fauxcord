@@ -70,8 +70,7 @@ export function createInviteRoutes(db: Database): Hono {
       DiscordErrorCode.UNKNOWN_INVITE,
       'Unknown Invite'
     )
-    if (invite instanceof Response) return invite
-    return c.json(invite)
+    return invite instanceof Response ? invite : c.json(invite)
   })
 
   // DELETE /invites/:code — Delete an invite

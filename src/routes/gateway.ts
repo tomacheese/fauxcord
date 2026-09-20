@@ -42,10 +42,9 @@ export function createGatewayRoutes(
           .get(authHeader) as BotRecord | undefined
       }
     }
-    if (!bot) {
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    }
-    return c.json(getGatewayBotInfo(baseUrl))
+    return bot
+      ? c.json(getGatewayBotInfo(baseUrl))
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   return app

@@ -76,16 +76,15 @@ function resolveBotForIdentify(
       token: lookupToken,
     }
   }
-  if (disableAuth) {
-    return {
-      userId: '0',
-      username: 'MockBot',
-      discriminator: '0',
-      avatar: null,
-      token: lookupToken,
-    }
-  }
-  return undefined
+  return disableAuth
+    ? {
+        userId: '0',
+        username: 'MockBot',
+        discriminator: '0',
+        avatar: null,
+        token: lookupToken,
+      }
+    : undefined
 }
 
 /**
@@ -136,9 +135,9 @@ function isResumeData(d: unknown): d is ResumeData {
 function toWsUrl(baseUrl: string): string {
   if (baseUrl.startsWith('https://'))
     return `wss://${baseUrl.slice('https://'.length)}`
-  if (baseUrl.startsWith('http://'))
-    return `ws://${baseUrl.slice('http://'.length)}`
-  return baseUrl
+  return baseUrl.startsWith('http://')
+    ? `ws://${baseUrl.slice('http://'.length)}`
+    : baseUrl
 }
 
 /**
@@ -338,20 +337,20 @@ function handleIdentify(
   // `POST /guilds`), not for guilds that already existed at IDENTIFY time
   // (e.g. seeded via `/_test/setup` before the client ever connects), so
   // those need to be sent here explicitly.
-  if (hasIntent(data.intents, GatewayIntentBits.Guilds)) {
-    // buildGuildCreatePayload runs ~4 reads per guild, so an IDENTIFY from a
-    // bot in N guilds issues ~4N statements. Batch them into one SQLite
-    // transaction (a read-only transaction in WAL mode) to avoid per-statement
-    // transaction overhead, then perform the WebSocket sends outside it so no
-    // I/O happens while the transaction is open.
-    const payloads = db.transaction(() =>
-      existingGuildIds
-        .map(({ id: guildId }) => buildGuildCreatePayload(db, guildId))
-        .filter((guild) => guild !== null)
-    )()
-    for (const guild of payloads) {
-      sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
-    }
+  if (!hasIntent(data.intents, GatewayIntentBits.Guilds)) return
+
+  // buildGuildCreatePayload runs ~4 reads per guild, so an IDENTIFY from a
+  // bot in N guilds issues ~4N statements. Batch them into one SQLite
+  // transaction (a read-only transaction in WAL mode) to avoid per-statement
+  // transaction overhead, then perform the WebSocket sends outside it so no
+  // I/O happens while the transaction is open.
+  const payloads = db.transaction(() =>
+    existingGuildIds
+      .map(({ id: guildId }) => buildGuildCreatePayload(db, guildId))
+      .filter((guild) => guild !== null)
+  )()
+  for (const guild of payloads) {
+    sendDispatch(sessionManager, session, 'GUILD_CREATE', guild)
   }
 }
 
@@ -404,10 +403,12 @@ function handleHeartbeat(
   const sessionId = sessionIdByWs.get(ws)
   const session = sessionId ? sessionManager.get(sessionId) : undefined
   ws.send(encodePayload({ op: GatewayOp.HeartbeatAck, d: null }))
-  if (session) {
-    session.lastHeartbeatAt = Date.now()
-    armHeartbeatTimeout(sessionManager, ws, session.sessionId)
+  if (!session) {
+    return
   }
+
+  session.lastHeartbeatAt = Date.now()
+  armHeartbeatTimeout(sessionManager, ws, session.sessionId)
 }
 
 /**

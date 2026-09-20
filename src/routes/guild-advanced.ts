@@ -209,13 +209,12 @@ function requireGuildAccess(
     .get(guildId) as { bot_token: string } | undefined
   if (!row) return unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
   const bot = c.get('bot')
-  if (bot?.token !== row.bot_token) {
-    return c.json(
-      { message: 'Missing Access', code: DiscordErrorCode.MISSING_ACCESS },
-      403
-    )
-  }
-  return row
+  return bot?.token === row.bot_token
+    ? row
+    : c.json(
+        { message: 'Missing Access', code: DiscordErrorCode.MISSING_ACCESS },
+        403
+      )
 }
 
 function ensureAuxiliaryTables(db: Database): void {
@@ -288,17 +287,15 @@ export function createGuildAdvancedPublicRoutes(db: Database): Hono<AppEnv> {
   })
   app.get('/guilds/:guildId/widget.json', (c) => {
     const { guildId } = c.req.param()
-    if (!getGuild(db, guildId)) {
-      return unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
-    }
-    return c.json(getGuildWidgetJson(db, guildId))
+    return getGuild(db, guildId)
+      ? c.json(getGuildWidgetJson(db, guildId))
+      : unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
   })
   app.get('/guilds/:guildId/widget.png', (c) => {
     const { guildId } = c.req.param()
-    if (!getGuild(db, guildId)) {
-      return unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
-    }
-    return c.body(WIDGET_PNG, 200, { 'Content-Type': 'image/png' })
+    return getGuild(db, guildId)
+      ? c.body(WIDGET_PNG, 200, { 'Content-Type': 'image/png' })
+      : unknown(c, DiscordErrorCode.UNKNOWN_GUILD, 'Unknown Guild')
   })
   return app
 }
@@ -312,45 +309,44 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
   app.get('/guilds/:guildId/audit-logs', (c) => {
     const { guildId } = c.req.param()
     const access = requireGuildAccess(c, db, guildId)
-    if (access instanceof Response) return access
-    return c.json({
-      audit_log_entries: [],
-      users: [],
-      integrations: [],
-      webhooks: [],
-      guild_scheduled_events: listGuildScheduledEvents(db, guildId),
-      threads: [],
-      application_commands: [],
-      auto_moderation_rules: listAutoModerationRules(db, guildId),
-    })
+    return access instanceof Response
+      ? access
+      : c.json({
+          audit_log_entries: [],
+          users: [],
+          integrations: [],
+          webhooks: [],
+          guild_scheduled_events: listGuildScheduledEvents(db, guildId),
+          threads: [],
+          application_commands: [],
+          auto_moderation_rules: listAutoModerationRules(db, guildId),
+        })
   })
 
   app.get('/guilds/:guildId/auto-moderation/rules', (c) => {
     const { guildId } = c.req.param()
     const access = requireGuildAccess(c, db, guildId)
-    if (access instanceof Response) return access
-    return c.json(listAutoModerationRules(db, guildId))
+    return access instanceof Response
+      ? access
+      : c.json(listAutoModerationRules(db, guildId))
   })
   app.post('/guilds/:guildId/auto-moderation/rules', async (c) => {
     const { guildId } = c.req.param()
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    if (
-      typeof payload.name !== 'string' ||
+    return typeof payload.name !== 'string' ||
       !Array.isArray(payload.actions) ||
       typeof payload.trigger_type !== 'number'
-    ) {
-      return invalid(c, 'name')
-    }
-    return c.json(
-      createAutoModerationRule(
-        db,
-        guildId,
-        c.get('bot')?.user_id ?? '',
-        payload
-      )
-    )
+      ? invalid(c, 'name')
+      : c.json(
+          createAutoModerationRule(
+            db,
+            guildId,
+            c.get('bot')?.user_id ?? '',
+            payload
+          )
+        )
   })
   app.get('/guilds/:guildId/auto-moderation/rules/:ruleId', (c) => {
     const { guildId, ruleId } = c.req.param()
@@ -469,8 +465,7 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
   app.get('/guilds/:guildId/integrations', (c) => {
     const { guildId } = c.req.param()
     const access = requireGuildAccess(c, db, guildId)
-    if (access instanceof Response) return access
-    return c.json([])
+    return access instanceof Response ? access : c.json([])
   })
   app.delete('/guilds/:guildId/integrations/:integrationId', (c) => {
     const { guildId, integrationId } = c.req.param()
@@ -563,13 +558,14 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const welcome = getGuildWelcomeScreen(db, guildId)
-    if (!welcome.enabled) return c.body(null, 204)
-    return c.json({
-      guild_id: guildId,
-      enabled: true,
-      new_member_actions: [],
-      resource_channels: [],
-    })
+    return welcome.enabled
+      ? c.json({
+          guild_id: guildId,
+          enabled: true,
+          new_member_actions: [],
+          resource_channels: [],
+        })
+      : c.body(null, 204)
   })
 
   app.get('/guilds/:guildId/onboarding', (c) => {
@@ -583,13 +579,10 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    if (
-      !Array.isArray(payload.prompts) ||
+    return !Array.isArray(payload.prompts) ||
       !Array.isArray(payload.default_channel_ids)
-    ) {
-      return invalid(c, 'prompts')
-    }
-    return c.json(setGuildOnboarding(db, guildId, payload))
+      ? invalid(c, 'prompts')
+      : c.json(setGuildOnboarding(db, guildId, payload))
   })
 
   app.get('/guilds/:guildId/preview', (c) => {
@@ -744,20 +737,17 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    if (
-      typeof payload.name !== 'string' ||
+    return typeof payload.name !== 'string' ||
       typeof payload.scheduled_start_time !== 'string'
-    ) {
-      return invalid(c, 'name')
-    }
-    return c.json(
-      createGuildScheduledEvent(
-        db,
-        guildId,
-        c.get('bot')?.user_id ?? '',
-        payload
-      )
-    )
+      ? invalid(c, 'name')
+      : c.json(
+          createGuildScheduledEvent(
+            db,
+            guildId,
+            c.get('bot')?.user_id ?? '',
+            payload
+          )
+        )
   })
   app.get('/guilds/:guildId/scheduled-events/:eventId/users/counts', (c) => {
     const { guildId, eventId } = c.req.param()
@@ -792,11 +782,11 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
       const { guildId, eventId } = c.req.param()
       const access = requireGuildAccess(c, db, guildId)
       if (access instanceof Response) return access
-      if (!getGuildScheduledEvent(db, guildId, eventId))
-        return unknown(c, 10_066, 'Unknown Guild Scheduled Event')
-      return c.json(
-        createScheduledEventException(db, eventId, await parseJsonBody(c))
-      )
+      return getGuildScheduledEvent(db, guildId, eventId)
+        ? c.json(
+            createScheduledEventException(db, eventId, await parseJsonBody(c))
+          )
+        : unknown(c, 10_066, 'Unknown Guild Scheduled Event')
     }
   )
   app.patch(
@@ -870,16 +860,17 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    if (typeof payload.name !== 'string') return invalid(c, 'name')
-    return c.json(
-      createGuildSoundboardSound(
-        db,
-        guildId,
-        c.get('bot')?.user_id ?? '',
-        payload
-      ),
-      201
-    )
+    return typeof payload.name === 'string'
+      ? c.json(
+          createGuildSoundboardSound(
+            db,
+            guildId,
+            c.get('bot')?.user_id ?? '',
+            payload
+          ),
+          201
+        )
+      : invalid(c, 'name')
   })
   app.get('/guilds/:guildId/soundboard-sounds/:soundId', (c) => {
     const { guildId, soundId } = c.req.param()
@@ -928,21 +919,18 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const description = form?.get('description')
     const tags = form?.get('tags')
     const file = form?.get('file')
-    if (
-      typeof name !== 'string' ||
+    return typeof name !== 'string' ||
       typeof tags !== 'string' ||
       !(file instanceof File)
-    ) {
-      return invalid(c, 'file')
-    }
-    return c.json(
-      createGuildSticker(db, guildId, c.get('bot')?.user_id ?? '', {
-        name,
-        description: typeof description === 'string' ? description : null,
-        tags,
-      }),
-      201
-    )
+      ? invalid(c, 'file')
+      : c.json(
+          createGuildSticker(db, guildId, c.get('bot')?.user_id ?? '', {
+            name,
+            description: typeof description === 'string' ? description : null,
+            tags,
+          }),
+          201
+        )
   })
   app.get('/guilds/:guildId/stickers/:stickerId', (c) => {
     const { guildId, stickerId } = c.req.param()
@@ -983,10 +971,11 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    if (typeof payload.name !== 'string') return invalid(c, 'name')
-    return c.json(
-      createGuildTemplate(db, guildId, c.get('bot')?.user_id ?? '', payload)
-    )
+    return typeof payload.name === 'string'
+      ? c.json(
+          createGuildTemplate(db, guildId, c.get('bot')?.user_id ?? '', payload)
+        )
+      : invalid(c, 'name')
   })
   app.put('/guilds/:guildId/templates/:code', (c) => {
     const { guildId, code } = c.req.param()
@@ -1046,11 +1035,12 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
   app.get('/guilds/:guildId/vanity-url', (c) => {
     const { guildId } = c.req.param()
     const access = requireGuildAccess(c, db, guildId)
-    if (access instanceof Response) return access
-    return c.json({
-      code: getGuildPresentation(db, guildId).vanity_url_code,
-      uses: 0,
-    })
+    return access instanceof Response
+      ? access
+      : c.json({
+          code: getGuildPresentation(db, guildId).vanity_url_code,
+          uses: 0,
+        })
   })
 
   app.get('/guilds/:guildId/voice-states/@me', (c) => {

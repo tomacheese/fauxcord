@@ -110,15 +110,13 @@ function mapStickerPack(db: Database, row: StickerPackRow): StickerPackObject {
     name: row.name,
     description: row.description,
     stickers: stickerRows.map((sticker) => mapCatalogSticker(sticker)),
-  }
-  if (
-    row.cover_sticker_id !== null &&
-    stickerRows.some(({ id }) => id === row.cover_sticker_id)
-  ) {
-    pack.cover_sticker_id = row.cover_sticker_id
-  }
-  if (row.banner_asset_id !== null) {
-    pack.banner_asset_id = row.banner_asset_id
+    ...(row.cover_sticker_id !== null &&
+      stickerRows.some(({ id }) => id === row.cover_sticker_id) && {
+        cover_sticker_id: row.cover_sticker_id,
+      }),
+    ...(row.banner_asset_id !== null && {
+      banner_asset_id: row.banner_asset_id,
+    }),
   }
   return pack
 }

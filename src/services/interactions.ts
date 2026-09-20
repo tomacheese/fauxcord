@@ -74,23 +74,22 @@ function toInteractionObject(
     data = storedData
   }
 
+  const member = row.guild_id
+    ? getGuildMember(db, row.guild_id, row.user_id)
+    : null
+  const user = row.guild_id ? null : getUser(db, row.user_id)
+
   const result: InteractionObject = {
     id: row.id,
     application_id: row.application_id,
     type: row.type,
     token: row.token,
     version: 1,
-  }
-  if (data) result.data = data
-  if (row.channel_id) result.channel_id = row.channel_id
-
-  if (row.guild_id) {
-    result.guild_id = row.guild_id
-    const member = getGuildMember(db, row.guild_id, row.user_id)
-    if (member) result.member = member as unknown as Record<string, unknown>
-  } else {
-    const user = getUser(db, row.user_id)
-    if (user) result.user = user as unknown as Record<string, unknown>
+    ...(data && { data }),
+    ...(row.channel_id && { channel_id: row.channel_id }),
+    ...(row.guild_id && { guild_id: row.guild_id }),
+    ...(member && { member: member as unknown as Record<string, unknown> }),
+    ...(user && { user: user as unknown as Record<string, unknown> }),
   }
 
   return result
@@ -171,11 +170,12 @@ export function getInteractionFollowupTarget(
     .get(applicationId, token) as
     | { channel_id: string | null; initial_response_message_id: string | null }
     | undefined
-  if (!row?.channel_id) return null
-  return {
-    channelId: row.channel_id,
-    initialResponseMessageId: row.initial_response_message_id,
-  }
+  return row?.channel_id
+    ? {
+        channelId: row.channel_id,
+        initialResponseMessageId: row.initial_response_message_id,
+      }
+    : null
 }
 
 /** Callback (initial response) payload for POST .../callback */
@@ -239,9 +239,9 @@ export function handleInteractionCallback(
   const interaction: InteractionCallbackResponse['interaction'] = {
     id: row.id,
     type: row.type,
+    ...(row.channel_id && { channel_id: row.channel_id }),
+    ...(row.guild_id && { guild_id: row.guild_id }),
   }
-  if (row.channel_id) interaction.channel_id = row.channel_id
-  if (row.guild_id) interaction.guild_id = row.guild_id
 
   let resource: InteractionCallbackResponse['resource']
   if (payload.type === 4 && row.channel_id) {

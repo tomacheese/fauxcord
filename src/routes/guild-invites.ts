@@ -28,8 +28,9 @@ export function createGuildInviteRoutes(db: Database): Hono {
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
-    if (guild instanceof Response) return guild
-    return c.json(getGuildInvites(db, guildId))
+    return guild instanceof Response
+      ? guild
+      : c.json(getGuildInvites(db, guildId))
   })
 
   return app

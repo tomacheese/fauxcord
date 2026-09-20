@@ -493,23 +493,21 @@ export function getInviteTargetUsersJobStatus(
     )
     .get(code) as InviteTargetUsersRow | undefined
 
-  if (!row) {
-    return {
-      status: 0,
-      total_users: 0,
-      processed_users: 0,
-      created_at: null,
-      completed_at: null,
-      error_message: null,
-    }
-  }
-
-  return {
-    status: row.status,
-    total_users: row.total_users,
-    processed_users: row.processed_users,
-    created_at: toIso(row.created_at),
-    completed_at: row.completed_at ? toIso(row.completed_at) : null,
-    error_message: row.error_message,
-  }
+  return row
+    ? {
+        status: row.status,
+        total_users: row.total_users,
+        processed_users: row.processed_users,
+        created_at: toIso(row.created_at),
+        completed_at: row.completed_at ? toIso(row.completed_at) : null,
+        error_message: row.error_message,
+      }
+    : {
+        status: 0,
+        total_users: 0,
+        processed_users: 0,
+        created_at: null,
+        completed_at: null,
+        error_message: null,
+      }
 }

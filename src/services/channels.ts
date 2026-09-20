@@ -305,18 +305,12 @@ function toChannelObject(
     rate_limit_per_user: row.rate_limit_per_user,
     parent_id: row.parent_id,
     permission_overwrites: overwrites,
-  }
-
-  if (row.voice_status !== null) {
-    obj.voice_status = row.voice_status
-  }
-
-  if (row.type === 1 || row.type === 3) {
-    obj.recipients = recipients
-  }
-  if (row.type === 3) {
-    obj.icon = null
-    obj.owner_id = row.owner_id ?? recipients.at(0)?.id ?? row.id
+    ...(row.voice_status !== null && { voice_status: row.voice_status }),
+    ...((row.type === 1 || row.type === 3) && { recipients }),
+    ...(row.type === 3 && {
+      icon: null,
+      owner_id: row.owner_id ?? recipients.at(0)?.id ?? row.id,
+    }),
   }
 
   return obj
@@ -395,13 +389,15 @@ export function updateChannel(
     .get(channelId) as ChannelRow | undefined
   if (!current) return null
 
-  const updates: Record<string, unknown> = {}
-  if (payload.name !== undefined) updates.name = payload.name
-  if (payload.topic !== undefined) updates.topic = payload.topic
-  if (payload.nsfw !== undefined) updates.nsfw = payload.nsfw ? 1 : 0
-  if (payload.rate_limit_per_user !== undefined)
-    updates.rate_limit_per_user = payload.rate_limit_per_user
-  if (payload.position !== undefined) updates.position = payload.position
+  const updates: Record<string, unknown> = {
+    ...(payload.name !== undefined && { name: payload.name }),
+    ...(payload.topic !== undefined && { topic: payload.topic }),
+    ...(payload.nsfw !== undefined && { nsfw: payload.nsfw ? 1 : 0 }),
+    ...(payload.rate_limit_per_user !== undefined && {
+      rate_limit_per_user: payload.rate_limit_per_user,
+    }),
+    ...(payload.position !== undefined && { position: payload.position }),
+  }
 
   if (Object.keys(updates).length > 0) {
     const setClauses = Object.keys(updates)

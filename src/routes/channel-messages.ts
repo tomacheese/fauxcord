@@ -81,8 +81,7 @@ export function createChannelMessageRoutes(
       DiscordErrorCode.UNKNOWN_MESSAGE,
       'Unknown Message'
     )
-    if (msg instanceof Response) return msg
-    return c.json(msg)
+    return msg instanceof Response ? msg : c.json(msg)
   })
 
   // POST /channels/:channelId/messages — Send a message

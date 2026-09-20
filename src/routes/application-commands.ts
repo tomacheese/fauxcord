@@ -95,8 +95,7 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
   app.get('/applications/:applicationId/commands', (c) => {
     const { applicationId } = c.req.param()
     const denied = requireOwnApplication(c, applicationId)
-    if (denied) return denied
-    return c.json(getCommands(db, applicationId, null))
+    return denied ?? c.json(getCommands(db, applicationId, null))
   })
 
   // PUT /applications/:applicationId/commands — bulk overwrite global commands
@@ -112,10 +111,9 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
         return c.json(validationError(errors).body, 400)
       }
     }
-    if (hasDuplicateNameInPayload(payloads)) {
-      return c.json(DUPLICATE_NAME_ERROR, 400)
-    }
-    return c.json(bulkOverwriteCommands(db, applicationId, null, payloads))
+    return hasDuplicateNameInPayload(payloads)
+      ? c.json(DUPLICATE_NAME_ERROR, 400)
+      : c.json(bulkOverwriteCommands(db, applicationId, null, payloads))
   })
 
   // POST /applications/:applicationId/commands — create a global command
@@ -233,10 +231,9 @@ export function createApplicationCommandRoutes(db: Database): Hono<AppEnv> {
           return c.json(validationError(errors).body, 400)
         }
       }
-      if (hasDuplicateNameInPayload(payloads)) {
-        return c.json(DUPLICATE_NAME_ERROR, 400)
-      }
-      return c.json(bulkOverwriteCommands(db, applicationId, guildId, payloads))
+      return hasDuplicateNameInPayload(payloads)
+        ? c.json(DUPLICATE_NAME_ERROR, 400)
+        : c.json(bulkOverwriteCommands(db, applicationId, guildId, payloads))
     }
   )
 

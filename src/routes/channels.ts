@@ -58,8 +58,7 @@ export function createChannelRoutes(
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (channel instanceof Response) return channel
-    return c.json(channel)
+    return channel instanceof Response ? channel : c.json(channel)
   })
 
   // PATCH /channels/:channelId — Update channel information
@@ -78,8 +77,7 @@ export function createChannelRoutes(
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (updated instanceof Response) return updated
-    return c.json(updated)
+    return updated instanceof Response ? updated : c.json(updated)
   })
 
   // DELETE /channels/:channelId — Delete a channel

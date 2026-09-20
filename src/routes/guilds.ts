@@ -43,8 +43,7 @@ export function createGuildRoutes(db: Database): Hono {
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
-    if (guild instanceof Response) return guild
-    return c.json(guild)
+    return guild instanceof Response ? guild : c.json(guild)
   })
 
   // PATCH /guilds/:guildId — Update guild information
@@ -74,8 +73,7 @@ export function createGuildRoutes(db: Database): Hono {
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
-    if (updated instanceof Response) return updated
-    return c.json(updated)
+    return updated instanceof Response ? updated : c.json(updated)
   })
 
   // DELETE /guilds/:guildId — Delete a guild

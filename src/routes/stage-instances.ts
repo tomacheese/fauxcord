@@ -104,8 +104,7 @@ export function createStageInstanceRoutes(db: Database): Hono<AppEnv> {
           .body,
         404
       )
-    if (!ownsGuild(c, db, stage.guild_id)) return missingAccess(c)
-    return c.json(stage)
+    return ownsGuild(c, db, stage.guild_id) ? c.json(stage) : missingAccess(c)
   })
   app.patch('/stage-instances/:channelId', async (c) => {
     const channelId = c.req.param('channelId')

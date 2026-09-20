@@ -358,18 +358,19 @@ export function getActivityInstance(
   const application = db
     .prepare('SELECT owner_id FROM applications WHERE id = ?')
     .get(applicationId) as { owner_id: string } | undefined
-  if (!application) return null
-  return {
-    application_id: applicationId,
-    instance_id: instanceId,
-    launch_id: `launch-${instanceId}`,
-    location: {
-      id: `location-${instanceId}`,
-      kind: 'pc',
-      channel_id: applicationId,
-    },
-    users: [application.owner_id],
-  }
+  return application
+    ? {
+        application_id: applicationId,
+        instance_id: instanceId,
+        launch_id: `launch-${instanceId}`,
+        location: {
+          id: `location-${instanceId}`,
+          kind: 'pc',
+          channel_id: applicationId,
+        },
+        users: [application.owner_id],
+      }
+    : null
 }
 
 /** Converts an application emoji row into an API response. */

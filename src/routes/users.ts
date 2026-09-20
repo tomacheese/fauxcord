@@ -85,10 +85,9 @@ function requireOAuthApplicationAccess(
   if (!application) {
     return c.json(discordError(10_002, 'Unknown Application', 404).body, 404)
   }
-  if (accessToken.client_id !== applicationId) {
-    return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
-  }
-  return undefined
+  return accessToken.client_id === applicationId
+    ? undefined
+    : c.json({ message: '403: Forbidden', code: 50_001 }, 403)
 }
 
 /**
@@ -107,10 +106,9 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     }
 
     const user = getBotUser(db, bot.token)
-    if (!user) {
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    }
-    return c.json(user)
+    return user
+      ? c.json(user)
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   // PATCH /users/@me — Update the authenticated bot user's profile
@@ -135,10 +133,9 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     }
 
     const user = updateBotUser(db, bot.token, body)
-    if (!user) {
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    }
-    return c.json(user)
+    return user
+      ? c.json(user)
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   // GET /users/:userId — Retrieve the specified user's information
@@ -155,10 +152,9 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
         return c.json({ message: '401: Unauthorized', code: 0 }, 401)
       }
       const user = getBotUser(db, bot.token)
-      if (!user) {
-        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-      }
-      return c.json(user)
+      return user
+        ? c.json(user)
+        : c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
     const user = getUser(db, userId)
@@ -194,14 +190,14 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     )
     if (denied) return denied
     const accessToken = c.get('accessToken')
-    if (!accessToken?.user_id)
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    return c.json(
-      listEntitlements(db, applicationId, {
-        userId: accessToken.user_id,
-        excludeDeleted: true,
-      })
-    )
+    return accessToken?.user_id
+      ? c.json(
+          listEntitlements(db, applicationId, {
+            userId: accessToken.user_id,
+            excludeDeleted: true,
+          })
+        )
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   app.get('/users/@me/applications/:applicationId/role-connection', (c) => {
@@ -304,12 +300,10 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     const accessToken = c.get('accessToken')
     if (!accessToken && !c.get('bot'))
       return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    if (
-      accessToken &&
+    return accessToken &&
       !hasOAuthScope(accessToken.scope, new Set(['connections']))
-    )
-      return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
-    return c.json([])
+      ? c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+      : c.json([])
   })
 
   app.delete('/users/@me/guilds/:guildId', (c) => {
@@ -346,39 +340,39 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
           bot: number
         }
       | undefined
-    if (!row)
-      return c.json(
-        discordError(DiscordErrorCode.UNKNOWN_MEMBER, 'Unknown Member', 404)
-          .body,
-        404
-      )
-    return c.json({
-      avatar: null,
-      avatar_decoration_data: null,
-      banner: null,
-      communication_disabled_until: null,
-      flags: row.flags,
-      joined_at: new Date(`${row.joined_at}Z`).toISOString(),
-      nick: row.nick,
-      pending: false,
-      premium_since: null,
-      roles: [],
-      collectibles: null,
-      user: {
-        id: row.id,
-        username: row.username,
-        discriminator: row.discriminator,
-        avatar: row.avatar,
-        bot: row.bot === 1,
-        public_flags: 0,
-        flags: 0,
-        global_name: null,
-        primary_guild: null,
-      },
-      mute: row.mute === 1,
-      deaf: row.deaf === 1,
-      permissions: '0',
-    })
+    return row
+      ? c.json({
+          avatar: null,
+          avatar_decoration_data: null,
+          banner: null,
+          communication_disabled_until: null,
+          flags: row.flags,
+          joined_at: new Date(`${row.joined_at}Z`).toISOString(),
+          nick: row.nick,
+          pending: false,
+          premium_since: null,
+          roles: [],
+          collectibles: null,
+          user: {
+            id: row.id,
+            username: row.username,
+            discriminator: row.discriminator,
+            avatar: row.avatar,
+            bot: row.bot === 1,
+            public_flags: 0,
+            flags: 0,
+            global_name: null,
+            primary_guild: null,
+          },
+          mute: row.mute === 1,
+          deaf: row.deaf === 1,
+          permissions: '0',
+        })
+      : c.json(
+          discordError(DiscordErrorCode.UNKNOWN_MEMBER, 'Unknown Member', 404)
+            .body,
+          404
+        )
   })
 
   // POST /users/@me/channels — Create a DM or group-DM channel
@@ -437,10 +431,9 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     }
 
     const app_ = getApplication(db, bot.token)
-    if (!app_) {
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    }
-    return c.json(app_)
+    return app_
+      ? c.json(app_)
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   // GET /oauth2/applications/@me — Retrieve application information (Discord.Net-compatible alias)
@@ -454,10 +447,9 @@ export function createUserRoutes(db: Database): Hono<AppEnv> {
     }
 
     const app_ = getApplication(db, bot.token)
-    if (!app_) {
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    }
-    return c.json(app_)
+    return app_
+      ? c.json(app_)
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   return app

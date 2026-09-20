@@ -46,22 +46,25 @@ function botUser(c: Context<AppEnv>): string | null {
 }
 
 function mapMembers(value: unknown) {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((member) => {
-    if (!member || typeof member !== 'object') return []
-    const input = member as Record<string, unknown>
-    return typeof input.id === 'string' || typeof input.user_id === 'string'
-      ? [
-          {
-            userId: (input.id ?? input.user_id) as string,
-            metadata: input.metadata as
-              Record<string, string> | null | undefined,
-            flags: typeof input.flags === 'number' ? input.flags : undefined,
-            additionalName: input.additional_name as string | null | undefined,
-          },
-        ]
-      : []
-  })
+  return Array.isArray(value)
+    ? value.flatMap((member) => {
+        if (!member || typeof member !== 'object') return []
+        const input = member as Record<string, unknown>
+        return typeof input.id === 'string' || typeof input.user_id === 'string'
+          ? [
+              {
+                userId: (input.id ?? input.user_id) as string,
+                metadata: input.metadata as
+                  Record<string, string> | null | undefined,
+                flags:
+                  typeof input.flags === 'number' ? input.flags : undefined,
+                additionalName: input.additional_name as
+                  string | null | undefined,
+              },
+            ]
+          : []
+      })
+    : []
 }
 
 /** Creates routes for Discord's local SDK lobby API. */
@@ -126,9 +129,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    if (!botUser(c) || lobby.owner_id !== botUser(c))
-      return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    return c.json(lobby)
+    return !botUser(c) || lobby.owner_id !== botUser(c)
+      ? c.json(discordError(50_001, 'Missing Access', 403).body, 403)
+      : c.json(lobby)
   })
 
   app.delete('/lobbies/:lobbyId', (c) => {
@@ -180,9 +183,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     )
       return invalid(c)
     const updated = updateLobbyChannel(db, lobbyId, payload.channel_id ?? null)
-    if (!updated)
-      return unknown(c, DiscordErrorCode.UNKNOWN_CHANNEL, 'Unknown Channel')
-    return c.json(updated)
+    return updated
+      ? c.json(updated)
+      : unknown(c, DiscordErrorCode.UNKNOWN_CHANNEL, 'Unknown Channel')
   })
 
   app.delete('/lobbies/:lobbyId/members/@me', (c) => {
@@ -249,9 +252,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
       flags: typeof payload.flags === 'number' ? payload.flags : undefined,
       additionalName: payload.additional_name as string | null | undefined,
     })
-    if (!member)
-      return unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
-    return c.json(member)
+    return member
+      ? c.json(member)
+      : unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
   })
 
   app.delete('/lobbies/:lobbyId/members/:userId', (c) => {
@@ -260,9 +263,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
     if (lobby.owner_id !== botUser(c))
       return c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-    if (!deleteLobbyMember(db, lobbyId, userId))
-      return unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
-    return c.body(null, 204)
+    return deleteLobbyMember(db, lobbyId, userId)
+      ? c.body(null, 204)
+      : unknown(c, DiscordErrorCode.UNKNOWN_USER, 'Unknown User')
   })
 
   app.post('/lobbies/:lobbyId/members/:userId/invites', (c) => {
@@ -285,9 +288,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!lobby || !userId || !isLobbyMember(db, lobbyId, userId))
       return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
     const limit = Number(c.req.query('limit') ?? '50')
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200)
-      return invalid(c)
-    return c.json(listLobbyMessages(db, lobbyId, limit))
+    return !Number.isSafeInteger(limit) || limit < 1 || limit > 200
+      ? invalid(c)
+      : c.json(listLobbyMessages(db, lobbyId, limit))
   })
 
   app.post('/lobbies/:lobbyId/messages', async (c) => {
@@ -303,8 +306,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
       content: payload.content as string | null | undefined,
       flags: typeof payload.flags === 'number' ? payload.flags : undefined,
     })
-    if (!message) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    return c.json(message, 201)
+    return message
+      ? c.json(message, 201)
+      : unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
   })
 
   app.put(
@@ -318,9 +322,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
       const metadata = await c.req
         .json<Record<string, string>>()
         .catch((): Record<string, string> => ({}))
-      if (!updateLobbyMessageModeration(db, lobbyId, messageId, metadata))
-        return unknown(c, DiscordErrorCode.UNKNOWN_MESSAGE, 'Unknown Message')
-      return c.body(null, 204)
+      return updateLobbyMessageModeration(db, lobbyId, messageId, metadata)
+        ? c.body(null, 204)
+        : unknown(c, DiscordErrorCode.UNKNOWN_MESSAGE, 'Unknown Message')
     }
   )
 

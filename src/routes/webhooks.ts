@@ -55,35 +55,34 @@ function createFollowupOrWebhookMessage(
   payload: Record<string, unknown>,
   baseUrl: string
 ) {
-  if (webhook) {
-    return executeWebhook(
-      db,
-      {
-        messageId,
-        channelId: webhook.channel_id,
-        webhookId: webhook.id,
-        webhookName: webhook.name,
-        content: payload.content as string | undefined,
-        username: payload.username as string | undefined,
-        tts: payload.tts as boolean | undefined,
-        embeds: payload.embeds as unknown[] | undefined,
-      },
-      baseUrl
-    )
-  }
-  return createMessage(
-    db,
-    {
-      messageId,
-      channelId: targetChannelId,
-      authorId: webhookIdParam,
-      authorToken: 'interaction',
-      content: payload.content as string | undefined,
-      tts: payload.tts as boolean | undefined,
-      embeds: payload.embeds as unknown[] | undefined,
-    },
-    baseUrl
-  )
+  return webhook
+    ? executeWebhook(
+        db,
+        {
+          messageId,
+          channelId: webhook.channel_id,
+          webhookId: webhook.id,
+          webhookName: webhook.name,
+          content: payload.content as string | undefined,
+          username: payload.username as string | undefined,
+          tts: payload.tts as boolean | undefined,
+          embeds: payload.embeds as unknown[] | undefined,
+        },
+        baseUrl
+      )
+    : createMessage(
+        db,
+        {
+          messageId,
+          channelId: targetChannelId,
+          authorId: webhookIdParam,
+          authorToken: 'interaction',
+          content: payload.content as string | undefined,
+          tts: payload.tts as boolean | undefined,
+          embeds: payload.embeds as unknown[] | undefined,
+        },
+        baseUrl
+      )
 }
 
 function getOriginalMessageId(

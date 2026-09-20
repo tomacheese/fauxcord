@@ -32,8 +32,7 @@ export function createChannelTypingRoutes(db: Database): Hono {
     db.prepare(
       "UPDATE channels SET typing_at = datetime('now') WHERE id = ?"
     ).run(channelId)
-    if (channel.type === 3) return c.json({})
-    return c.body(null, 204)
+    return channel.type === 3 ? c.json({}) : c.body(null, 204)
   })
 
   return app

@@ -143,32 +143,32 @@ export function getGuildMember(
         bot: number
       }
     | undefined
-  if (!userRow) return null
-
-  return {
-    avatar: null,
-    banner: null,
-    communication_disabled_until: null,
-    flags: memberRow.flags,
-    joined_at: toDiscordTimestamp(new Date(memberRow.joined_at)),
-    nick: memberRow.nick,
-    pending: false,
-    premium_since: null,
-    roles: getMemberRoleIds(db, guildId, userId),
-    user: {
-      id: userRow.id,
-      username: userRow.username,
-      discriminator: userRow.discriminator,
-      avatar: userRow.avatar,
-      bot: userRow.bot === 1,
-      flags: 0,
-      public_flags: 0,
-      global_name: null,
-      primary_guild: null,
-    },
-    mute: memberRow.mute === 1,
-    deaf: memberRow.deaf === 1,
-  }
+  return userRow
+    ? {
+        avatar: null,
+        banner: null,
+        communication_disabled_until: null,
+        flags: memberRow.flags,
+        joined_at: toDiscordTimestamp(new Date(memberRow.joined_at)),
+        nick: memberRow.nick,
+        pending: false,
+        premium_since: null,
+        roles: getMemberRoleIds(db, guildId, userId),
+        user: {
+          id: userRow.id,
+          username: userRow.username,
+          discriminator: userRow.discriminator,
+          avatar: userRow.avatar,
+          bot: userRow.bot === 1,
+          flags: 0,
+          public_flags: 0,
+          global_name: null,
+          primary_guild: null,
+        },
+        mute: memberRow.mute === 1,
+        deaf: memberRow.deaf === 1,
+      }
+    : null
 }
 
 /**
@@ -232,32 +232,32 @@ export function getGuildMembers(
   return memberRows
     .map((memberRow): GuildMemberObject | null => {
       const userRow = usersById.get(memberRow.user_id)
-      if (!userRow) return null
-
-      return {
-        avatar: null,
-        banner: null,
-        communication_disabled_until: null,
-        flags: memberRow.flags,
-        joined_at: toDiscordTimestamp(new Date(memberRow.joined_at)),
-        nick: memberRow.nick,
-        pending: false,
-        premium_since: null,
-        roles: rolesByUser.get(memberRow.user_id) ?? [],
-        user: {
-          id: userRow.id,
-          username: userRow.username,
-          discriminator: userRow.discriminator,
-          avatar: userRow.avatar,
-          bot: userRow.bot === 1,
-          flags: 0,
-          public_flags: 0,
-          global_name: null,
-          primary_guild: null,
-        },
-        mute: memberRow.mute === 1,
-        deaf: memberRow.deaf === 1,
-      }
+      return userRow
+        ? {
+            avatar: null,
+            banner: null,
+            communication_disabled_until: null,
+            flags: memberRow.flags,
+            joined_at: toDiscordTimestamp(new Date(memberRow.joined_at)),
+            nick: memberRow.nick,
+            pending: false,
+            premium_since: null,
+            roles: rolesByUser.get(memberRow.user_id) ?? [],
+            user: {
+              id: userRow.id,
+              username: userRow.username,
+              discriminator: userRow.discriminator,
+              avatar: userRow.avatar,
+              bot: userRow.bot === 1,
+              flags: 0,
+              public_flags: 0,
+              global_name: null,
+              primary_guild: null,
+            },
+            mute: memberRow.mute === 1,
+            deaf: memberRow.deaf === 1,
+          }
+        : null
     })
     .filter((m): m is GuildMemberObject => m !== null)
 }

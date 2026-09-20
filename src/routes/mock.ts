@@ -29,24 +29,22 @@ export function createMockRoutes(db: Database, uploadPath: string): Hono {
       dbStatus = 'error'
     }
 
-    if (dbStatus === 'error') {
-      return c.json(
-        {
-          status: 'error',
+    return dbStatus === 'error'
+      ? c.json(
+          {
+            status: 'error',
+            version: '1.0.0',
+            db: 'error',
+            uptime: Math.floor((Date.now() - START_TIME) / 1000),
+          },
+          503
+        )
+      : c.json({
+          status: 'ok',
           version: '1.0.0',
-          db: 'error',
+          db: 'ok',
           uptime: Math.floor((Date.now() - START_TIME) / 1000),
-        },
-        503
-      )
-    }
-
-    return c.json({
-      status: 'ok',
-      version: '1.0.0',
-      db: 'ok',
-      uptime: Math.floor((Date.now() - START_TIME) / 1000),
-    })
+        })
   })
 
   // GET /_mock/attachments/:channelId/:messageId/:filename — Serve attachments

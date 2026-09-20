@@ -47,10 +47,9 @@ export function createOAuth2Routes(db: Database): Hono {
     }
     const token = authHeader.slice(7)
     const me = getOAuth2Me(db, token)
-    if (!me) {
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    }
-    return c.json(me)
+    return me
+      ? c.json(me)
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   })
 
   // GET /oauth2/authorize — Redirect for the OAuth2 authorization code flow
@@ -108,10 +107,9 @@ export function createOAuth2Routes(db: Database): Hono {
       }
 
       const tokenResponse = exchangeAuthCode(db, code, redirectUri)
-      if (!tokenResponse) {
-        return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-      }
-      return c.json(tokenResponse)
+      return tokenResponse
+        ? c.json(tokenResponse)
+        : c.json({ message: '401: Unauthorized', code: 0 }, 401)
     }
 
     if (grantType === 'client_credentials') {

@@ -189,22 +189,25 @@ export function updateWebhook(
     .get(webhookId) as WebhookRow | undefined
   if (!current) return null
 
-  const updates: Record<string, unknown> = {}
-  if (payload.name !== undefined) updates.name = payload.name
-  if (payload.avatar !== undefined) updates.avatar = payload.avatar
-  if (payload.channel_id !== undefined) {
-    // Only move the webhook when the target channel exists. Writing an
-    // unknown channel_id would violate the webhooks.channel_id foreign key
-    // and surface as an HTTP 500; callers are expected to validate the
-    // channel first (see the PATCH /webhooks/:id route), and this guard keeps
-    // the constraint from ever being hit regardless of the entry point.
-    const channel = db
-      .prepare('SELECT guild_id FROM channels WHERE id = ?')
-      .get(payload.channel_id) as { guild_id: string | null } | undefined
-    if (channel) {
-      updates.channel_id = payload.channel_id
-      updates.guild_id = channel.guild_id
-    }
+  // Only move the webhook when the target channel exists. Writing an
+  // unknown channel_id would violate the webhooks.channel_id foreign key
+  // and surface as an HTTP 500; callers are expected to validate the
+  // channel first (see the PATCH /webhooks/:id route), and this guard keeps
+  // the constraint from ever being hit regardless of the entry point.
+  const targetChannel =
+    payload.channel_id === undefined
+      ? undefined
+      : (db
+          .prepare('SELECT guild_id FROM channels WHERE id = ?')
+          .get(payload.channel_id) as { guild_id: string | null } | undefined)
+
+  const updates: Record<string, unknown> = {
+    ...(payload.name !== undefined && { name: payload.name }),
+    ...(payload.avatar !== undefined && { avatar: payload.avatar }),
+    ...(targetChannel && {
+      channel_id: payload.channel_id,
+      guild_id: targetChannel.guild_id,
+    }),
   }
 
   if (Object.keys(updates).length > 0) {
@@ -329,16 +332,14 @@ export function buildGithubEmbed(payload: GithubWebhookPayload): {
     }
   }
 
-  if (payload.issue) {
-    return {
-      title: `${payload.action ?? 'updated'}: ${payload.issue.title}`,
-      url: payload.issue.html_url,
-      author: { name: sender },
-    }
-  }
-
-  return {
-    title: 'GitHub event',
-    author: { name: sender },
-  }
+  return payload.issue
+    ? {
+        title: `${payload.action ?? 'updated'}: ${payload.issue.title}`,
+        url: payload.issue.html_url,
+        author: { name: sender },
+      }
+    : {
+        title: 'GitHub event',
+        author: { name: sender },
+      }
 }
