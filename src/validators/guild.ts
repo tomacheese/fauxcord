@@ -181,14 +181,12 @@ export interface GuildMemberUpdatePayload {
 export function validateGuildMemberUpdate(
   payload: GuildMemberUpdatePayload
 ): ValidationErrors {
-  const errors: ValidationErrors = {}
-
-  if (
-    payload.nick !== undefined &&
-    payload.nick !== null &&
-    payload.nick.length > NICK_MAX
-  ) {
-    errors.nick = { _errors: [maxLengthError(NICK_MAX)] }
+  const errors: ValidationErrors = {
+    ...(payload.nick !== undefined &&
+      payload.nick !== null &&
+      payload.nick.length > NICK_MAX && {
+        nick: { _errors: [maxLengthError(NICK_MAX)] },
+      }),
   }
 
   return errors
@@ -226,18 +224,15 @@ function validateEmojiName(name: unknown, required: boolean): FieldError[] {
   if (typeof name !== 'string') {
     return [typeError('string')]
   }
-  if (
-    name.length < EMOJI_LIMITS.NAME_MIN ||
+  return name.length < EMOJI_LIMITS.NAME_MIN ||
     name.length > EMOJI_LIMITS.NAME_MAX
-  ) {
-    return [
-      {
-        code: 'BASE_TYPE_BAD_LENGTH',
-        message: `Must be between ${EMOJI_LIMITS.NAME_MIN} and ${EMOJI_LIMITS.NAME_MAX} in length.`,
-      },
-    ]
-  }
-  return []
+    ? [
+        {
+          code: 'BASE_TYPE_BAD_LENGTH',
+          message: `Must be between ${EMOJI_LIMITS.NAME_MIN} and ${EMOJI_LIMITS.NAME_MAX} in length.`,
+        },
+      ]
+    : []
 }
 
 /**
@@ -253,10 +248,9 @@ function validateEmojiRoles(roles: unknown): FieldError[] {
   if (!Array.isArray(roles)) {
     return [typeError('array')]
   }
-  if (roles.some((role) => typeof role !== 'string')) {
-    return [typeError('array[string]')]
-  }
-  return []
+  return roles.some((role) => typeof role !== 'string')
+    ? [typeError('array[string]')]
+    : []
 }
 
 /**

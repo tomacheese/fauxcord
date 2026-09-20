@@ -30,18 +30,19 @@ interface BanRow {
  */
 function resolveBanUser(db: Database, userId: string): UserObject {
   const user = getUser(db, userId)
-  if (user) return user
-  return {
-    id: userId,
-    username: 'Unknown User',
-    discriminator: '0',
-    avatar: null,
-    bot: false,
-    flags: 0,
-    public_flags: 0,
-    global_name: null,
-    primary_guild: null,
-  }
+  return (
+    user ?? {
+      id: userId,
+      username: 'Unknown User',
+      discriminator: '0',
+      avatar: null,
+      bot: false,
+      flags: 0,
+      public_flags: 0,
+      global_name: null,
+      primary_guild: null,
+    }
+  )
 }
 
 /**
@@ -59,8 +60,7 @@ export function getGuildBan(
   const row = db
     .prepare('SELECT * FROM guild_bans WHERE guild_id = ? AND user_id = ?')
     .get(guildId, userId) as BanRow | undefined
-  if (!row) return null
-  return { user: resolveBanUser(db, userId), reason: row.reason }
+  return row ? { user: resolveBanUser(db, userId), reason: row.reason } : null
 }
 
 /**

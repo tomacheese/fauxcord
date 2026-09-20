@@ -168,13 +168,14 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (channel instanceof Response) return channel
-    return c.json(
-      getArchivedThreads(db, channelId, {
-        private: false,
-        memberUserId: resolveUserId(c, db),
-      })
-    )
+    return channel instanceof Response
+      ? channel
+      : c.json(
+          getArchivedThreads(db, channelId, {
+            private: false,
+            memberUserId: resolveUserId(c, db),
+          })
+        )
   })
 
   // GET /channels/:channelId/threads/archived/private — Archived private threads
@@ -186,13 +187,14 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (channel instanceof Response) return channel
-    return c.json(
-      getArchivedThreads(db, channelId, {
-        private: true,
-        memberUserId: resolveUserId(c, db),
-      })
-    )
+    return channel instanceof Response
+      ? channel
+      : c.json(
+          getArchivedThreads(db, channelId, {
+            private: true,
+            memberUserId: resolveUserId(c, db),
+          })
+        )
   })
 
   // GET /channels/:channelId/users/@me/threads/archived/private — Joined private
@@ -204,13 +206,14 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (channel instanceof Response) return channel
-    return c.json(
-      getArchivedThreads(db, channelId, {
-        private: true,
-        joinedUserId: resolveUserId(c, db),
-      })
-    )
+    return channel instanceof Response
+      ? channel
+      : c.json(
+          getArchivedThreads(db, channelId, {
+            private: true,
+            joinedUserId: resolveUserId(c, db),
+          })
+        )
   })
 
   // GET /channels/:channelId/threads/search — Search threads
@@ -224,18 +227,17 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
     )
     if (channel instanceof Response) return channel
     const result = searchThreads(db, channelId)
-    if (result.total_results === 0) {
-      return c.json(
-        {
-          message: 'Search index is not ready',
-          code: 11_000,
-          documents_indexed: 0,
-          retry_after: 1,
-        },
-        202
-      )
-    }
-    return c.json(result)
+    return result.total_results === 0
+      ? c.json(
+          {
+            message: 'Search index is not ready',
+            code: 11_000,
+            documents_indexed: 0,
+            retry_after: 1,
+          },
+          202
+        )
+      : c.json(result)
   })
 
   // GET /channels/:channelId/thread-members — List members
@@ -250,10 +252,18 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (thread instanceof Response) return thread
-    return c.json(
-      getThreadMembers(db, channelId, limit, after, thread.guild_id, withMember)
-    )
+    return thread instanceof Response
+      ? thread
+      : c.json(
+          getThreadMembers(
+            db,
+            channelId,
+            limit,
+            after,
+            thread.guild_id,
+            withMember
+          )
+        )
   })
 
   // PUT /channels/:channelId/thread-members/@me — Join
@@ -303,8 +313,7 @@ export function createChannelThreadRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_MEMBER,
       'Unknown Member'
     )
-    if (member instanceof Response) return member
-    return c.json(member)
+    return member instanceof Response ? member : c.json(member)
   })
 
   // PUT /channels/:channelId/thread-members/:userId — Add member

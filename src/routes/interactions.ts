@@ -53,10 +53,9 @@ export function createInteractionRoutes(db: Database, baseUrl: string): Hono {
         return c.json(err.body, 400)
       }
 
-      if (c.req.query('with_response') === 'true') {
-        return c.json(result.response)
-      }
-      return c.body(null, 204)
+      return c.req.query('with_response') === 'true'
+        ? c.json(result.response)
+        : c.body(null, 204)
     }
   )
 

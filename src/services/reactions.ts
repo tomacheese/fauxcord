@@ -94,17 +94,17 @@ export function removeReaction(
   // Only emit when a reaction was actually deleted, so removing a
   // non-existent reaction does not produce a misleading
   // MESSAGE_REACTION_REMOVE dispatch.
-  if (result.changes > 0) {
-    const channelId = getChannelIdForMessage(db, messageId)
-    if (channelId !== undefined) {
-      gatewayBus.emit('message.reaction.remove', {
-        guildId: getGuildIdForChannel(db, channelId),
-        channelId,
-        messageId,
-        userId,
-        emoji: { id: null, name: emoji },
-      })
-    }
+  if (result.changes === 0) return
+
+  const channelId = getChannelIdForMessage(db, messageId)
+  if (channelId !== undefined) {
+    gatewayBus.emit('message.reaction.remove', {
+      guildId: getGuildIdForChannel(db, channelId),
+      channelId,
+      messageId,
+      userId,
+      emoji: { id: null, name: emoji },
+    })
   }
 }
 
@@ -151,22 +151,21 @@ export function getReactionUsers(
   after?: string
 ): UserRow[] {
   const clampedLimit = Math.min(limit, 100)
-  if (after) {
-    return db
-      .prepare(
-        `SELECT u.* FROM users u
+  return after
+    ? (db
+        .prepare(
+          `SELECT u.* FROM users u
          JOIN reactions r ON r.user_id = u.id
          WHERE r.message_id = ? AND r.emoji = ? AND u.id > ?
          ORDER BY u.id ASC LIMIT ?`
-      )
-      .all(messageId, emoji, after, clampedLimit) as UserRow[]
-  }
-  return db
-    .prepare(
-      `SELECT u.* FROM users u
+        )
+        .all(messageId, emoji, after, clampedLimit) as UserRow[])
+    : (db
+        .prepare(
+          `SELECT u.* FROM users u
        JOIN reactions r ON r.user_id = u.id
        WHERE r.message_id = ? AND r.emoji = ?
        ORDER BY u.id ASC LIMIT ?`
-    )
-    .all(messageId, emoji, clampedLimit) as UserRow[]
+        )
+        .all(messageId, emoji, clampedLimit) as UserRow[])
 }

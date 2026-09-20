@@ -161,10 +161,11 @@ export function updateEmoji(
     .get(emojiId, guildId) as EmojiRow | undefined
   if (!current) return null
 
-  const updates: Record<string, unknown> = {}
-  if (payload.name !== undefined) updates.name = payload.name
-  if (payload.roles !== undefined) {
-    updates.roles = JSON.stringify(payload.roles)
+  const updates: Record<string, unknown> = {
+    ...(payload.name !== undefined && { name: payload.name }),
+    ...(payload.roles !== undefined && {
+      roles: JSON.stringify(payload.roles),
+    }),
   }
 
   if (Object.keys(updates).length > 0) {

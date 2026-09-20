@@ -175,8 +175,7 @@ function isValidBitfield(value: unknown): boolean {
   if (value === undefined || value === null) return true
   if (typeof value === 'number')
     return Number.isSafeInteger(value) && value >= 0
-  if (typeof value === 'string') return /^\d+$/.test(value)
-  return false
+  return typeof value === 'string' ? /^\d+$/.test(value) : false
 }
 
 /**
@@ -202,24 +201,24 @@ function bitfieldTypeError(): FieldError {
 export function validatePermissionOverwrite(
   payload: PermissionOverwritePayload
 ): ValidationErrors {
-  const errors: ValidationErrors = {}
-
-  if (payload.type !== 0 && payload.type !== 1) {
-    errors.type = {
-      _errors: [
-        {
-          code: 'BASE_TYPE_CHOICES',
-          message: 'Value must be one of (0, 1).',
+  const errors: ValidationErrors = {
+    ...(payload.type !== 0 &&
+      payload.type !== 1 && {
+        type: {
+          _errors: [
+            {
+              code: 'BASE_TYPE_CHOICES',
+              message: 'Value must be one of (0, 1).',
+            },
+          ],
         },
-      ],
-    }
-  }
-
-  if (!isValidBitfield(payload.allow)) {
-    errors.allow = { _errors: [bitfieldTypeError()] }
-  }
-  if (!isValidBitfield(payload.deny)) {
-    errors.deny = { _errors: [bitfieldTypeError()] }
+      }),
+    ...(!isValidBitfield(payload.allow) && {
+      allow: { _errors: [bitfieldTypeError()] },
+    }),
+    ...(!isValidBitfield(payload.deny) && {
+      deny: { _errors: [bitfieldTypeError()] },
+    }),
   }
 
   return errors
@@ -233,9 +232,8 @@ export function validatePermissionOverwrite(
  */
 function bitfieldToString(value: unknown): string {
   if (value === undefined || value === null) return '0'
-  if (typeof value === 'number') return String(value)
   // Guaranteed to be a numeric string once validatePermissionOverwrite passes.
-  return value as string
+  return typeof value === 'number' ? String(value) : (value as string)
 }
 
 /**

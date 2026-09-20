@@ -117,30 +117,19 @@ export function validateWebhookUpdate(
 export function validateWebhookExecute(
   payload: WebhookExecutePayload
 ): ValidationErrors {
-  const errors: ValidationErrors = {}
-
-  if (payload.content && payload.content.length > WEBHOOK_LIMITS.CONTENT_MAX) {
-    errors.content = {
-      _errors: [maxLengthError(WEBHOOK_LIMITS.CONTENT_MAX)],
-    }
-  }
-
-  if (
-    payload.username &&
-    payload.username.length > WEBHOOK_LIMITS.USERNAME_MAX
-  ) {
-    errors.username = {
-      _errors: [maxLengthError(WEBHOOK_LIMITS.USERNAME_MAX)],
-    }
-  }
-
-  if (
-    Array.isArray(payload.embeds) &&
-    payload.embeds.length > WEBHOOK_LIMITS.EMBEDS_MAX
-  ) {
-    errors.embeds = {
-      _errors: [maxLengthError(WEBHOOK_LIMITS.EMBEDS_MAX)],
-    }
+  const errors: ValidationErrors = {
+    ...(payload.content &&
+      payload.content.length > WEBHOOK_LIMITS.CONTENT_MAX && {
+        content: { _errors: [maxLengthError(WEBHOOK_LIMITS.CONTENT_MAX)] },
+      }),
+    ...(payload.username &&
+      payload.username.length > WEBHOOK_LIMITS.USERNAME_MAX && {
+        username: { _errors: [maxLengthError(WEBHOOK_LIMITS.USERNAME_MAX)] },
+      }),
+    ...(Array.isArray(payload.embeds) &&
+      payload.embeds.length > WEBHOOK_LIMITS.EMBEDS_MAX && {
+        embeds: { _errors: [maxLengthError(WEBHOOK_LIMITS.EMBEDS_MAX)] },
+      }),
   }
 
   return errors

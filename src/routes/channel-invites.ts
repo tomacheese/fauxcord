@@ -38,8 +38,9 @@ export function createChannelInviteRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_CHANNEL,
       'Unknown Channel'
     )
-    if (channel instanceof Response) return channel
-    return c.json(getChannelInvites(db, channelId))
+    return channel instanceof Response
+      ? channel
+      : c.json(getChannelInvites(db, channelId))
   })
 
   // POST /channels/:channelId/invites — Create an invite

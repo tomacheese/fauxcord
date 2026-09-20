@@ -48,8 +48,9 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_GUILD,
       'Unknown Guild'
     )
-    if (guild instanceof Response) return guild
-    return c.json(getGuildEmojis(db, guildId))
+    return guild instanceof Response
+      ? guild
+      : c.json(getGuildEmojis(db, guildId))
   })
 
   // GET /guilds/:guildId/emojis/:emojiId — Retrieve a single emoji
@@ -68,8 +69,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_EMOJI,
       'Unknown Emoji'
     )
-    if (emoji instanceof Response) return emoji
-    return c.json(emoji)
+    return emoji instanceof Response ? emoji : c.json(emoji)
   })
 
   // POST /guilds/:guildId/emojis — Create an emoji
@@ -146,8 +146,7 @@ export function createGuildEmojiRoutes(db: Database): Hono<AppEnv> {
       DiscordErrorCode.UNKNOWN_EMOJI,
       'Unknown Emoji'
     )
-    if (updated instanceof Response) return updated
-    return c.json(updated)
+    return updated instanceof Response ? updated : c.json(updated)
   })
 
   // DELETE /guilds/:guildId/emojis/:emojiId — Delete an emoji

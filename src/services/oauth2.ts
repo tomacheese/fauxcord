@@ -293,33 +293,33 @@ export function getOAuth2Me(
         | undefined)
     : undefined
 
-  if (!user) return null
-
-  return {
-    application: {
-      id: bot?.user_id ?? accessToken.client_id,
-      name: bot?.username ?? 'MockApp',
-      icon: null,
-      description: '',
-      type: null,
-      verify_key: 'fauxcord-contract-verify-key',
-      flags: 0,
-      flags_new: '0',
-      bot_public: true,
-      bot_require_code_grant: false,
-    },
-    // Guard against an empty scope so we return [] rather than [""].
-    scopes: accessToken.scope ? accessToken.scope.split(' ') : [],
-    expires: toDiscordTimestamp(new Date(accessToken.expires_at)),
-    user: {
-      id: user.id,
-      username: user.username,
-      discriminator: user.discriminator,
-      avatar: user.avatar,
-      public_flags: 0,
-      flags: 0,
-      global_name: null,
-      primary_guild: null,
-    },
-  }
+  return user
+    ? {
+        application: {
+          id: bot?.user_id ?? accessToken.client_id,
+          name: bot?.username ?? 'MockApp',
+          icon: null,
+          description: '',
+          type: null,
+          verify_key: 'fauxcord-contract-verify-key',
+          flags: 0,
+          flags_new: '0',
+          bot_public: true,
+          bot_require_code_grant: false,
+        },
+        // Guard against an empty scope so we return [] rather than [""].
+        scopes: accessToken.scope ? accessToken.scope.split(' ') : [],
+        expires: toDiscordTimestamp(new Date(accessToken.expires_at)),
+        user: {
+          id: user.id,
+          username: user.username,
+          discriminator: user.discriminator,
+          avatar: user.avatar,
+          public_flags: 0,
+          flags: 0,
+          global_name: null,
+          primary_guild: null,
+        },
+      }
+    : null
 }

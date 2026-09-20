@@ -64,8 +64,7 @@ export function createGuildBanRoutes(db: Database): Hono {
       DiscordErrorCode.UNKNOWN_BAN,
       'Unknown Ban'
     )
-    if (ban instanceof Response) return ban
-    return c.json(ban)
+    return ban instanceof Response ? ban : c.json(ban)
   })
 
   // PUT /guilds/:guildId/bans/:userId — Ban a user from the guild

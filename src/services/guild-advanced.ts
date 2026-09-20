@@ -576,37 +576,38 @@ export function updateGuildScheduledEvent(
   payload: ScheduledEventPayload
 ): JsonObject | null {
   const current = getGuildScheduledEvent(db, guildId, eventId)
-  if (!current) return null
-  return runInTransaction(db, () => {
-    db.prepare(
-      `UPDATE scheduled_events SET name = ?, description = ?, channel_id = ?,
+  return current
+    ? runInTransaction(db, () => {
+        db.prepare(
+          `UPDATE scheduled_events SET name = ?, description = ?, channel_id = ?,
          scheduled_start_time = ?, scheduled_end_time = ?, privacy_level = ?,
          status = ?, entity_type = ?, entity_metadata = ?, image = ?,
          recurrence_rule = ?, updated_at = datetime('now')
        WHERE guild_id = ? AND id = ?`
-    ).run(
-      payload.name ?? current.name,
-      payload.description === undefined
-        ? current.description
-        : payload.description,
-      payload.channel_id === undefined
-        ? current.channel_id
-        : payload.channel_id,
-      payload.scheduled_start_time ?? current.scheduled_start_time,
-      payload.scheduled_end_time === undefined
-        ? current.scheduled_end_time
-        : payload.scheduled_end_time,
-      payload.privacy_level ?? current.privacy_level,
-      payload.status ?? current.status,
-      payload.entity_type ?? current.entity_type,
-      JSON.stringify(payload.entity_metadata ?? current.entity_metadata),
-      payload.image === undefined ? current.image : payload.image,
-      JSON.stringify(payload.recurrence_rule ?? current.recurrence_rule),
-      guildId,
-      eventId
-    )
-    return getGuildScheduledEvent(db, guildId, eventId)
-  })
+        ).run(
+          payload.name ?? current.name,
+          payload.description === undefined
+            ? current.description
+            : payload.description,
+          payload.channel_id === undefined
+            ? current.channel_id
+            : payload.channel_id,
+          payload.scheduled_start_time ?? current.scheduled_start_time,
+          payload.scheduled_end_time === undefined
+            ? current.scheduled_end_time
+            : payload.scheduled_end_time,
+          payload.privacy_level ?? current.privacy_level,
+          payload.status ?? current.status,
+          payload.entity_type ?? current.entity_type,
+          JSON.stringify(payload.entity_metadata ?? current.entity_metadata),
+          payload.image === undefined ? current.image : payload.image,
+          JSON.stringify(payload.recurrence_rule ?? current.recurrence_rule),
+          guildId,
+          eventId
+        )
+        return getGuildScheduledEvent(db, guildId, eventId)
+      })
+    : null
 }
 
 /** Deletes a scheduled event. */

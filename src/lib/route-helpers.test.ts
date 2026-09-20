@@ -18,8 +18,7 @@ describe('requireEntity', () => {
         DiscordErrorCode.UNKNOWN_GUILD,
         'Unknown Guild'
       )
-      if (result instanceof Response) return result
-      return c.json(result)
+      return result instanceof Response ? result : c.json(result)
     })
     const res = await app.request('/')
     expect(res.status).toBe(200)
@@ -35,8 +34,7 @@ describe('requireEntity', () => {
         DiscordErrorCode.UNKNOWN_GUILD,
         'Unknown Guild'
       )
-      if (result instanceof Response) return result
-      return c.json(result)
+      return result instanceof Response ? result : c.json(result)
     })
     const res = await app.request('/')
     expect(res.status).toBe(404)
@@ -54,8 +52,7 @@ describe('requireEntity', () => {
         DiscordErrorCode.UNKNOWN_CHANNEL,
         'Unknown Channel'
       )
-      if (result instanceof Response) return result
-      return c.json(result)
+      return result instanceof Response ? result : c.json(result)
     })
     const res = await app.request('/')
     expect(res.status).toBe(404)

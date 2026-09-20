@@ -57,9 +57,7 @@ export function parseTargetUsersCsv(
   }
 
   const invalid = dataLines.filter((line) => !SNOWFLAKE_PATTERN.test(line))
-  if (invalid.length > 0) {
-    return fileError(`Invalid user ID(s): ${invalid.join(', ')}`)
-  }
-
-  return { userIds: dataLines }
+  return invalid.length > 0
+    ? fileError(`Invalid user ID(s): ${invalid.join(', ')}`)
+    : { userIds: dataLines }
 }

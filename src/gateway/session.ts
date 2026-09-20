@@ -80,10 +80,11 @@ export class SessionManager {
    */
   getByBotId(botId: string): Session[] {
     const ids = this.sessionIdsByBotId.get(botId)
-    if (!ids) return []
-    return [...ids]
-      .map((id) => this.sessionsById.get(id))
-      .filter((s): s is Session => s !== undefined)
+    return ids
+      ? [...ids]
+          .map((id) => this.sessionsById.get(id))
+          .filter((s): s is Session => s !== undefined)
+      : []
   }
 
   /**
@@ -144,9 +145,8 @@ export class SessionManager {
       return seq === session.seq ? [] : undefined
     }
     const oldestSeq = session.replayBuffer[0]?.seq ?? 0
-    if (seq < oldestSeq - 1) {
-      return undefined
-    }
-    return session.replayBuffer.filter((entry) => entry.seq > seq)
+    return seq < oldestSeq - 1
+      ? undefined
+      : session.replayBuffer.filter((entry) => entry.seq > seq)
   }
 }

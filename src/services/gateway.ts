@@ -89,10 +89,9 @@ function toGatewayUrl(baseUrl: string): string {
   if (baseUrl.startsWith('https://')) {
     return `wss://${baseUrl.slice('https://'.length)}`
   }
-  if (baseUrl.startsWith('http://')) {
-    return `ws://${baseUrl.slice('http://'.length)}`
-  }
-  return baseUrl
+  return baseUrl.startsWith('http://')
+    ? `ws://${baseUrl.slice('http://'.length)}`
+    : baseUrl
 }
 
 /**

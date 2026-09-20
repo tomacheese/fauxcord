@@ -250,30 +250,25 @@ export function toMessageObject(
     pinned: row.pinned === 1,
     type: row.type,
     flags: row.flags,
-  }
-
-  if (row.referenced_message_id) {
-    obj.message_reference = { message_id: row.referenced_message_id }
-  }
-
-  // Add webhook_id to messages sent via webhook (author_id = webhook ID)
-  if (row.author_token === 'webhook') {
-    obj.webhook_id = row.author_id
-  }
-
-  // Add the reactions field only when reactions exist (conforming to the Discord API spec)
-  if (reactions.length > 0) {
-    obj.reactions = reactions.map((r) => ({
-      count: r.count,
-      count_details: { burst: 0, normal: r.count },
-      me: false, // Always false in the mock (the requesting user is not identified)
-      me_burst: false, // Super reactions are not simulated
-      emoji: {
-        id: null, // Always null because these are standard emoji
-        name: r.emoji,
-      },
-      burst_colors: [],
-    }))
+    ...(row.referenced_message_id && {
+      message_reference: { message_id: row.referenced_message_id },
+    }),
+    // Add webhook_id to messages sent via webhook (author_id = webhook ID)
+    ...(row.author_token === 'webhook' && { webhook_id: row.author_id }),
+    // Add the reactions field only when reactions exist (conforming to the Discord API spec)
+    ...(reactions.length > 0 && {
+      reactions: reactions.map((r) => ({
+        count: r.count,
+        count_details: { burst: 0, normal: r.count },
+        me: false, // Always false in the mock (the requesting user is not identified)
+        me_burst: false, // Super reactions are not simulated
+        emoji: {
+          id: null, // Always null because these are standard emoji
+          name: r.emoji,
+        },
+        burst_colors: [],
+      })),
+    }),
   }
 
   return obj
@@ -331,9 +326,7 @@ export function getMessage(
   const row = db
     .prepare('SELECT * FROM messages WHERE id = ?')
     .get(messageId) as MessageRow | undefined
-  if (!row) return null
-
-  return hydrateMessageRow(db, row, baseUrl)
+  return row ? hydrateMessageRow(db, row, baseUrl) : null
 }
 
 /** Query parameters for listing messages */
@@ -444,11 +437,12 @@ function dispatchMemberFor(
   guildId: string | undefined,
   authorId: string
 ): Record<string, unknown> | undefined {
-  if (!guildId) return undefined
-  return (
-    (getGuildMember(db, guildId, authorId) as Record<string, unknown> | null) ??
-    undefined
-  )
+  return guildId
+    ? ((getGuildMember(db, guildId, authorId) as Record<
+        string,
+        unknown
+      > | null) ?? undefined)
+    : undefined
 }
 
 /** Message flag bit values (Discord API MESSAGE_FLAGS) */

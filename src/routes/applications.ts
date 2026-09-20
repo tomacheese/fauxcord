@@ -107,12 +107,14 @@ function validateSnowflake(
   field: string,
   value: string
 ): Response | undefined {
-  if (SNOWFLAKE_PATTERN.test(value)) return undefined
-  return c.json(
-    validationError({ [field]: fieldError('Value is not a valid snowflake.') })
-      .body,
-    400
-  )
+  return SNOWFLAKE_PATTERN.test(value)
+    ? undefined
+    : c.json(
+        validationError({
+          [field]: fieldError('Value is not a valid snowflake.'),
+        }).body,
+        400
+      )
 }
 
 /** Requires the authenticated principal to own the requested application. */
@@ -194,8 +196,7 @@ function validateEmojiName(name: unknown): boolean {
 function parseBooleanQuery(value: string | undefined): boolean | undefined {
   if (value === undefined) return undefined
   if (value === 'true') return true
-  if (value === 'false') return false
-  return undefined
+  return value === 'false' ? false : undefined
 }
 
 /** Validates one application role connection metadata item. */
@@ -336,8 +337,9 @@ export function createApplicationRoutes(
     if (invalid) return invalid
     const denied = requireApplicationAccess(c, db, applicationId)
     if (denied) return denied
-    if (!getApplication(db, applicationId)) return unknownApplication(c)
-    return c.json({ items: listApplicationEmojis(db, applicationId) })
+    return getApplication(db, applicationId)
+      ? c.json({ items: listApplicationEmojis(db, applicationId) })
+      : unknownApplication(c)
   })
 
   app.post('/applications/:applicationId/emojis', async (c) => {
@@ -348,12 +350,13 @@ export function createApplicationRoutes(
     if (denied) return denied
     if (!getApplication(db, applicationId)) return unknownApplication(c)
     const payload = await parseJsonBody(c)
-    const errors: Record<string, unknown> = {}
-    if (!validateEmojiName(payload.name)) {
-      errors.name = fieldError('Name must be between 2 and 32 characters.')
-    }
-    if (typeof payload.image !== 'string' || payload.image.length === 0) {
-      errors.image = fieldError('Image is required.')
+    const errors: Record<string, unknown> = {
+      ...(!validateEmojiName(payload.name) && {
+        name: fieldError('Name must be between 2 and 32 characters.'),
+      }),
+      ...((typeof payload.image !== 'string' || payload.image.length === 0) && {
+        image: fieldError('Image is required.'),
+      }),
     }
     if (Object.keys(errors).length > 0) {
       return c.json(validationError(errors).body, 400)
@@ -361,17 +364,21 @@ export function createApplicationRoutes(
     const bot = c.get('bot')
     const accessToken = c.get('accessToken')
     const userId = bot?.user_id ?? accessToken?.user_id
-    if (!userId) {
-      return c.json(
-        discordError(DiscordErrorCode.MISSING_ACCESS, 'Missing Access', 403)
-          .body,
-        403
-      )
-    }
-    return c.json(
-      createApplicationEmoji(db, applicationId, userId, payload.name as string),
-      201
-    )
+    return userId
+      ? c.json(
+          createApplicationEmoji(
+            db,
+            applicationId,
+            userId,
+            payload.name as string
+          ),
+          201
+        )
+      : c.json(
+          discordError(DiscordErrorCode.MISSING_ACCESS, 'Missing Access', 403)
+            .body,
+          403
+        )
   })
 
   app.get('/applications/:applicationId/emojis/:emojiId', (c) => {
@@ -484,27 +491,26 @@ export function createApplicationRoutes(
     const invalidSnowflake = snowflakeQueries.find(
       ([, value]) => value !== undefined && !SNOWFLAKE_PATTERN.test(value)
     )
-    if (invalidSnowflake) {
-      return c.json(
-        validationError({
-          [invalidSnowflake[0]]: fieldError('Invalid snowflake query value.'),
-        }).body,
-        400
-      )
-    }
-    return c.json(
-      listEntitlements(db, applicationId, {
-        userId: c.req.query('user_id'),
-        skuIds,
-        guildId: c.req.query('guild_id'),
-        before: c.req.query('before'),
-        after: c.req.query('after'),
-        limit,
-        excludeEnded: booleans.exclude_ended,
-        excludeDeleted: booleans.exclude_deleted,
-        onlyActive: booleans.only_active,
-      })
-    )
+    return invalidSnowflake
+      ? c.json(
+          validationError({
+            [invalidSnowflake[0]]: fieldError('Invalid snowflake query value.'),
+          }).body,
+          400
+        )
+      : c.json(
+          listEntitlements(db, applicationId, {
+            userId: c.req.query('user_id'),
+            skuIds,
+            guildId: c.req.query('guild_id'),
+            before: c.req.query('before'),
+            after: c.req.query('after'),
+            limit,
+            excludeEnded: booleans.exclude_ended,
+            excludeDeleted: booleans.exclude_deleted,
+            onlyActive: booleans.only_active,
+          })
+        )
   })
 
   app.post('/applications/:applicationId/entitlements', async (c) => {
@@ -604,8 +610,9 @@ export function createApplicationRoutes(
     if (invalid) return invalid
     const denied = requireApplicationAccess(c, db, applicationId)
     if (denied) return denied
-    if (!getApplication(db, applicationId)) return unknownApplication(c)
-    return c.json(getRoleConnectionMetadata(db, applicationId))
+    return getApplication(db, applicationId)
+      ? c.json(getRoleConnectionMetadata(db, applicationId))
+      : unknownApplication(c)
   })
 
   app.put(
@@ -619,28 +626,25 @@ export function createApplicationRoutes(
       if (!getApplication(db, applicationId)) return unknownApplication(c)
       const payload: unknown = await c.req.json().catch(() => undefined)
       const metadata = payload === null ? [] : payload
-      if (
-        !Array.isArray(metadata) ||
+      return !Array.isArray(metadata) ||
         metadata.length > 5 ||
         metadata.some((item) => !validateMetadataItem(item)) ||
         new Set(
           metadata.map((item) => (item as RoleConnectionMetadataItem).key)
         ).size !== metadata.length
-      ) {
-        return c.json(
-          validationError({
-            metadata: fieldError('Invalid role connection metadata.'),
-          }).body,
-          400
-        )
-      }
-      return c.json(
-        replaceRoleConnectionMetadata(
-          db,
-          applicationId,
-          metadata as RoleConnectionMetadataItem[]
-        )
-      )
+        ? c.json(
+            validationError({
+              metadata: fieldError('Invalid role connection metadata.'),
+            }).body,
+            400
+          )
+        : c.json(
+            replaceRoleConnectionMetadata(
+              db,
+              applicationId,
+              metadata as RoleConnectionMetadataItem[]
+            )
+          )
     }
   )
 

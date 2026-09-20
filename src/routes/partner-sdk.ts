@@ -32,9 +32,9 @@ const invalid = (field = 'body') =>
 export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
   const requireBot = (c: Context<AppEnv>) => {
-    if (!c.get('bot'))
-      return c.json({ message: '401: Unauthorized', code: 0 }, 401)
-    return null
+    return c.get('bot')
+      ? null
+      : c.json({ message: '401: Unauthorized', code: 0 }, 401)
   }
   const token = async (c: Context<AppEnv>, requireCredential: boolean) => {
     if (requireCredential) {
@@ -51,20 +51,19 @@ export function createPartnerSdkRoutes(db: Database): Hono<AppEnv> {
       payload.external_auth_type === undefined
     )
       return c.json(invalid(), 400)
-    if (
-      !acceptsPartnerClient(
-        db,
-        payload.client_id,
-        payload.client_secret ?? null
-      )
+    return acceptsPartnerClient(
+      db,
+      payload.client_id,
+      payload.client_secret ?? null
     )
-      return c.json(
-        discordError(40_001, 'Invalid OAuth2 client', 401).body,
-        401
-      )
-    return c.json(
-      issueProvisionalToken(db, payload.client_id, payload.external_auth_token)
-    )
+      ? c.json(
+          issueProvisionalToken(
+            db,
+            payload.client_id,
+            payload.external_auth_token
+          )
+        )
+      : c.json(discordError(40_001, 'Invalid OAuth2 client', 401).body, 401)
   }
   app.post('/partner-sdk/token', (c) => token(c, false))
   app.post('/partner-sdk/token/bot', async (c) => {
@@ -159,20 +158,19 @@ export function createPartnerSdkPublicRoutes(db: Database): Hono<AppEnv> {
       payload.external_auth_type === undefined
     )
       return c.json(invalid(), 400)
-    if (
-      !acceptsPartnerClient(
-        db,
-        payload.client_id,
-        payload.client_secret ?? null
-      )
+    return acceptsPartnerClient(
+      db,
+      payload.client_id,
+      payload.client_secret ?? null
     )
-      return c.json(
-        discordError(40_001, 'Invalid OAuth2 client', 401).body,
-        401
-      )
-    return c.json(
-      issueProvisionalToken(db, payload.client_id, payload.external_auth_token)
-    )
+      ? c.json(
+          issueProvisionalToken(
+            db,
+            payload.client_id,
+            payload.external_auth_token
+          )
+        )
+      : c.json(discordError(40_001, 'Invalid OAuth2 client', 401).body, 401)
   }
   app.post('/partner-sdk/token', publicToken)
   app.post('/partner-sdk/provisional-accounts/unmerge', async (c) => {

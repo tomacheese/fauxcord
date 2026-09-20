@@ -146,8 +146,9 @@ export interface RoleCreateParams {
 function normalizePermissions(value: string | number | undefined): string {
   if (value === undefined) return '0'
   if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value < 0) return '0'
-    return Math.trunc(value).toString()
+    return !Number.isFinite(value) || value < 0
+      ? '0'
+      : Math.trunc(value).toString()
   }
   const dotIndex = value.indexOf('.')
   const intPart = dotIndex === -1 ? value : value.slice(0, dotIndex)
@@ -243,17 +244,18 @@ export function updateRole(
     .get(roleId, guildId) as RoleRow | undefined
   if (!current) return null
 
-  const updates: Record<string, unknown> = {}
-  if (payload.name !== undefined) updates.name = payload.name
-  if (payload.color !== undefined) updates.color = payload.color
-  if (payload.hoist !== undefined) updates.hoist = payload.hoist ? 1 : 0
-  if (payload.permissions !== undefined) {
-    updates.permissions = normalizePermissions(payload.permissions)
+  const updates: Record<string, unknown> = {
+    ...(payload.name !== undefined && { name: payload.name }),
+    ...(payload.color !== undefined && { color: payload.color }),
+    ...(payload.hoist !== undefined && { hoist: payload.hoist ? 1 : 0 }),
+    ...(payload.permissions !== undefined && {
+      permissions: normalizePermissions(payload.permissions),
+    }),
+    ...(payload.mentionable !== undefined && {
+      mentionable: payload.mentionable ? 1 : 0,
+    }),
+    ...(payload.position !== undefined && { position: payload.position }),
   }
-  if (payload.mentionable !== undefined) {
-    updates.mentionable = payload.mentionable ? 1 : 0
-  }
-  if (payload.position !== undefined) updates.position = payload.position
 
   if (Object.keys(updates).length > 0) {
     const setClauses = Object.keys(updates)

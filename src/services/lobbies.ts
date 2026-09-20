@@ -175,15 +175,16 @@ export function updateLobbyChannel(
   lobbyId: string,
   channelId: string | null
 ): LobbyObject | null {
-  if (channelId !== null && !getChannel(db, channelId)) return null
-  return runInTransaction(db, () => {
-    if (!getLobby(db, lobbyId)) return null
-    db.prepare(
-      `UPDATE lobbies SET linked_channel_id = ?, updated_at = datetime('now')
+  return channelId !== null && !getChannel(db, channelId)
+    ? null
+    : runInTransaction(db, () => {
+        if (!getLobby(db, lobbyId)) return null
+        db.prepare(
+          `UPDATE lobbies SET linked_channel_id = ?, updated_at = datetime('now')
        WHERE id = ?`
-    ).run(channelId, lobbyId)
-    return getLobby(db, lobbyId)
-  })
+        ).run(channelId, lobbyId)
+        return getLobby(db, lobbyId)
+      })
 }
 
 export function deleteLobby(db: Database, lobbyId: string): boolean {
@@ -285,28 +286,31 @@ function toLobbyMessage(
   row: LobbyMessageRow
 ): LobbyMessageObject | null {
   const author = getUser(db, row.author_id)
-  if (!author) return null
-  return {
-    id: row.id,
-    type: row.type,
-    content: row.content,
-    lobby_id: row.lobby_id,
-    channel_id: row.channel_id,
-    author,
-    ...(listMembers(db, row.lobby_id).find(
-      (member) => member.id === row.author_id
-    ) && {
-      lobby_member: listMembers(db, row.lobby_id).find(
-        (member) => member.id === row.author_id
-      ),
-    }),
-    ...(row.metadata !== null && { metadata: parseMap(row.metadata) ?? {} }),
-    ...(row.moderation_metadata !== null && {
-      moderation_metadata: parseMap(row.moderation_metadata) ?? {},
-    }),
-    flags: row.flags,
-    application_id: row.application_id,
-  }
+  return author
+    ? {
+        id: row.id,
+        type: row.type,
+        content: row.content,
+        lobby_id: row.lobby_id,
+        channel_id: row.channel_id,
+        author,
+        ...(listMembers(db, row.lobby_id).find(
+          (member) => member.id === row.author_id
+        ) && {
+          lobby_member: listMembers(db, row.lobby_id).find(
+            (member) => member.id === row.author_id
+          ),
+        }),
+        ...(row.metadata !== null && {
+          metadata: parseMap(row.metadata) ?? {},
+        }),
+        ...(row.moderation_metadata !== null && {
+          moderation_metadata: parseMap(row.moderation_metadata) ?? {},
+        }),
+        flags: row.flags,
+        application_id: row.application_id,
+      }
+    : null
 }
 
 export function listLobbyMessages(

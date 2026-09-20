@@ -47,14 +47,11 @@ const SUBSCRIPTION_OAUTH2_SCOPES = new Set([
 
 function authorizeSubscription(c: Context<AppEnv>) {
   const accessToken = c.get('accessToken')
-  if (
-    accessToken?.scope
-      .split(' ')
-      .every((scope) => !SUBSCRIPTION_OAUTH2_SCOPES.has(scope))
-  ) {
-    return c.json({ message: '403: Forbidden', code: 50_001 }, 403)
-  }
-  return null
+  return accessToken?.scope
+    .split(' ')
+    .every((scope) => !SUBSCRIPTION_OAUTH2_SCOPES.has(scope))
+    ? c.json({ message: '403: Forbidden', code: 50_001 }, 403)
+    : null
 }
 
 /** Public catalog routes that Discord permits without a credential. */

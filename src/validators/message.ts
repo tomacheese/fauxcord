@@ -59,31 +59,27 @@ export function validateMessageCreate(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _hasAttachments = false
 ): ValidationErrors {
-  const errors: ValidationErrors = {}
-
   // Check content length (treat null like undefined; type-safely verify it is a string)
-  if (
-    typeof payload.content === 'string' &&
-    payload.content.length > MESSAGE_LIMITS.CONTENT_MAX
-  ) {
-    errors.content = {
-      _errors: [maxLengthError(MESSAGE_LIMITS.CONTENT_MAX)],
-    }
-  }
-
   // Check embeds count (null is treated the same as an empty array; discordgo etc. always send null)
-  if (
+  const embedsTooLong =
     Array.isArray(payload.embeds) &&
     payload.embeds.length > MESSAGE_LIMITS.EMBEDS_MAX
-  ) {
-    errors.embeds = {
-      _errors: [
-        {
-          code: 'BASE_TYPE_MAX_LENGTH',
-          message: `Must be ${MESSAGE_LIMITS.EMBEDS_MAX} or fewer in length.`,
-        },
-      ],
-    }
+
+  const errors: ValidationErrors = {
+    ...(typeof payload.content === 'string' &&
+      payload.content.length > MESSAGE_LIMITS.CONTENT_MAX && {
+        content: { _errors: [maxLengthError(MESSAGE_LIMITS.CONTENT_MAX)] },
+      }),
+    ...(embedsTooLong && {
+      embeds: {
+        _errors: [
+          {
+            code: 'BASE_TYPE_MAX_LENGTH',
+            message: `Must be ${MESSAGE_LIMITS.EMBEDS_MAX} or fewer in length.`,
+          },
+        ],
+      },
+    }),
   }
 
   // Validate each embed field (Array.isArray safely skips null/undefined)

@@ -85,21 +85,21 @@ export function getBotUser(db: Database, botToken: string): UserObject | null {
       }
     | undefined
 
-  if (!user) return null
-
-  return {
-    id: user.id,
-    username: user.username,
-    discriminator: user.discriminator,
-    avatar: user.avatar,
-    bot: user.bot === 1,
-    flags: 0,
-    public_flags: 0,
-    global_name: null,
-    mfa_enabled: false,
-    locale: 'en-US',
-    verified: true,
-  }
+  return user
+    ? {
+        id: user.id,
+        username: user.username,
+        discriminator: user.discriminator,
+        avatar: user.avatar,
+        bot: user.bot === 1,
+        flags: 0,
+        public_flags: 0,
+        global_name: null,
+        mfa_enabled: false,
+        locale: 'en-US',
+        verified: true,
+      }
+    : null
 }
 
 /**
@@ -138,16 +138,18 @@ export function updateBotUser(
       )
     }
 
-    if (payload.avatar !== undefined) {
-      db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(
-        payload.avatar,
-        bot.user_id
-      )
-      db.prepare('UPDATE bots SET avatar = ? WHERE token = ?').run(
-        payload.avatar,
-        botToken
-      )
+    if (payload.avatar === undefined) {
+      return
     }
+
+    db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(
+      payload.avatar,
+      bot.user_id
+    )
+    db.prepare('UPDATE bots SET avatar = ? WHERE token = ?').run(
+      payload.avatar,
+      botToken
+    )
   })
   applyUpdate()
 
@@ -171,19 +173,19 @@ export function getUser(db: Database, userId: string): UserObject | null {
       }
     | undefined
 
-  if (!user) return null
-
-  return {
-    id: user.id,
-    username: user.username,
-    discriminator: user.discriminator,
-    avatar: user.avatar,
-    bot: user.bot === 1,
-    flags: 0,
-    public_flags: 0,
-    global_name: null,
-    primary_guild: null,
-  }
+  return user
+    ? {
+        id: user.id,
+        username: user.username,
+        discriminator: user.discriminator,
+        avatar: user.avatar,
+        bot: user.bot === 1,
+        flags: 0,
+        public_flags: 0,
+        global_name: null,
+        primary_guild: null,
+      }
+    : null
 }
 
 /**
@@ -231,37 +233,37 @@ export function getApplication(
   if (!bot) return null
 
   const user = getUser(db, bot.user_id)
-  if (!user) return null
-
-  return {
-    id: bot.user_id,
-    name: bot.username,
-    icon: null,
-    description: '',
-    // `summary` is a required field on real Discord's application object,
-    // deprecated and always empty (discord-api-types' APIApplication types
-    // it as the literal `''`). interactions.py's `Application` model
-    // declares it as required with no default, and constructs it from this
-    // response during login -- before the Gateway ever connects -- so
-    // omitting it crashed with a `TypeError` (found via compat harness
-    // Task 8's interactions.py verifier).
-    summary: '',
-    type: null,
-    verify_key:
-      '0000000000000000000000000000000000000000000000000000000000000000',
-    flags: 0,
-    flags_new: '0',
-    redirect_uris: [],
-    interactions_endpoint_url: null,
-    role_connections_verification_url: null,
-    bot_public: true,
-    bot_require_code_grant: false,
-    owner: user,
-    approximate_guild_count: 0,
-    approximate_user_install_count: 0,
-    approximate_user_authorization_count: 0,
-    explicit_content_filter: 0,
-    team: null,
-    eligible_oauth2_scopes: [],
-  }
+  return user
+    ? {
+        id: bot.user_id,
+        name: bot.username,
+        icon: null,
+        description: '',
+        // `summary` is a required field on real Discord's application object,
+        // deprecated and always empty (discord-api-types' APIApplication types
+        // it as the literal `''`). interactions.py's `Application` model
+        // declares it as required with no default, and constructs it from this
+        // response during login -- before the Gateway ever connects -- so
+        // omitting it crashed with a `TypeError` (found via compat harness
+        // Task 8's interactions.py verifier).
+        summary: '',
+        type: null,
+        verify_key:
+          '0000000000000000000000000000000000000000000000000000000000000000',
+        flags: 0,
+        flags_new: '0',
+        redirect_uris: [],
+        interactions_endpoint_url: null,
+        role_connections_verification_url: null,
+        bot_public: true,
+        bot_require_code_grant: false,
+        owner: user,
+        approximate_guild_count: 0,
+        approximate_user_install_count: 0,
+        approximate_user_authorization_count: 0,
+        explicit_content_filter: 0,
+        team: null,
+        eligible_oauth2_scopes: [],
+      }
+    : null
 }

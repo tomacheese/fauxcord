@@ -113,8 +113,7 @@ export function createGuildRoleRoutes(db: Database): Hono {
       DiscordErrorCode.UNKNOWN_ROLE,
       'Unknown Role'
     )
-    if (result instanceof Response) return result
-    return c.json(result)
+    return result instanceof Response ? result : c.json(result)
   })
 
   // DELETE /guilds/:guildId/roles/:roleId — Delete a role
