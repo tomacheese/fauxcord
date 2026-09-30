@@ -13,6 +13,7 @@
     "test:coverage": "vitest run --coverage",
     "fuzz": "tsx src/model-based-explorer.ts",
     "fuzz:short": "tsx src/model-based-explorer.ts --seed 24301 --steps 48",
+    "fuzz:full": "tsx src/model-based-full-explorer.ts --seed 24301",
     "lint:tsc": "tsc --noEmit",
     "lint:eslint": "eslint src/",
     "lint:prettier": "prettier --check src/",
