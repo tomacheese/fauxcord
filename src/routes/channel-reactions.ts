@@ -14,7 +14,6 @@ import {
   removeAllReactions,
   getReactionUsers,
 } from '../services/reactions'
-import { getMessage } from '../services/messages'
 import { DiscordErrorCode, discordError } from '../errors'
 import type { AppEnv } from '../middleware/auth'
 import { parseLimitQuery } from '../lib/route-helpers'
@@ -44,37 +43,59 @@ function decodeEmojiParam(
 }
 
 /**
+ * Checks that a message ID resolves inside the channel in the request path.
+ * @param db - Database
+ * @param channelId - Channel ID from the route
+ * @param messageId - Message ID from the route
+ * @returns Whether the message belongs to the requested channel
+ */
+function messageBelongsToChannel(
+  db: Database,
+  channelId: string,
+  messageId: string
+): boolean {
+  const message = db
+    .prepare('SELECT channel_id FROM messages WHERE id = ?')
+    .get(messageId) as { channel_id: string } | undefined
+  return message?.channel_id === channelId
+}
+
+/**
+ * Creates the standard Unknown Message response for message-scoped routes.
+ * @param c - Hono context
+ * @returns Discord 404 response
+ */
+function unknownMessageResponse(c: Context<AppEnv>): Response {
+  const err = discordError(
+    DiscordErrorCode.UNKNOWN_MESSAGE,
+    'Unknown Message',
+    404
+  )
+  return c.json(err.body, 404)
+}
+
+/**
  * Creates the channel reactions API routes.
  * @param db - Database
- * @param baseUrl - Base URL, used to build the message existence check
  * @returns Hono router instance
  */
-export function createChannelReactionRoutes(
-  db: Database,
-  baseUrl: string
-): Hono<AppEnv> {
+export function createChannelReactionRoutes(db: Database): Hono<AppEnv> {
   const app = new Hono<AppEnv>()
 
   // PUT /channels/:channelId/messages/:messageId/reactions/:emoji/@me — Add own reaction
   app.put(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/@me',
     (c) => {
-      const { messageId, emoji } = c.req.param()
+      const { channelId, messageId, emoji } = c.req.param()
       const bot = c.get('bot')
       const userId = bot?.user_id ?? '000000000000000000'
       const decodedResult = decodeEmojiParam(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
-      const decodedEmoji = decodedResult
 
-      const msg = getMessage(db, messageId, baseUrl)
-      if (!msg) {
-        const err = discordError(
-          DiscordErrorCode.UNKNOWN_MESSAGE,
-          'Unknown Message',
-          404
-        )
-        return c.json(err.body, 404)
+      if (!messageBelongsToChannel(db, channelId, messageId)) {
+        return unknownMessageResponse(c)
       }
+      const decodedEmoji = decodedResult
 
       addReaction(db, messageId, userId, decodedEmoji)
       return c.body(null, 204)
@@ -85,11 +106,15 @@ export function createChannelReactionRoutes(
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/@me',
     (c) => {
-      const { messageId, emoji } = c.req.param()
+      const { channelId, messageId, emoji } = c.req.param()
       const bot = c.get('bot')
       const userId = bot?.user_id ?? '000000000000000000'
       const decodedResult = decodeEmojiParam(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
+
+      if (!messageBelongsToChannel(db, channelId, messageId)) {
+        return unknownMessageResponse(c)
+      }
       const decodedEmoji = decodedResult
 
       removeReaction(db, messageId, userId, decodedEmoji)
@@ -101,9 +126,13 @@ export function createChannelReactionRoutes(
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji/:userId',
     (c) => {
-      const { messageId, emoji, userId } = c.req.param()
+      const { channelId, messageId, emoji, userId } = c.req.param()
       const decodedResult = decodeEmojiParam(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
+
+      if (!messageBelongsToChannel(db, channelId, messageId)) {
+        return unknownMessageResponse(c)
+      }
       const decodedEmoji = decodedResult
 
       removeReaction(db, messageId, userId, decodedEmoji)
@@ -113,9 +142,12 @@ export function createChannelReactionRoutes(
 
   // GET /channels/:channelId/messages/:messageId/reactions/:emoji — List users who reacted
   app.get('/channels/:channelId/messages/:messageId/reactions/:emoji', (c) => {
-    const { messageId, emoji } = c.req.param()
+    const { channelId, messageId, emoji } = c.req.param()
     const decodedResult = decodeEmojiParam(c, emoji)
     if (decodedResult instanceof Response) return decodedResult
+    if (!messageBelongsToChannel(db, channelId, messageId)) {
+      return unknownMessageResponse(c)
+    }
     const decodedEmoji = decodedResult
     const limit = parseLimitQuery(c, 25, 100)
     const after = c.req.query('after')
@@ -136,9 +168,12 @@ export function createChannelReactionRoutes(
   app.delete(
     '/channels/:channelId/messages/:messageId/reactions/:emoji',
     (c) => {
-      const { messageId, emoji } = c.req.param()
+      const { channelId, messageId, emoji } = c.req.param()
       const decodedResult = decodeEmojiParam(c, emoji)
       if (decodedResult instanceof Response) return decodedResult
+      if (!messageBelongsToChannel(db, channelId, messageId)) {
+        return unknownMessageResponse(c)
+      }
       const decodedEmoji = decodedResult
       removeEmojiReactions(db, messageId, decodedEmoji)
       return c.body(null, 204)
@@ -147,7 +182,10 @@ export function createChannelReactionRoutes(
 
   // DELETE /channels/:channelId/messages/:messageId/reactions — Remove all reactions from a message
   app.delete('/channels/:channelId/messages/:messageId/reactions', (c) => {
-    const { messageId } = c.req.param()
+    const { channelId, messageId } = c.req.param()
+    if (!messageBelongsToChannel(db, channelId, messageId)) {
+      return unknownMessageResponse(c)
+    }
     removeAllReactions(db, messageId)
     return c.body(null, 204)
   })

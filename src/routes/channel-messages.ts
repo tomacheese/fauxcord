@@ -74,10 +74,19 @@ export function createChannelMessageRoutes(
 
   // GET /channels/:channelId/messages/:messageId — Retrieve a specific message
   app.get('/channels/:channelId/messages/:messageId', (c) => {
-    const { messageId } = c.req.param()
+    const { channelId, messageId } = c.req.param()
+    const message = getMessage(db, messageId, baseUrl)
+    if (message && message.channel_id !== channelId) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
     const msg = requireEntity(
       c,
-      getMessage(db, messageId, baseUrl),
+      message,
       DiscordErrorCode.UNKNOWN_MESSAGE,
       'Unknown Message'
     )
@@ -237,7 +246,7 @@ export function createChannelMessageRoutes(
 
   // PATCH /channels/:channelId/messages/:messageId — Edit a message
   app.patch('/channels/:channelId/messages/:messageId', async (c) => {
-    const { messageId } = c.req.param()
+    const { channelId, messageId } = c.req.param()
     const bot = c.get('bot')
 
     const existing = requireEntity(
@@ -247,6 +256,14 @@ export function createChannelMessageRoutes(
       'Unknown Message'
     )
     if (existing instanceof Response) return existing
+    if (existing.channel_id !== channelId) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MESSAGE,
+        'Unknown Message',
+        404
+      )
+      return c.json(err.body, 404)
+    }
 
     if (bot && existing.author.id !== bot.user_id) {
       const err = discordError(

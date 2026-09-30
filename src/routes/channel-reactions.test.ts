@@ -6,8 +6,6 @@ import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
 import type { Database } from '../db'
 import type { AppEnv } from '../middleware/auth'
 
-const BASE_URL = 'http://localhost:3000'
-
 describe('Channel Reactions API', () => {
   let db: Database
   let app: Hono<AppEnv>
@@ -17,7 +15,7 @@ describe('Channel Reactions API', () => {
   beforeEach(() => {
     db = initializeDatabase(':memory:')
     app = new Hono<AppEnv>()
-    app.route('/', createChannelReactionRoutes(db, BASE_URL))
+    app.route('/', createChannelReactionRoutes(db))
 
     token = seedBot(db)
     const guildId = seedGuild(db, token)
@@ -112,6 +110,32 @@ describe('Channel Reactions API', () => {
       expect(body.code).toBe(10_008)
     })
 
+    it('does not add a reaction through a different channel path', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'scoped')
+      const otherChannelId = seedChannel(
+        db,
+        seedGuild(db, token),
+        '888888888888888888'
+      )
+
+      const response = await app.request(
+        `/channels/${otherChannelId}/messages/${messageId}/reactions/${encodeURIComponent('👍')}/@me`,
+        { method: 'PUT', headers: { Authorization: token } }
+      )
+
+      expect(response.status).toBe(404)
+      await expect(response.json()).resolves.toMatchObject({ code: 10_008 })
+      const reactionCount = db
+        .prepare('SELECT COUNT(*) AS count FROM reactions WHERE message_id = ?')
+        .get(messageId) as { count: number }
+      expect(reactionCount.count).toBe(0)
+    })
+
     it('returns 400 for a malformed percent-encoded emoji', async () => {
       const botUserId = (
         db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
@@ -159,6 +183,28 @@ describe('Channel Reactions API', () => {
       const users = (await res.json()) as { id: string }[]
       expect(users.some((u) => u.id === reactor)).toBe(true)
     })
+
+    it('does not list reactions through a different channel path', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'scoped')
+      const otherChannelId = seedChannel(
+        db,
+        seedGuild(db, token),
+        '888888888888888888'
+      )
+
+      const response = await app.request(
+        `/channels/${otherChannelId}/messages/${messageId}/reactions/${encodeURIComponent('👍')}`,
+        { headers: { Authorization: token } }
+      )
+
+      expect(response.status).toBe(404)
+      await expect(response.json()).resolves.toMatchObject({ code: 10_008 })
+    })
   })
 
   describe('DELETE all reactions', () => {
@@ -184,6 +230,35 @@ describe('Channel Reactions API', () => {
         .get(messageId) as { n: number }
       expect(remaining.n).toBe(0)
     })
+
+    it('does not remove reactions through a different channel path', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'scoped')
+      db.prepare(
+        'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+      ).run(messageId, botUserId, '👍')
+      const otherChannelId = seedChannel(
+        db,
+        seedGuild(db, token),
+        '888888888888888888'
+      )
+
+      const response = await app.request(
+        `/channels/${otherChannelId}/messages/${messageId}/reactions`,
+        { method: 'DELETE', headers: { Authorization: token } }
+      )
+
+      expect(response.status).toBe(404)
+      await expect(response.json()).resolves.toMatchObject({ code: 10_008 })
+      const after = db
+        .prepare('SELECT COUNT(*) AS n FROM reactions WHERE message_id = ?')
+        .get(messageId) as { n: number }
+      expect(after.n).toBe(1)
+    })
   })
 
   describe('DELETE reactions for a specific emoji', () => {
@@ -205,5 +280,46 @@ describe('Channel Reactions API', () => {
       )
       expect(res.status).toBe(204)
     })
+  })
+
+  describe('cross-channel reaction deletions', () => {
+    it.each(['@me', 'specific-user', 'emoji'])(
+      'does not delete a %s reaction through a different channel path',
+      async (route) => {
+        const botUserId = (
+          db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+            user_id: string
+          }
+        ).user_id
+        const messageId = seedMessage(db, channelId, botUserId, token, 'scoped')
+        db.prepare(
+          'INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)'
+        ).run(messageId, botUserId, '👍')
+        const otherChannelId = seedChannel(
+          db,
+          seedGuild(db, token),
+          '888888888888888888'
+        )
+        const emoji = encodeURIComponent('👍')
+        const target =
+          route === 'emoji'
+            ? emoji
+            : `${emoji}/${route === '@me' ? route : botUserId}`
+
+        const response = await app.request(
+          `/channels/${otherChannelId}/messages/${messageId}/reactions/${target}`,
+          { method: 'DELETE', headers: { Authorization: token } }
+        )
+
+        expect(response.status).toBe(404)
+        await expect(response.json()).resolves.toMatchObject({ code: 10_008 })
+        const remaining = db
+          .prepare(
+            'SELECT COUNT(*) AS count FROM reactions WHERE message_id = ?'
+          )
+          .get(messageId) as { count: number }
+        expect(remaining.count).toBe(1)
+      }
+    )
   })
 })

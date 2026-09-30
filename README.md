@@ -255,6 +255,10 @@ pnpm test:watch
 pnpm test:coverage
 ```
 
+Run the short seeded API exploration with `pnpm fuzz:short`. See the
+[model-based exploration guide](./docs/model-based-exploration.md) for replaying
+explicit seeds and running longer scenarios.
+
 ## Directory Structure
 
 ```

@@ -174,6 +174,28 @@ describe('Channel Messages API', () => {
       const body = (await res.json()) as { code: number }
       expect(body.code).toBe(10_008)
     })
+
+    it('does not return a message through a different channel path', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'scoped')
+      const otherChannelId = seedChannel(
+        db,
+        seedGuild(db, token),
+        '888888888888888888'
+      )
+
+      const response = await app.request(
+        `/channels/${otherChannelId}/messages/${messageId}`,
+        { headers: { Authorization: token } }
+      )
+
+      expect(response.status).toBe(404)
+      await expect(response.json()).resolves.toMatchObject({ code: 10_008 })
+    })
   })
 
   describe('PATCH /channels/:channelId/messages/:messageId', () => {
@@ -214,6 +236,39 @@ describe('Channel Messages API', () => {
         }
       )
       expect(res.status).toBe(404)
+    })
+
+    it('does not edit a message through a different channel path', async () => {
+      const botUserId = (
+        db.prepare('SELECT user_id FROM bots WHERE token = ?').get(token) as {
+          user_id: string
+        }
+      ).user_id
+      const messageId = seedMessage(db, channelId, botUserId, token, 'before')
+      const otherChannelId = seedChannel(
+        db,
+        seedGuild(db, token),
+        '888888888888888888'
+      )
+
+      const response = await app.request(
+        `/channels/${otherChannelId}/messages/${messageId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: 'wrong channel edit' }),
+        }
+      )
+
+      expect(response.status).toBe(404)
+      await expect(response.json()).resolves.toMatchObject({ code: 10_008 })
+      const row = db
+        .prepare('SELECT content FROM messages WHERE id = ?')
+        .get(messageId) as { content: string }
+      expect(row.content).toBe('before')
     })
 
     it('returns 400 when the edited content exceeds the limit', async () => {
