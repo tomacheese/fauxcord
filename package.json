@@ -42,7 +42,7 @@
   "dependencies": {
     "@hono/node-server": "2.1.1",
     "better-sqlite3": "13.0.3",
-    "discord-api-types": "0.38.55",
+    "discord-api-types": "0.38.56",
     "hono": "4.13.10",
     "tsx": "4.23.15",
     "ws": "8.22.0"
