@@ -29,7 +29,7 @@
     "@book000/eslint-config": "1.16.71",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "25.9.8",
-    "@types/ws": "8.18.1",
+    "@types/ws": "8.18.2",
     "@vitest/coverage-v8": "5.0.2",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
