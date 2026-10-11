@@ -36,7 +36,7 @@
       Discord.Net.WebSocket is pinned to the same 3.20.1 version since it
       ships from the same Discord.Net release train as Discord.Net.Rest.
     -->
-    <PackageReference Include="Discord.Net.Rest" Version="3.20.1" />
+    <PackageReference Include="Discord.Net.Rest" Version="3.20.2" />
     <PackageReference Include="Discord.Net.WebSocket" Version="3.20.1" />
   </ItemGroup>
 
