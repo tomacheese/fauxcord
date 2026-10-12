@@ -2782,6 +2782,9 @@
         "security": [
           {
             "BotToken": []
+          },
+          {
+            "OAuth2": []
           }
         ]
       },
@@ -8414,6 +8417,9 @@
         "security": [
           {
             "BotToken": []
+          },
+          {
+            "OAuth2": []
           }
         ]
       }
@@ -15602,6 +15608,14 @@
             }
           },
           {
+            "name": "shard",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
             "name": "with_counts",
             "in": "query",
             "schema": {
@@ -22193,6 +22207,9 @@
           },
           "lobby_member": {
             "$ref": "#/components/schemas/MessageLobbyMemberResponse"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/UserResponse"
           }
         },
         "required": [
@@ -23809,7 +23826,7 @@
               "null"
             ],
             "minimum": 1,
-            "maximum": 604800
+            "maximum": 2592000
           }
         }
       },
@@ -24090,6 +24107,25 @@
                   "$ref": "#/components/schemas/SnowflakeType"
                 },
                 "maxItems": 250,
+                "uniqueItems": true
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_user_ids": {
+            "description": "The IDs of the users to target with this invite.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SnowflakeType"
+                },
+                "maxItems": 1000,
                 "uniqueItems": true
               },
               {
@@ -30681,6 +30717,9 @@
           "icon": {
             "type": "string"
           },
+          "nsfw": {
+            "type": "boolean"
+          },
           "recipients": {
             "type": "array",
             "items": {
@@ -31824,7 +31863,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MediaGalleryItemRequest"
+              "$ref": "#/components/schemas/MediaGalleryItemForMessageRequest"
             },
             "minItems": 1,
             "maxItems": 10
@@ -31867,7 +31906,7 @@
           "items"
         ]
       },
-      "MediaGalleryItemRequest": {
+      "MediaGalleryItemForMessageRequest": {
         "type": "object",
         "properties": {
           "description": {
@@ -33705,6 +33744,9 @@
           },
           "lobby_member": {
             "$ref": "#/components/schemas/MessageLobbyMemberResponse"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/UserResponse"
           },
           "reactions": {
             "type": "array",
@@ -37922,6 +37964,9 @@
           },
           "lobby_member": {
             "$ref": "#/components/schemas/MessageLobbyMemberResponse"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/UserResponse"
           },
           "reactions": {
             "type": "array",
