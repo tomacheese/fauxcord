@@ -43,14 +43,14 @@ export function recordSoundboardPlayback(
   channelId: string,
   userId: string,
   soundId: string,
-  sourceGuildId?: string
+  sourceGuildId: string | null = null
 ): void {
   ensurePlaybackTable(db)
   db.prepare(
     `INSERT INTO channel_soundboard_playbacks
        (id, channel_id, user_id, sound_id, source_guild_id)
      VALUES (?, ?, ?, ?, ?)`
-  ).run(generateSnowflake(), channelId, userId, soundId, sourceGuildId ?? null)
+  ).run(generateSnowflake(), channelId, userId, soundId, sourceGuildId)
 }
 
 /** Returns the number of locally recorded playbacks for a channel. */

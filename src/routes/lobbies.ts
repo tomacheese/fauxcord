@@ -46,25 +46,21 @@ function botUser(c: Context<AppEnv>): string | null {
 }
 
 function mapMembers(value: unknown) {
-  return Array.isArray(value)
-    ? value.flatMap((member) => {
-        if (!member || typeof member !== 'object') return []
-        const input = member as Record<string, unknown>
-        return typeof input.id === 'string' || typeof input.user_id === 'string'
-          ? [
-              {
-                userId: (input.id ?? input.user_id) as string,
-                metadata: input.metadata as
-                  Record<string, string> | null | undefined,
-                flags:
-                  typeof input.flags === 'number' ? input.flags : undefined,
-                additionalName: input.additional_name as
-                  string | null | undefined,
-              },
-            ]
-          : []
-      })
-    : []
+  if (!Array.isArray(value)) return []
+  return value
+    .filter(
+      (member): member is Record<string, unknown> =>
+        !!member &&
+        typeof member === 'object' &&
+        (typeof (member as Record<string, unknown>).id === 'string' ||
+          typeof (member as Record<string, unknown>).user_id === 'string')
+    )
+    .map((input) => ({
+      userId: (input.id ?? input.user_id) as string,
+      metadata: input.metadata as Record<string, string> | null | undefined,
+      flags: typeof input.flags === 'number' ? input.flags : undefined,
+      additionalName: input.additional_name as string | null | undefined,
+    }))
 }
 
 /** Creates routes for Discord's local SDK lobby API. */

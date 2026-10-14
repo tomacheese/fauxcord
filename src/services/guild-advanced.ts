@@ -1105,7 +1105,7 @@ export function getGuildVoiceState(
         mute: row.mute === 1,
         request_to_speak_timestamp: row.request_to_speak_timestamp,
         suppress: row.suppress === 1,
-        self_stream: row.self_stream === null ? false : row.self_stream === 1,
+        self_stream: row.self_stream === 1,
         self_deaf: row.self_deaf === 1,
         self_mute: row.self_mute === 1,
         self_video: row.self_video === 1,
