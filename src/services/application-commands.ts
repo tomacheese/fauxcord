@@ -167,7 +167,7 @@ function findDuplicate(
   guildId: string | null,
   type: number,
   name: string,
-  excludeId?: string
+  excludeId = ''
 ): string | undefined {
   const row = (
     guildId === null
@@ -176,13 +176,13 @@ function findDuplicate(
             `SELECT id FROM application_commands
              WHERE application_id = ? AND guild_id IS NULL AND type = ? AND name = ? AND id != ?`
           )
-          .get(applicationId, type, name, excludeId ?? '')
+          .get(applicationId, type, name, excludeId)
       : db
           .prepare(
             `SELECT id FROM application_commands
              WHERE application_id = ? AND guild_id = ? AND type = ? AND name = ? AND id != ?`
           )
-          .get(applicationId, guildId, type, name, excludeId ?? '')
+          .get(applicationId, guildId, type, name, excludeId)
   ) as { id: string } | undefined
   return row?.id
 }

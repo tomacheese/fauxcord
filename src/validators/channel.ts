@@ -173,9 +173,9 @@ export interface PermissionOverwritePayload {
  */
 function isValidBitfield(value: unknown): boolean {
   if (value === undefined || value === null) return true
-  if (typeof value === 'number')
-    return Number.isSafeInteger(value) && value >= 0
-  return typeof value === 'string' ? /^\d+$/.test(value) : false
+  return typeof value === 'number'
+    ? Number.isSafeInteger(value) && value >= 0
+    : typeof value === 'string' && /^\d+$/.test(value)
 }
 
 /**
