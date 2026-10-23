@@ -36,7 +36,7 @@ dependencies {
     // API directly (parseToJsonElement) to read common/*.json without needing
     // the kotlinx.serialization compiler plugin (no @Serializable data classes
     // are declared in this module).
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
 }
 
 application {
