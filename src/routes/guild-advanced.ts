@@ -335,11 +335,10 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    return typeof payload.name !== 'string' ||
-      !Array.isArray(payload.actions) ||
-      typeof payload.trigger_type !== 'number'
-      ? invalid(c, 'name')
-      : c.json(
+    return typeof payload.name === 'string' &&
+      Array.isArray(payload.actions) &&
+      typeof payload.trigger_type === 'number'
+      ? c.json(
           createAutoModerationRule(
             db,
             guildId,
@@ -347,6 +346,7 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
             payload
           )
         )
+      : invalid(c, 'name')
   })
   app.get('/guilds/:guildId/auto-moderation/rules/:ruleId', (c) => {
     const { guildId, ruleId } = c.req.param()
@@ -579,10 +579,10 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    return !Array.isArray(payload.prompts) ||
-      !Array.isArray(payload.default_channel_ids)
-      ? invalid(c, 'prompts')
-      : c.json(setGuildOnboarding(db, guildId, payload))
+    return Array.isArray(payload.prompts) &&
+      Array.isArray(payload.default_channel_ids)
+      ? c.json(setGuildOnboarding(db, guildId, payload))
+      : invalid(c, 'prompts')
   })
 
   app.get('/guilds/:guildId/preview', (c) => {
@@ -737,10 +737,9 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const access = requireGuildAccess(c, db, guildId)
     if (access instanceof Response) return access
     const payload = await parseJsonBody(c)
-    return typeof payload.name !== 'string' ||
-      typeof payload.scheduled_start_time !== 'string'
-      ? invalid(c, 'name')
-      : c.json(
+    return typeof payload.name === 'string' &&
+      typeof payload.scheduled_start_time === 'string'
+      ? c.json(
           createGuildScheduledEvent(
             db,
             guildId,
@@ -748,6 +747,7 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
             payload
           )
         )
+      : invalid(c, 'name')
   })
   app.get('/guilds/:guildId/scheduled-events/:eventId/users/counts', (c) => {
     const { guildId, eventId } = c.req.param()
@@ -919,11 +919,10 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
     const description = form?.get('description')
     const tags = form?.get('tags')
     const file = form?.get('file')
-    return typeof name !== 'string' ||
-      typeof tags !== 'string' ||
-      !(file instanceof File)
-      ? invalid(c, 'file')
-      : c.json(
+    return typeof name === 'string' &&
+      typeof tags === 'string' &&
+      file instanceof File
+      ? c.json(
           createGuildSticker(db, guildId, c.get('bot')?.user_id ?? '', {
             name,
             description: typeof description === 'string' ? description : null,
@@ -931,6 +930,7 @@ export function createGuildAdvancedRoutes(db: Database): Hono<AppEnv> {
           }),
           201
         )
+      : invalid(c, 'file')
   })
   app.get('/guilds/:guildId/stickers/:stickerId', (c) => {
     const { guildId, stickerId } = c.req.param()

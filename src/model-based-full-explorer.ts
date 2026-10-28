@@ -802,11 +802,13 @@ if (
   pathToFileURL(path.resolve(process.argv[1] ?? '')).href === import.meta.url
 ) {
   try {
+    // eslint-disable-next-line unicorn/no-top-level-side-effects -- CLI entry point: setting the exit code is the module's purpose when run directly.
     process.exitCode = await runCli(process.argv.slice(2))
   } catch (error) {
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n`
     )
+    // eslint-disable-next-line unicorn/no-top-level-side-effects -- CLI entry point: setting the exit code is the module's purpose when run directly.
     process.exitCode = 1
   }
 }

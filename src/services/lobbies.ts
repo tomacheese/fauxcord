@@ -175,9 +175,8 @@ export function updateLobbyChannel(
   lobbyId: string,
   channelId: string | null
 ): LobbyObject | null {
-  return channelId !== null && !getChannel(db, channelId)
-    ? null
-    : runInTransaction(db, () => {
+  return channelId === null || getChannel(db, channelId)
+    ? runInTransaction(db, () => {
         if (!getLobby(db, lobbyId)) return null
         db.prepare(
           `UPDATE lobbies SET linked_channel_id = ?, updated_at = datetime('now')
@@ -185,6 +184,7 @@ export function updateLobbyChannel(
         ).run(channelId, lobbyId)
         return getLobby(db, lobbyId)
       })
+    : null
 }
 
 export function deleteLobby(db: Database, lobbyId: string): boolean {

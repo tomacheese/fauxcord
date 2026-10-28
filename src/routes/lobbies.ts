@@ -125,9 +125,9 @@ export function createLobbyRoutes(db: Database): Hono<AppEnv> {
     if (!SNOWFLAKE.test(lobbyId)) return invalid(c)
     const lobby = getLobby(db, lobbyId)
     if (!lobby) return unknown(c, UNKNOWN_LOBBY, 'Unknown Lobby')
-    return !botUser(c) || lobby.owner_id !== botUser(c)
-      ? c.json(discordError(50_001, 'Missing Access', 403).body, 403)
-      : c.json(lobby)
+    return botUser(c) && lobby.owner_id === botUser(c)
+      ? c.json(lobby)
+      : c.json(discordError(50_001, 'Missing Access', 403).body, 403)
   })
 
   app.delete('/lobbies/:lobbyId', (c) => {
