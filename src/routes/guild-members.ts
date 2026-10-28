@@ -152,9 +152,9 @@ export function createGuildMemberRoutes(db: Database): Hono<AppEnv> {
       'Unknown Member'
     )
     if (result instanceof Response) return result
-    return payload.roles !== undefined && payload.mute !== undefined
-      ? c.body(null, 204)
-      : c.json(result)
+    return payload.roles === undefined || payload.mute === undefined
+      ? c.json(result)
+      : c.body(null, 204)
   })
 
   // PUT /guilds/:guildId/members/:userId/roles/:roleId — Add a role to a member

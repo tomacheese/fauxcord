@@ -2782,5 +2782,6 @@ if (
   process.argv[1] &&
   pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url
 ) {
+  // eslint-disable-next-line unicorn/no-top-level-side-effects -- CLI entry point: setting the exit code is the module's purpose when run directly.
   process.exitCode = await runCli(process.argv.slice(2))
 }

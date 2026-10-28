@@ -109,5 +109,4 @@ export const gatewayBus = new TypedGatewayBus()
 // Raise the listener limit so frequent emits from the REST layer don't
 // trigger Node's max-listeners warning (leaves headroom for more concurrent
 // sessions).
-// eslint-disable-next-line unicorn/no-top-level-side-effects -- one-time setup on the module's own singleton, not a shared/exported binding mutation.
 gatewayBus.setMaxListeners(50)

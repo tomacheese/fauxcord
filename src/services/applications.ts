@@ -706,10 +706,9 @@ export async function saveApplicationAttachment(
   const safeFilename = path.basename(filename)
   const directory = path.join(uploadPath, applicationId, attachmentId)
   await mkdir(directory, { recursive: true })
-  const buffer =
-    data instanceof Uint8Array
-      ? Buffer.from(data)
-      : Buffer.from(new Uint8Array(data))
+  const buffer = Buffer.from(
+    data instanceof Uint8Array ? data : new Uint8Array(data)
+  )
   await writeFile(path.join(directory, safeFilename), buffer)
   const url = `${baseUrl}/_mock/attachments/${applicationId}/${attachmentId}/${encodeURIComponent(safeFilename)}`
   return {

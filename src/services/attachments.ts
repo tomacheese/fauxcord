@@ -50,10 +50,9 @@ export async function saveAttachment(
   await mkdir(dir, { recursive: true })
 
   // Normalize to Buffer so both ArrayBuffer and Uint8Array are accepted
-  const buffer =
-    data instanceof Uint8Array
-      ? Buffer.from(data)
-      : Buffer.from(new Uint8Array(data))
+  const buffer = Buffer.from(
+    data instanceof Uint8Array ? data : new Uint8Array(data)
+  )
 
   const filePath = path.join(dir, filename)
   await writeFile(filePath, buffer)
