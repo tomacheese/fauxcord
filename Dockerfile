@@ -2,7 +2,7 @@
 
 # ===== Stage 1: builder =====
 # 依存パッケージのインストールを行うステージ
-FROM node:24-alpine AS builder
+FROM node:26-alpine AS builder
 
 # better-sqlite3 のネイティブビルドに必要なツール（ビルドツールはバージョン固定不要）
 # hadolint ignore=DL3018
@@ -29,7 +29,7 @@ RUN pnpm prune --prod
 
 # ===== Stage 3: runner =====
 # 実行専用の軽量ステージ（ビルドツール・devDependencies を含まない）
-FROM node:24-alpine AS runner
+FROM node:26-alpine AS runner
 
 ENV NODE_ENV=production
 
