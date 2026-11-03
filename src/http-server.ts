@@ -73,24 +73,45 @@ export function serveWithGateway(
       return // @hono/node-server's own listener handles this
     }
 
-    const statusLine = `${req.method ?? 'GET'} ${req.url ?? '/'} HTTP/${req.httpVersion}\r\n`
-    const headerLines: string[] = []
-    for (let i = 0; i < req.rawHeaders.length; i += 2) {
-      const name = req.rawHeaders[i]
-      if (UPGRADE_RELATED_HEADER_NAMES.has(name.toLowerCase())) {
-        continue // Strip these so re-parsing is not treated as an upgrade again, avoiding an infinite loop
+    // Node 24 detaches the parser on upgrade, so any body goes to `head`/the
+    // socket. Node 26 keeps feeding the (decoded) body into `req` instead, so
+    // collect whatever `req` yields and replay it as a Content-Length body.
+    const bodyChunks: Buffer[] = []
+    req.on('data', (chunk: Buffer) => {
+      bodyChunks.push(chunk)
+    })
+    req.once('end', () => {
+      const reqBody = Buffer.concat(bodyChunks)
+      const hasReqBody = reqBody.length > 0
+      const statusLine = `${req.method ?? 'GET'} ${req.url ?? '/'} HTTP/${req.httpVersion}\r\n`
+      const headerLines: string[] = []
+      for (let i = 0; i < req.rawHeaders.length; i += 2) {
+        const name = req.rawHeaders[i]
+        const lower = name.toLowerCase()
+        if (UPGRADE_RELATED_HEADER_NAMES.has(lower)) {
+          continue // Strip these so re-parsing is not treated as an upgrade again, avoiding an infinite loop
+        }
+        if (
+          hasReqBody &&
+          (lower === 'content-length' || lower === 'transfer-encoding')
+        ) {
+          continue // The body was already decoded by req; re-framed below
+        }
+        headerLines.push(`${name}: ${req.rawHeaders[i + 1]}`)
       }
-      headerLines.push(`${name}: ${req.rawHeaders[i + 1]}`)
-    }
-    const replayedHeader = Buffer.from(
-      statusLine + headerLines.join('\r\n') + '\r\n\r\n',
-      'latin1'
-    )
-    // Unshift what the parser had already consumed (the reconstructed headers
-    // plus the leading part of the body) back to the front of the socket, so it
-    // is parsed from scratch as a new connection
-    socket.unshift(Buffer.concat([replayedHeader, head]))
-    server.emit('connection', socket)
+      if (hasReqBody) {
+        headerLines.push(`Content-Length: ${reqBody.length}`)
+      }
+      const replayedHeader = Buffer.from(
+        statusLine + headerLines.join('\r\n') + '\r\n\r\n',
+        'latin1'
+      )
+      // Unshift what the parser had already consumed (the reconstructed headers
+      // plus the leading part of the body) back to the front of the socket, so it
+      // is parsed from scratch as a new connection
+      socket.unshift(Buffer.concat([replayedHeader, head, reqBody]))
+      server.emit('connection', socket)
+    })
   })
 
   return server
