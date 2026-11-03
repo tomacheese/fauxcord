@@ -1,47 +1,47 @@
 # syntax=docker/dockerfile:1
 
 # ===== Stage 1: builder =====
-# 依存パッケージのインストールを行うステージ
+# Stage that installs dependencies
 FROM node:26-alpine AS builder
 
-# better-sqlite3 のネイティブビルドに必要なツール（ビルドツールはバージョン固定不要）
+# Tools required for the native better-sqlite3 build (build tools need no version pin)
 # hadolint ignore=DL3018
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# pnpm をバージョン固定でインストール（lockfile と互換性を保つため。Node 25 以降は corepack が同梱されないため npm でインストール）
+# Install a pinned pnpm to stay compatible with the lockfile (installed via npm because Node 25+ no longer bundles corepack)
 RUN npm install -g pnpm@11.2.2
 
-# 依存パッケージのインストール（ビルドスクリプト許可済み）
+# Install dependencies (build scripts are allow-listed)
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc ./
 RUN pnpm install --frozen-lockfile
 
-# ソースコードをコピー（tsx でソースを直接実行するためコンパイルは行わない）
+# Copy the sources (no compile step: tsx runs the TypeScript directly)
 COPY tsconfig.json ./
 COPY src ./src
 
 # ===== Stage 2: prod-deps =====
-# devDependencies を削除し、本番用依存のみに削減するステージ
-# （better-sqlite3 のビルド済みバイナリと tsx は dependencies のため保持される）
+# Stage that prunes devDependencies, leaving production dependencies only
+# (the built better-sqlite3 binary and tsx are dependencies, so they are kept)
 FROM builder AS prod-deps
 RUN pnpm prune --prod
 
 # ===== Stage 3: runner =====
-# 実行専用の軽量ステージ（ビルドツール・devDependencies を含まない）
+# Lightweight runtime stage (no build tools or devDependencies)
 FROM node:26-alpine AS runner
 
 ENV NODE_ENV=production
 
 WORKDIR /app
 
-# 非 root ユーザーを作成（セキュリティのため root で実行しない）
+# Create a non-root user so the server does not run as root
 RUN addgroup -S -g 1001 nodejs && adduser -S discord-mock -u 1001 -G nodejs
 
-# データディレクトリを作成し、非 root ユーザーが書き込めるよう権限を付与
+# Create the data directory and make it writable by the non-root user
 RUN mkdir -p /data/uploads && chown -R discord-mock:nodejs /data
 
-# 本番用依存・ソースコード・tsconfig をコピー
+# Copy production dependencies, sources, and tsconfig
 COPY --from=prod-deps --chown=discord-mock:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=discord-mock:nodejs /app/src ./src
 COPY --from=builder --chown=discord-mock:nodejs /app/tsconfig.json ./tsconfig.json
@@ -51,11 +51,11 @@ USER 1001:1001
 
 EXPOSE 3000
 
-# ヘルスチェック（DB 初期化などで起動に時間がかかるため start-period は長めに設定）
-# 注意: localhost は busybox wget では ::1 (IPv6) に解決され、IPv4 のみで待ち受ける
-# サーバーに接続できないため、127.0.0.1 を明示する
+# Healthcheck (start-period is generous because DB initialization slows startup)
+# Note: busybox wget resolves localhost to ::1 (IPv6), which cannot reach a
+# server listening on IPv4 only, so 127.0.0.1 is explicit
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD ["wget", "-qO-", "http://127.0.0.1:3000/_mock/health"]
 
-# tsx で TypeScript ソースを直接実行する（org デファクトスタンダードに準拠）
+# Run the TypeScript sources directly with tsx
 CMD ["node_modules/.bin/tsx", "src/index.ts"]

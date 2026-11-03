@@ -16,7 +16,7 @@ Run integration tests for Discord bots and applications without connecting to th
 ## Verified Library Compatibility
 
 Fauxcord is continuously verified against real Discord client libraries via a
-Docker-based harness (`compat/`) — 21 libraries across 6 languages, checked
+Docker-based harness (`compat/`) — 21 libraries across 8 languages (JS/TS, Python, Go, C#, JVM, Rust, C, C++), checked
 endpoint-by-endpoint against the mock.
 
 | Language | Verified libraries |
@@ -51,7 +51,7 @@ curl http://localhost:3000/_mock/health
 
 ### Running locally
 
-**Requirements:** Node.js 22 or later, pnpm (see `.node-version` for the version used in development/CI)
+**Requirements:** Node.js 22.12+, 24, or 26+ (developed and tested on the version in `.node-version`), pnpm
 
 ```bash
 # Install dependencies

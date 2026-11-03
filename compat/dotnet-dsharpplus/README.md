@@ -78,21 +78,23 @@ verifier).
   building/running DSharpPlus in this environment (no build commands were run,
   per task constraints).
 
-## Gateway実装後の再評価（Issue #106）
+## Re-evaluation after the Gateway implementation (Issue #106)
 
-Fauxcordの Gateway実装後（#102/#107）に再確認したが、DSharpPlus 4.x/5.x
-の `⛔blocked` 判定は独立した2つの理由（REST base URLの `const string`
-コンパイル時定数、Gateway接続必須）のうち、Gatewayとは無関係な (1) が
-引き続き解消しないため、`⛔blocked` 判定を維持する。
+After Fauxcord gained a Gateway implementation (#102/#107), we re-checked this verdict.
+The `⛔blocked` verdict for DSharpPlus 4.x/5.x rests on two independent
+reasons: (1) the REST base URL is a compile-time `const string`, and (2) a
+Gateway connection is required. Reason (1) has nothing to do with the Gateway
+and still stands, so the `⛔blocked` verdict is kept.
 
-現行の DSharpPlus `master` ブランチ上流ソース（`DSharpPlus/Net/Rest/Endpoints.cs`）を直接取得し再確認した結果:
+Re-checked against the current upstream DSharpPlus `master` source
+(`DSharpPlus/Net/Rest/Endpoints.cs`):
 
 ```csharp
 public const string API_VERSION = "10";
 public const string BASE_URI = "https://discord.com/api/v" + API_VERSION;
 ```
 
-`BASE_URI` は現在も `const string` のまま（`Evidence 1` に記載の内容から
-変化なし）。C# の `const` はコンパイル時に呼び出し側アセンブリへインライン
-展開されるため、ランタイムでの上書き手段は原理的に存在しない。この結論は
-4.x/5.x 共通のメカニズムであり、両バージョンに等しく適用される。
+`BASE_URI` is still a `const string` (unchanged from Evidence 1). A C#
+`const` is inlined into the calling assembly at compile time, so there is no
+way to override it at runtime. This mechanism is shared by 4.x and 5.x, so the
+conclusion applies equally to both.

@@ -1,5 +1,7 @@
 # Copilot code review instructions — Fauxcord
 
+Project overview, commands, and conventions live in `AGENTS.md`; this file lists review focus points only. Everything in this repository is written in English.
+
 Fauxcord is a **mock server** for the Discord REST API v10 and Gateway
 (WebSocket), used to integration-test Discord bots without the live service.
 It is a testing tool, not a production-facing service. Keep this in mind when
