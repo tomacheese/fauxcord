@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context is compat/ (see compose.yaml), so COPY paths are prefixed
 # with the library directory and the shared common/ dir.
-FROM node:24-alpine
+FROM node:26-alpine
 WORKDIR /app
 COPY js-discordjs/package.json ./
 RUN npm install --no-audit --no-fund
