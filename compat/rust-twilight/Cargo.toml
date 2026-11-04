@@ -17,7 +17,7 @@ publish = false
 # block at the top of src/main.rs for the residual uncertainties (mainly:
 # no `cargo build` was actually run in this offline session).
 twilight-http = "0.17"
-twilight-model = "0.17"
+twilight-model = "0.18"
 # Gateway verification phase: opens a real WebSocket connection via the
 # high-level `Shard` API (HELLO -> IDENTIFY -> READY), then dispatches a
 # MESSAGE_CREATE and confirms it arrives over the socket. Pinned to the same
