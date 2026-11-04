@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createGuildRoleRoutes } from './guild-roles'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild } from '../test-helpers'
+import {
+  seedBot,
+  seedGuild,
+  seedMember,
+  createFullTestApp,
+} from '../test-helpers'
 import type { Database } from '../db'
 
 describe('Guild Roles API', () => {
@@ -247,6 +252,80 @@ describe('Guild Roles API', () => {
       expect(res.status).toBe(404)
       const body = (await res.json()) as { code: number }
       expect(body.code).toBe(10_004)
+    })
+  })
+
+  describe('computed permissions', () => {
+    const VIEW = 1n << 10n
+    const SEND = 1n << 11n
+    const ROLE_ID = '888888888888888881'
+    let memberId: string
+
+    beforeEach(() => {
+      db.prepare(
+        `INSERT INTO roles (id, guild_id, name, permissions, position)
+         VALUES (?, ?, '@everyone', ?, 0)`
+      ).run(guildId, guildId, VIEW.toString())
+      seedRole(ROLE_ID)
+      db.prepare('UPDATE roles SET permissions = ? WHERE id = ?').run(
+        SEND.toString(),
+        ROLE_ID
+      )
+      memberId = seedMember(db, guildId)
+      db.prepare(
+        'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
+      ).run(guildId, memberId, ROLE_ID)
+    })
+
+    it('GET member returns the guild-level permissions as a decimal string', async () => {
+      const res = await app.request(
+        `/guilds/${guildId}/permissions/member/${memberId}`
+      )
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({
+        permissions: (VIEW | SEND).toString(),
+      })
+    })
+
+    it('GET role returns the role combined with @everyone', async () => {
+      const res = await app.request(
+        `/guilds/${guildId}/permissions/role/${ROLE_ID}`
+      )
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({
+        permissions: (VIEW | SEND).toString(),
+      })
+    })
+
+    it.each(['member', 'role'])(
+      'GET %s returns 404 (10004) for an unknown guild',
+      async (kind) => {
+        const res = await app.request(
+          `/guilds/999999999999999999/permissions/${kind}/${memberId}`
+        )
+        expect(res.status).toBe(404)
+        expect(((await res.json()) as { code: number }).code).toBe(10_004)
+      }
+    )
+
+    it('GET member returns 404 (10007) for an unknown member', async () => {
+      const res = await app.request(`/guilds/${guildId}/permissions/member/999`)
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: number }).code).toBe(10_007)
+    })
+
+    it('GET role returns 404 (10011) for an unknown role', async () => {
+      const res = await app.request(`/guilds/${guildId}/permissions/role/999`)
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: number }).code).toBe(10_011)
+    })
+
+    it('returns 401 without authentication on the full app', async () => {
+      const { app: fullApp } = createFullTestApp()
+      const res = await fullApp.request(
+        `/api/v10/guilds/${guildId}/permissions/member/${memberId}`
+      )
+      expect(res.status).toBe(401)
     })
   })
 })

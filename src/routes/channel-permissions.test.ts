@@ -2,8 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
 import { createChannelPermissionRoutes } from './channel-permissions'
 import { initializeDatabase, closeDatabase } from '../db'
-import { seedBot, seedGuild, seedChannel } from '../test-helpers'
-import { getChannel } from '../services/channels'
+import {
+  seedBot,
+  seedGuild,
+  seedChannel,
+  seedMember,
+  seedRole,
+  createFullTestApp,
+} from '../test-helpers'
+import { getChannel, putChannelOverwrite } from '../services/channels'
 import type { Database } from '../db'
 
 describe('Channel Permissions API', () => {
@@ -121,5 +128,111 @@ describe('Channel Permissions API', () => {
     )
     expect(res.status).toBe(404)
     expect(((await res.json()) as { code: number }).code).toBe(10_003)
+  })
+})
+
+describe('Channel computed permissions API', () => {
+  const VIEW = 1n << 10n
+  const SEND = 1n << 11n
+  let db: Database
+  let app: Hono
+  let guildId: string
+  let channelId: string
+  let memberId: string
+  let roleId: string
+
+  /**
+   * Requests a computed-permissions endpoint.
+   * @param path - Request path
+   * @returns The response
+   */
+  const get = (path: string) => app.request(path)
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono()
+    app.route('/', createChannelPermissionRoutes(db))
+    guildId = seedGuild(db, seedBot(db))
+    db.prepare(
+      `INSERT INTO roles (id, guild_id, name, permissions, position)
+       VALUES (?, ?, '@everyone', ?, 0)`
+    ).run(guildId, guildId, (VIEW | SEND).toString())
+    channelId = seedChannel(db, guildId)
+    memberId = seedMember(db, guildId)
+    roleId = seedRole(db, guildId)
+    putChannelOverwrite(db, channelId, guildId, {
+      type: 0,
+      allow: '0',
+      deny: SEND.toString(),
+    })
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('GET member returns the cascaded permissions as a decimal string', async () => {
+    const res = await get(
+      `/channels/${channelId}/permissions/member/${memberId}`
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ permissions: VIEW.toString() })
+  })
+
+  it('GET role returns the cascaded permissions as a decimal string', async () => {
+    const res = await get(`/channels/${channelId}/permissions/role/${roleId}`)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ permissions: VIEW.toString() })
+  })
+
+  it('accepts the implicit query parameter without changing the result', async () => {
+    const res = await get(
+      `/channels/${channelId}/permissions/member/${memberId}?implicit=true`
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ permissions: VIEW.toString() })
+  })
+
+  it.each(['member', 'role'])(
+    'GET %s returns 404 (10003) for an unknown channel',
+    async (kind) => {
+      const res = await get(`/channels/999/permissions/${kind}/${memberId}`)
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: number }).code).toBe(10_003)
+    }
+  )
+
+  it('GET member returns 404 (10007) for an unknown member', async () => {
+    const res = await get(`/channels/${channelId}/permissions/member/999`)
+    expect(res.status).toBe(404)
+    expect(((await res.json()) as { code: number }).code).toBe(10_007)
+  })
+
+  it('GET role returns 404 (10011) for an unknown role', async () => {
+    const res = await get(`/channels/${channelId}/permissions/role/999`)
+    expect(res.status).toBe(404)
+    expect(((await res.json()) as { code: number }).code).toBe(10_011)
+  })
+
+  it.each(['member', 'role'])(
+    'GET %s returns 404 (10003) for a channel without a guild',
+    async (kind) => {
+      db.prepare('UPDATE channels SET guild_id = NULL WHERE id = ?').run(
+        channelId
+      )
+      const res = await get(
+        `/channels/${channelId}/permissions/${kind}/${memberId}`
+      )
+      expect(res.status).toBe(404)
+      expect(((await res.json()) as { code: number }).code).toBe(10_003)
+    }
+  )
+
+  it('returns 401 without authentication on the full app', async () => {
+    const { app: fullApp } = createFullTestApp()
+    const res = await fullApp.request(
+      `/api/v10/channels/${channelId}/permissions/member/${memberId}`
+    )
+    expect(res.status).toBe(401)
   })
 })

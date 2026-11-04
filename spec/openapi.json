@@ -3852,6 +3852,152 @@
         ]
       }
     },
+    "/channels/{channel_id}/permissions/member/{user_id}": {
+      "parameters": [
+        {
+          "name": "channel_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        }
+      ],
+      "get": {
+        "description": "Returns the fully cascaded permissions for a member in this channel, applying their roles and the channel's permission overwrites.",
+        "operationId": "get_channel_member_permissions",
+        "parameters": [
+          {
+            "name": "implicit",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response for get_channel_member_permissions",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
+    "/channels/{channel_id}/permissions/role/{role_id}": {
+      "parameters": [
+        {
+          "name": "channel_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        },
+        {
+          "name": "role_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        }
+      ],
+      "get": {
+        "description": "Returns the permissions a role grants in this channel, applying the channel's permission overwrites on top of the role's guild-level permissions.",
+        "operationId": "get_channel_role_permissions",
+        "parameters": [
+          {
+            "name": "implicit",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 response for get_channel_role_permissions",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
     "/channels/{channel_id}/permissions/{overwrite_id}": {
       "parameters": [
         {
@@ -8607,6 +8753,134 @@
         ]
       }
     },
+    "/guilds/{guild_id}/permissions/member/{user_id}": {
+      "parameters": [
+        {
+          "name": "guild_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        },
+        {
+          "name": "user_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        }
+      ],
+      "get": {
+        "description": "Returns the fully cascaded guild-level permissions for a member, applying all of their roles including @everyone's",
+        "operationId": "get_guild_member_permissions",
+        "responses": {
+          "200": {
+            "description": "200 response for get_guild_member_permissions",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
+    "/guilds/{guild_id}/permissions/role/{role_id}": {
+      "parameters": [
+        {
+          "name": "guild_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        },
+        {
+          "name": "role_id",
+          "in": "path",
+          "schema": {
+            "$ref": "#/components/schemas/SnowflakeType"
+          },
+          "required": true
+        }
+      ],
+      "get": {
+        "description": "Returns the permissions a role grants at the guild level, combining the role's own permissions with @everyone's.",
+        "operationId": "get_guild_role_permissions",
+        "responses": {
+          "200": {
+            "description": "200 response for get_guild_role_permissions",
+            "headers": {
+              "X-RateLimit-Limit": {
+                "$ref": "#/components/headers/X-RateLimit-Limit"
+              },
+              "X-RateLimit-Remaining": {
+                "$ref": "#/components/headers/X-RateLimit-Remaining"
+              },
+              "X-RateLimit-Reset": {
+                "$ref": "#/components/headers/X-RateLimit-Reset"
+              },
+              "X-RateLimit-Reset-After": {
+                "$ref": "#/components/headers/X-RateLimit-Reset-After"
+              },
+              "X-RateLimit-Bucket": {
+                "$ref": "#/components/headers/X-RateLimit-Bucket"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionsResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/ClientRatelimitedResponse"
+          },
+          "4XX": {
+            "$ref": "#/components/responses/ClientErrorResponse"
+          }
+        },
+        "security": [
+          {
+            "BotToken": []
+          }
+        ]
+      }
+    },
     "/guilds/{guild_id}/preview": {
       "parameters": [
         {
@@ -12689,6 +12963,14 @@
                         ]
                       }
                     ]
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 100
                   }
                 },
                 "required": [
@@ -12801,6 +13083,14 @@
                     ],
                     "maxLength": 512,
                     "format": "uri"
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 100
                   }
                 }
               }
@@ -12999,6 +13289,14 @@
                     ],
                     "maxLength": 512,
                     "format": "uri"
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "minLength": 1,
+                    "maxLength": 100
                   }
                 }
               }
@@ -21081,6 +21379,11 @@
             "const": 15
           },
           {
+            "title": "CHANNEL_POSITION_UPDATE",
+            "description": "Channels were reordered",
+            "const": 16
+          },
+          {
             "title": "MEMBER_KICK",
             "const": 20
           },
@@ -21127,6 +21430,11 @@
           {
             "title": "ROLE_DELETE",
             "const": 32
+          },
+          {
+            "title": "ROLE_POSITION_UPDATE",
+            "description": "Roles were reordered",
+            "const": 33
           },
           {
             "title": "INVITE_CREATE",
@@ -23489,6 +23797,10 @@
             "const": "instagram"
           },
           {
+            "title": "LETTERBOXD",
+            "const": "letterboxd"
+          },
+          {
             "title": "MASTODON",
             "const": "mastodon"
           },
@@ -23750,6 +24062,18 @@
           "accent_color",
           "components",
           "spoiler"
+        ]
+      },
+      "ContentScanMetadataResponse": {
+        "type": "object",
+        "properties": {
+          "flags": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "flags"
         ]
       },
       "CreateEntitlementRequestData": {
@@ -33128,6 +33452,24 @@
           }
         }
       },
+      "MessageEmbedAudioResponse": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "proxy_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
       "MessageEmbedAuthorResponse": {
         "type": "object",
         "properties": {
@@ -33278,6 +33620,9 @@
           },
           "video": {
             "$ref": "#/components/schemas/MessageEmbedVideoResponse"
+          },
+          "audio": {
+            "$ref": "#/components/schemas/MessageEmbedAudioResponse"
           },
           "footer": {
             "$ref": "#/components/schemas/MessageEmbedFooterResponse"
@@ -35141,6 +35486,18 @@
           "account"
         ]
       },
+      "PermissionsResponse": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "type": "string",
+            "description": "The computed permissions, as a stringified bitfield"
+          }
+        },
+        "required": [
+          "permissions"
+        ]
+      },
       "PinnedMessageResponse": {
         "type": "object",
         "properties": {
@@ -36835,6 +37192,36 @@
                 "$ref": "#/components/schemas/RichEmbedVideo"
               }
             ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RichEmbedAudio"
+              }
+            ]
+          }
+        }
+      },
+      "RichEmbedAudio": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048,
+            "format": "uri"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 4096
           }
         }
       },
@@ -40468,11 +40855,31 @@
             ],
             "format": "int32"
           },
+          "placeholder": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "placeholder_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "content_scan_metadata": {
+            "$ref": "#/components/schemas/ContentScanMetadataResponse"
+          },
           "content_type": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "flags": {
+            "type": "integer",
+            "format": "int32"
           },
           "attachment_id": {
             "$ref": "#/components/schemas/SnowflakeType"
@@ -40480,8 +40887,7 @@
         },
         "required": [
           "id",
-          "url",
-          "proxy_url"
+          "url"
         ]
       },
       "UpdateApplicationUserRoleConnectionRequest": {
