@@ -162,7 +162,7 @@ Every `N/A` and `⛔blocked` cell needs an evidence note.
 
 ## Implementation status
 
-This harness spans 6 languages / 21 libraries. Of these, 16 have a scaffolded
+This harness spans 8 languages (JS/TS, Python, Go, C#, JVM, Rust, C, C++) / 21 libraries. Of these, 16 have a scaffolded
 verifier under `compat/` with a populated `results/<lib>.json`, and the other
 5 are technical blockers with no runnable code path at all (see below) and are
 not scaffolded (16 + 5 = 21). Counting by outcome rather than by scaffolding,

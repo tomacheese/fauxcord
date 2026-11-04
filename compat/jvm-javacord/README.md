@@ -78,23 +78,23 @@ public, documented API) that reaches a runnable state against Fauxcord.
   Javacord in this environment (no build commands were run, per task
   constraints).
 
-## Gateway実装後の再評価（Issue #106）
+## Re-evaluation after the Gateway implementation (Issue #106)
 
-Fauxcordの Gateway実装後（#102/#107）に再確認したが、Javacordの
-`⛔blocked` 判定は独立した2つの理由（REST base URLのハードコード、
-Gateway接続必須のログイン）のうち、Gatewayとは無関係な (1) が引き続き
-解消しないため、`⛔blocked` 判定を維持する。
+After Fauxcord gained a Gateway implementation (#102/#107), we re-checked this verdict.
+The `⛔blocked` verdict rests on two independent reasons: (1) the REST base URL
+is hardcoded, and (2) login requires a Gateway connection. Reason (1) has
+nothing to do with the Gateway and still stands, so the `⛔blocked` verdict is
+kept.
 
-現行の Javacord `master` ブランチ上流ソース（`javacord-api/src/main/java/
-org/javacord/api/Javacord.java`、`javacord-core/src/main/java/org/javacord/
-core/util/rest/RestEndpoint.java`）を直接取得し再確認した結果:
+Re-checked against the current upstream Javacord `master` sources
+(`javacord-api/src/main/java/org/javacord/api/Javacord.java` and
+`javacord-core/src/main/java/org/javacord/core/util/rest/RestEndpoint.java`):
 
-- `DISCORD_DOMAIN` は現在も `public static final String` のまま（`Evidence
-  1` に記載の内容から変化なし）。ランタイムで上書きする手段は追加されて
-  いない。
-- `DiscordApiBuilder.login()` が現在も唯一のエントリポイントであり、
-  REST-only モードは追加されていない。
+- `DISCORD_DOMAIN` is still a `public static final String` (unchanged from
+  Evidence 1). No runtime override has been added.
+- `DiscordApiBuilder.login()` is still the only entry point. No REST-only mode
+  has been added.
 
-Fauxcordの Gateway実装によって理由 (2) は理論上解消され得るが、理由 (1)
-は Gateway とは独立した別のブロッカーであるため、いずれか一方が残る限り
-`⛔blocked` の結論は変わらない。
+Fauxcord's Gateway could in theory resolve reason (2), but reason (1) is a
+separate blocker independent of the Gateway, so the conclusion stays
+`⛔blocked` as long as either reason remains.

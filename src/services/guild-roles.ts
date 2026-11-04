@@ -129,19 +129,18 @@ export interface RoleCreateParams {
 }
 
 /**
- * permissions を Discord API 準拠の 10 進整数文字列へ正規化する。
+ * Normalizes permissions to a decimal integer string, as the Discord API expects.
  *
- * クライアントは permissions を文字列でも数値でも送ってくる(例: hikari は
- * JSON 数値の 0 を送る)。数値を TEXT カラムへそのままバインドすると
- * better-sqlite3 が REAL として格納し、往復後に "0.0" のような小数文字列で
- * 返ってしまい、int() で解釈するクライアント(hikari など)がデシリアライズに
- * 失敗する。ここで整数文字列へ揃える。巨大な bitset を壊さないよう文字列入力は
- * 桁をそのまま保持し、小数点以下のみ切り捨てる。
- * `value` は本来ルート層のバリデーション(`/^\d+$/`)を通過済みのはずだが、
- * サービス層単体でも壊れた値を保存しないよう非有限数・負値・空文字はすべて
- * "0" にフォールバックする。
- * @param value - クライアントから受け取った permissions(文字列 / 数値 / 未指定)
- * @returns 10 進整数の文字列(未指定時・不正値は "0")
+ * Clients send permissions as either a string or a number (hikari sends the
+ * JSON number 0). Binding a number straight to a TEXT column makes
+ * better-sqlite3 store it as REAL, so it round-trips as "0.0" and clients that
+ * parse it with int() (e.g. hikari) fail to deserialize. String input keeps
+ * its digits as-is so huge bitsets are not corrupted; only the fractional part
+ * is dropped. Non-finite numbers, negatives, and malformed strings fall back to
+ * "0" so the service layer never stores a broken value even if route-level
+ * validation (`/^\d+$/`) is bypassed.
+ * @param value - permissions as received from the client
+ * @returns Decimal integer string ("0" when unset or invalid)
  */
 function normalizePermissions(value: string | number | undefined): string {
   if (value === undefined) return '0'

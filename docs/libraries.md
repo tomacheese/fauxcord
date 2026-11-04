@@ -192,7 +192,7 @@ func main() {
 
 ## Library compatibility matrix
 
-Fauxcord tracks compatibility for 21 Discord libraries across 6 languages using a
+Fauxcord tracks compatibility for 21 Discord libraries across 8 languages (JS/TS, Python, Go, C#, JVM, Rust, C, C++) using a
 Docker-based verification harness under [`compat/`](../compat/README.md). Every
 library is exercised against the full set of implemented endpoints inside its own
 language-specific container, so results are reproducible and independent of the
