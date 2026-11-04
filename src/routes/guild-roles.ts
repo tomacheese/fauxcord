@@ -10,6 +10,10 @@ import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
 import { getGuild } from '../services/guilds'
 import {
+  getGuildMemberPermissions,
+  getGuildRolePermissions,
+} from '../services/permissions'
+import {
   getGuildRoles,
   createRole,
   updateRole,
@@ -148,6 +152,54 @@ export function createGuildRoleRoutes(db: Database): Hono {
       return c.json(err.body, 404)
     }
     return c.body(null, 204)
+  })
+
+  // GET /guilds/:guildId/permissions/member/:userId — Computed member permissions
+  app.get('/guilds/:guildId/permissions/member/:userId', (c) => {
+    const { guildId, userId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
+    const permissions = getGuildMemberPermissions(db, guildId, userId)
+    if (permissions === null) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_MEMBER,
+        'Unknown Member',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.json({ permissions: permissions.toString() })
+  })
+
+  // GET /guilds/:guildId/permissions/role/:roleId — Computed role permissions
+  app.get('/guilds/:guildId/permissions/role/:roleId', (c) => {
+    const { guildId, roleId } = c.req.param()
+
+    const guild = requireEntity(
+      c,
+      getGuild(db, guildId),
+      DiscordErrorCode.UNKNOWN_GUILD,
+      'Unknown Guild'
+    )
+    if (guild instanceof Response) return guild
+
+    const permissions = getGuildRolePermissions(db, guildId, roleId)
+    if (permissions === null) {
+      const err = discordError(
+        DiscordErrorCode.UNKNOWN_ROLE,
+        'Unknown Role',
+        404
+      )
+      return c.json(err.body, 404)
+    }
+    return c.json({ permissions: permissions.toString() })
   })
 
   return app

@@ -741,6 +741,38 @@ const LEGACY_MANIFEST: LegacySpecEndpoint[] = [
     request: (f) => ({ path: `/api/v10/guilds/${f.guildId}/roles` }),
   },
   {
+    specPath: '/guilds/{guild_id}/permissions/member/{user_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/permissions/member/${f.memberId}`,
+    }),
+  },
+  {
+    specPath: '/guilds/{guild_id}/permissions/role/{role_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/guilds/${f.guildId}/permissions/role/${f.roleId}`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/permissions/member/{user_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/permissions/member/${f.memberId}`,
+    }),
+  },
+  {
+    specPath: '/channels/{channel_id}/permissions/role/{role_id}',
+    method: 'get',
+    successStatus: 200,
+    request: (f) => ({
+      path: `/api/v10/channels/${f.channelId}/permissions/role/${f.roleId}`,
+    }),
+  },
+  {
     specPath: '/guilds/{guild_id}/roles',
     method: 'post',
     successStatus: 200,

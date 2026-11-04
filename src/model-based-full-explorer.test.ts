@@ -74,11 +74,11 @@ describe('full model-based API explorer', () => {
     const result = await runFullCoverageExploration(317)
 
     expect(result.passed).toBe(true)
-    expect(result.generatedSteps).toBe(261)
+    expect(result.generatedSteps).toBe(265)
     expect(result.executedSteps).toBe(result.generatedSteps)
     expect(result.coverage).toEqual({
-      openApiOperations: 246,
-      successBranches: 258,
+      openApiOperations: 250,
+      successBranches: 262,
       supplementalScenarios: 3,
     })
     expect(result.trace.every(({ outcome }) => outcome === 'passed')).toBe(true)
