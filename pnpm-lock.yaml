@@ -173,8 +173,8 @@ importers:
         specifier: 13.0.3
         version: 13.0.3
       discord-api-types:
-        specifier: 0.38.57
-        version: 0.38.57
+        specifier: 0.38.58
+        version: 0.38.58
       hono:
         specifier: 4.13.17
         version: 4.13.17
@@ -844,8 +844,8 @@ packages:
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
 
-  discord-api-types@0.38.57:
-    resolution: {integrity: sha512-R1CTSSt4RshqCq23j2Xq2ZscvzB4LzG9OB1CYQdKUGdw8Ti/oF/72EEtK2mNpagG/Vj9NcBT7dw9lKLf+Dacfg==}
+  discord-api-types@0.38.58:
+    resolution: {integrity: sha512-6utghVho47hBzmx8nIp+pKEDDNIlVk6On/J5Y1Q529payNLZjBsrw+mt+G5Y3NYRE3kgta6eBx5hRYVyfHGdOA==}
 
   electron-to-chromium@1.5.478:
     resolution: {integrity: sha512-pftG+ma5Lm8O6/p45bhYT6StBN5ziQymaRzmCZwFl8DwWHKPPD93FdOmP1aqftcepolQYvrcyTLa17kE8Yf+jg==}
@@ -2166,7 +2166,7 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
-  discord-api-types@0.38.57: {}
+  discord-api-types@0.38.58: {}
 
   electron-to-chromium@1.5.478: {}
 
