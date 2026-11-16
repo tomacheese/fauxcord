@@ -22,12 +22,13 @@ export function createChannelPollRoutes(db: Database, baseUrl: string): Hono {
 
   // GET /channels/:channelId/polls/:messageId/answers/:answerId — Get Answer Voters
   app.get('/channels/:channelId/polls/:messageId/answers/:answerId', (c) => {
-    const { messageId, answerId } = c.req.param()
+    const { channelId, messageId, answerId } = c.req.param()
     const limit = parseLimitQuery(c, 25, 100)
     const after = c.req.query('after')
 
     const voters = getPollAnswerVoters(
       db,
+      channelId,
       messageId,
       Number.parseInt(answerId, 10),
       limit,
@@ -47,9 +48,9 @@ export function createChannelPollRoutes(db: Database, baseUrl: string): Hono {
 
   // POST /channels/:channelId/polls/:messageId/expire — Immediately end a poll
   app.post('/channels/:channelId/polls/:messageId/expire', (c) => {
-    const { messageId } = c.req.param()
+    const { channelId, messageId } = c.req.param()
 
-    const result = expirePoll(db, messageId, baseUrl)
+    const result = expirePoll(db, channelId, messageId, baseUrl)
     if (result === 'UNKNOWN_MESSAGE') {
       const err = discordError(
         DiscordErrorCode.UNKNOWN_MESSAGE,

@@ -50,6 +50,23 @@ describe('GET /channels/:channelId/polls/:messageId/answers/:answerId', () => {
     expect(res.status).toBe(404)
   })
 
+  it('returns 404 when the channel does not own the message', async () => {
+    const bot = seedBot(db, 'Bot testtoken', botUserId)
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+    const otherChannel = seedChannel(db, guild, '444444444444444444')
+    const message = seedMessage(db, channel, botUserId, bot)
+    createPoll(db, message, { question: 'Q', answers: [{ text: 'A' }] })
+
+    const res = await app.request(
+      `/channels/${otherChannel}/polls/${message}/answers/1`
+    )
+
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as { message: string }
+    expect(body.message).toBe('Unknown Message')
+  })
+
   it('returns an empty users array when no one has voted', async () => {
     const bot = seedBot(db, 'Bot testtoken', botUserId)
     const guild = seedGuild(db, bot)
@@ -103,6 +120,28 @@ describe('POST /channels/:channelId/polls/:messageId/expire', () => {
     )
 
     expect(res.status).toBe(404)
+  })
+
+  it('returns 404 and leaves the poll open when the channel does not own the message', async () => {
+    const bot = seedBot(db, 'Bot testtoken', botUserId)
+    const guild = seedGuild(db, bot)
+    const channel = seedChannel(db, guild)
+    const otherChannel = seedChannel(db, guild, '444444444444444444')
+    const message = seedMessage(db, channel, botUserId, bot)
+    createPoll(db, message, { question: 'Q', answers: [{ text: 'A' }] })
+
+    const res = await app.request(
+      `/channels/${otherChannel}/polls/${message}/expire`,
+      { method: 'POST' }
+    )
+
+    expect(res.status).toBe(404)
+    const body = (await res.json()) as { message: string }
+    expect(body.message).toBe('Unknown Message')
+    const row = db
+      .prepare('SELECT finalized FROM polls WHERE message_id = ?')
+      .get(message) as { finalized: number }
+    expect(row.finalized).toBe(0)
   })
 
   it('is idempotent when called on an already-finalized poll', async () => {
