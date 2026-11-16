@@ -480,4 +480,47 @@ describe('POST /channels/:channelId/messages with poll', () => {
 
     expect(res.status).toBe(400)
   })
+
+  it('returns the same poll on GET single and GET list after POST', async () => {
+    const bot = seedBot(db, 'Bot testtoken')
+    const channel = seedChannel(db, seedGuild(db, bot))
+    const headers = {
+      Authorization: 'Bot testtoken',
+      'Content-Type': 'application/json',
+    }
+    const postRes = await app.request(`/channels/${channel}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        poll: {
+          question: { text: 'Best pizza?' },
+          answers: [
+            { poll_media: { text: 'Margherita' } },
+            { poll_media: { text: 'Pepperoni' } },
+          ],
+        },
+      }),
+    })
+    const posted = (await postRes.json()) as { id: string; poll: unknown }
+    const plainRes = await app.request(`/channels/${channel}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ content: 'plain' }),
+    })
+    const plain = (await plainRes.json()) as { id: string }
+
+    const getRes = await app.request(
+      `/channels/${channel}/messages/${posted.id}`,
+      { headers }
+    )
+    const fetched = (await getRes.json()) as { poll: unknown }
+    expect(fetched.poll).toEqual(posted.poll)
+
+    const listRes = await app.request(`/channels/${channel}/messages`, {
+      headers,
+    })
+    const list = (await listRes.json()) as { id: string; poll?: unknown }[]
+    expect(list.find((m) => m.id === posted.id)?.poll).toEqual(posted.poll)
+    expect('poll' in (list.find((m) => m.id === plain.id) ?? {})).toBe(false)
+  })
 })

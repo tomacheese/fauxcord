@@ -10,6 +10,12 @@ import { snowflakeToTimestamp } from '../snowflake'
 import { toDiscordTimestamp } from '../timestamp'
 import { gatewayBus } from '../gateway/bus'
 import { getGuildMember } from './guild-members'
+import {
+  createPoll,
+  getPollForMessage,
+  type PollCreateParams,
+  type PollObject,
+} from './polls'
 // Used for compile-time type drift detection.
 // When Renovate bumps discord-api-types, `pnpm lint:tsc` will fail if the
 // safe-field subset of MessageResponse is renamed or retyped upstream.
@@ -165,6 +171,8 @@ export interface MessageObject {
   message_reference?: { message_id: string }
   /** Webhook ID when the message was sent via a webhook */
   webhook_id?: string
+  /** Poll attached to the message (omitted when the message has no poll) */
+  poll?: PollObject
 }
 
 /** Attachment object for API responses */
@@ -202,6 +210,7 @@ export function getGuildIdForChannel(
  * @param attachments - Array of attachment records
  * @param reactions - Array of reaction aggregation records
  * @param baseUrl - Base URL (for generating attachment URLs)
+ * @param poll - Poll attached to the message, if any
  * @returns Object for API responses
  */
 export function toMessageObject(
@@ -210,7 +219,8 @@ export function toMessageObject(
   embeds: EmbedRow[],
   attachments: AttachmentRow[],
   reactions: ReactionAggRow[],
-  baseUrl: string
+  baseUrl: string,
+  poll: PollObject | null = null
 ): MessageObject {
   const obj: MessageObject = {
     id: row.id,
@@ -255,6 +265,7 @@ export function toMessageObject(
     }),
     // Add webhook_id to messages sent via webhook (author_id = webhook ID)
     ...(row.author_token === 'webhook' && { webhook_id: row.author_id }),
+    ...(poll && { poll }),
     // Add the reactions field only when reactions exist (conforming to the Discord API spec)
     ...(reactions.length > 0 && {
       reactions: reactions.map((r) => ({
@@ -308,7 +319,17 @@ export function hydrateMessageRow(
     )
     .all(row.id) as ReactionAggRow[]
 
-  return toMessageObject(row, author, embeds, attachments, reactions, baseUrl)
+  const poll = getPollForMessage(db, row.id)
+
+  return toMessageObject(
+    row,
+    author,
+    embeds,
+    attachments,
+    reactions,
+    baseUrl,
+    poll
+  )
 }
 
 /**
@@ -414,6 +435,8 @@ export interface MessageCreateParams {
   embeds?: unknown[]
   messageReference?: { message_id?: string }
   flags?: number
+  /** Poll to attach; persisted before the message is hydrated and dispatched */
+  poll?: PollCreateParams
 }
 
 /**
@@ -484,6 +507,10 @@ export function createMessage(
         'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
       ).run(params.messageId, JSON.stringify(params.embeds[i]), i)
     }
+  }
+
+  if (params.poll) {
+    createPoll(db, params.messageId, params.poll)
   }
 
   // Update the channel's last_message_id

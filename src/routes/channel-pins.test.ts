@@ -4,6 +4,7 @@ import { createChannelPinRoutes } from './channel-pins'
 import { initializeDatabase, closeDatabase } from '../db'
 import { seedBot, seedGuild, seedChannel, seedMessage } from '../test-helpers'
 import type { Database } from '../db'
+import { createPoll, getPollForMessage } from '../services/polls'
 
 const BASE_URL = 'http://localhost:3000'
 
@@ -164,5 +165,54 @@ describe('Channel Pins API', () => {
       )
       expect(delRes.status).toBe(204)
     })
+  })
+})
+
+describe('Channel Pins API with a poll message', () => {
+  let db: Database
+  let app: Hono
+  let channelId: string
+  let token: string
+
+  beforeEach(() => {
+    db = initializeDatabase(':memory:')
+    app = new Hono()
+    app.route('/', createChannelPinRoutes(db, BASE_URL))
+    token = seedBot(db)
+    channelId = seedChannel(db, seedGuild(db, token))
+  })
+
+  afterEach(() => {
+    closeDatabase(db)
+  })
+
+  it('includes the poll in both pin list formats', async () => {
+    const messageId = seedMessage(db, channelId, '111111111111111111', token)
+    createPoll(db, messageId, {
+      question: 'Pinned poll?',
+      answers: [{ text: 'Yes' }, { text: 'No' }],
+    })
+    const expected = getPollForMessage(db, messageId)
+    expect(expected?.question).toEqual({ text: 'Pinned poll?' })
+    await app.request(`/channels/${channelId}/pins/${messageId}`, {
+      method: 'PUT',
+      headers: { Authorization: token },
+    })
+
+    const oldRes = await app.request(`/channels/${channelId}/pins`, {
+      headers: { Authorization: token },
+    })
+    const oldBody = (await oldRes.json()) as { poll?: unknown }[]
+    expect(oldBody).toHaveLength(1)
+    expect(oldBody[0].poll).toEqual(expected)
+
+    const newRes = await app.request(`/channels/${channelId}/messages/pins`, {
+      headers: { Authorization: token },
+    })
+    const newBody = (await newRes.json()) as {
+      items: { message: { poll?: unknown } }[]
+    }
+    expect(newBody.items).toHaveLength(1)
+    expect(newBody.items[0].message.poll).toEqual(expected)
   })
 })

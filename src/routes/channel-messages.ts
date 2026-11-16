@@ -25,13 +25,32 @@ import {
   type MessageCreatePayload,
   type PollCreatePayloadField,
 } from '../validators/message'
-import { createPoll, getPollForMessage } from '../services/polls'
+import type { PollCreateParams } from '../services/polls'
 import type { AppEnv, BotRecord } from '../middleware/auth'
 import {
   requireEntity,
   parseLimitQuery,
   parseJsonBody,
 } from '../lib/route-helpers'
+
+/**
+ * Maps a validated poll create payload to the service's poll parameters.
+ * @param pollField - Validated `poll` field of a message create payload
+ * @returns Poll creation parameters
+ */
+function toPollCreateParams(
+  pollField: PollCreatePayloadField
+): PollCreateParams {
+  return {
+    question: pollField.question.text,
+    answers: pollField.answers.map((a) => ({
+      text: a.poll_media.text,
+      emoji: a.poll_media.emoji ?? undefined,
+    })),
+    allowMultiselect: pollField.allow_multiselect,
+    durationHours: pollField.duration,
+  }
+}
 
 /**
  * Creates the channel messages API routes.
@@ -193,6 +212,9 @@ export function createChannelMessageRoutes(
         messageReference: payload.message_reference as
           { message_id?: string } | undefined,
         flags: payload.flags as number | undefined,
+        poll: hasPoll
+          ? toPollCreateParams(payload.poll as PollCreatePayloadField)
+          : undefined,
       },
       baseUrl
     )
@@ -224,24 +246,7 @@ export function createChannelMessageRoutes(
       }
     }
 
-    const responseMessage = getMessage(db, messageId, baseUrl) ?? msg
-
-    if (hasPoll) {
-      const pollField = payload.poll as PollCreatePayloadField
-      createPoll(db, responseMessage.id, {
-        question: pollField.question.text,
-        answers: pollField.answers.map((a) => ({
-          text: a.poll_media.text,
-          emoji: a.poll_media.emoji ?? undefined,
-        })),
-        allowMultiselect: pollField.allow_multiselect,
-        durationHours: pollField.duration,
-      })
-      const poll = getPollForMessage(db, responseMessage.id)
-      return c.json({ ...responseMessage, poll })
-    }
-
-    return c.json(responseMessage)
+    return c.json(getMessage(db, messageId, baseUrl) ?? msg)
   })
 
   // PATCH /channels/:channelId/messages/:messageId — Edit a message

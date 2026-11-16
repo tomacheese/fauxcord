@@ -1,10 +1,9 @@
 /**
  * Poll data model
  *
- * Backs Discord's Poll object (attached ad hoc to the message-create and
- * poll-expire responses; not part of the generic message hydration
- * pipeline, since no other endpoint needs to surface it — see spec Issue
- * #136).
+ * Backs Discord's Poll object. Message hydration loads it via
+ * `getPollForMessage`, so every message read path and Gateway message event
+ * carries the poll.
  */
 
 import type { Database } from '../db'
@@ -22,7 +21,7 @@ export interface PollAnswerObject {
   poll_media: { text: string; emoji?: { id: string | null; name: string } }
 }
 
-/** Poll object for API responses (attached to a message via object spread) */
+/** Poll object for API responses (the `poll` field of a message object) */
 export interface PollObject {
   question: { text: string }
   answers: PollAnswerObject[]
@@ -257,13 +256,13 @@ export function getPollAnswerVoters(
  * @param db - Database
  * @param messageId - Message ID the poll is attached to
  * @param baseUrl - Base URL for building the message object
- * @returns The updated message object with `poll` attached, or 'UNKNOWN_MESSAGE'
+ * @returns The updated message object (its `poll` reflects the finalized poll), or 'UNKNOWN_MESSAGE'
  */
 export function expirePoll(
   db: Database,
   messageId: string,
   baseUrl: string
-): (MessageObject & { poll: PollObject | null }) | 'UNKNOWN_MESSAGE' {
+): MessageObject | 'UNKNOWN_MESSAGE' {
   const poll = db
     .prepare('SELECT message_id FROM polls WHERE message_id = ?')
     .get(messageId)
@@ -276,9 +275,6 @@ export function expirePoll(
   const message = getMessage(db, messageId, baseUrl)
   if (!message) return 'UNKNOWN_MESSAGE'
 
-  const pollObject = getPollForMessage(db, messageId)
-  const result = { ...message, poll: pollObject }
-
   const row = db
     .prepare('SELECT channel_id, author_id FROM messages WHERE id = ?')
     .get(messageId) as { channel_id: string; author_id: string }
@@ -286,9 +282,9 @@ export function expirePoll(
   gatewayBus.emit('message.update', {
     guildId,
     channelId: row.channel_id,
-    message: result,
+    message: message as unknown as Record<string, unknown>,
     member: getDispatchMember(db, guildId, row.author_id),
   })
 
-  return result
+  return message
 }
