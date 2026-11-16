@@ -193,8 +193,32 @@ export interface PollVoterUser {
 }
 
 /**
+ * Checks that a poll exists on a message belonging to the given channel.
+ * @param db - Database
+ * @param channelId - Channel ID from the request URL
+ * @param messageId - Message ID the poll is attached to
+ * @returns True if the message is in the channel and has a poll
+ */
+function pollExistsInChannel(
+  db: Database,
+  channelId: string,
+  messageId: string
+): boolean {
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM polls p
+         JOIN messages m ON m.id = p.message_id
+         WHERE p.message_id = ? AND m.channel_id = ?`
+      )
+      .get(messageId, channelId)
+  )
+}
+
+/**
  * Retrieves the users who voted for a specific poll answer.
  * @param db - Database
+ * @param channelId - Channel ID from the request URL; must own the message
  * @param messageId - Message ID the poll is attached to
  * @param answerId - Answer ID
  * @param limit - Maximum number of voters to return
@@ -203,15 +227,13 @@ export interface PollVoterUser {
  */
 export function getPollAnswerVoters(
   db: Database,
+  channelId: string,
   messageId: string,
   answerId: number,
   limit: number,
   after?: string
 ): PollVoterUser[] | 'UNKNOWN_MESSAGE' {
-  const poll = db
-    .prepare('SELECT message_id FROM polls WHERE message_id = ?')
-    .get(messageId)
-  if (!poll) return 'UNKNOWN_MESSAGE'
+  if (!pollExistsInChannel(db, channelId, messageId)) return 'UNKNOWN_MESSAGE'
 
   const answer = db
     .prepare('SELECT id FROM poll_answers WHERE message_id = ? AND id = ?')
@@ -254,19 +276,18 @@ export function getPollAnswerVoters(
  * its poll attached. Idempotent: calling this on an already-finalized poll
  * re-sets its expiry to now and succeeds.
  * @param db - Database
+ * @param channelId - Channel ID from the request URL; must own the message
  * @param messageId - Message ID the poll is attached to
  * @param baseUrl - Base URL for building the message object
  * @returns The updated message object (its `poll` reflects the finalized poll), or 'UNKNOWN_MESSAGE'
  */
 export function expirePoll(
   db: Database,
+  channelId: string,
   messageId: string,
   baseUrl: string
 ): MessageObject | 'UNKNOWN_MESSAGE' {
-  const poll = db
-    .prepare('SELECT message_id FROM polls WHERE message_id = ?')
-    .get(messageId)
-  if (!poll) return 'UNKNOWN_MESSAGE'
+  if (!pollExistsInChannel(db, channelId, messageId)) return 'UNKNOWN_MESSAGE'
 
   db.prepare(
     'UPDATE polls SET finalized = 1, expiry = ? WHERE message_id = ?'
