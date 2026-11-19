@@ -56,6 +56,10 @@ jobs:
           REPORT=$(pnpm --silent spec:diff 2>&1)
           EXIT_CODE=$?
           set -e
+          if [ "$EXIT_CODE" -ne 0 ] && [ "$EXIT_CODE" -ne 1 ]; then
+            printf '%s\n' "$REPORT" >&2
+            exit "$EXIT_CODE"
+          fi
           # Escape for GitHub Actions multiline output
           {
             echo "report<<SPEC_DIFF_EOF"
