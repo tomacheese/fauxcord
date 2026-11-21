@@ -1,2 +1,2 @@
-discord-py-interactions==5.16.0
+discord-py-interactions==6.0.0
 aiohttp
