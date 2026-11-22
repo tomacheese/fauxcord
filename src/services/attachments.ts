@@ -78,12 +78,51 @@ export async function saveAttachment(
 }
 
 /**
+ * Resolves the on-disk location of an attachment from untrusted URL parameters.
+ * @param uploadPath - Upload base directory
+ * @param channelId - Channel ID (a single path segment)
+ * @param messageId - Message ID (a single path segment)
+ * @param filename - File name (a single path segment)
+ * @returns Absolute path strictly inside `uploadPath`, or null if any component
+ * is empty, `.`, `..`, or contains `/`, `\` or NUL
+ */
+export function resolveAttachmentPath(
+  uploadPath: string,
+  channelId: string,
+  messageId: string,
+  filename: string
+): string | null {
+  const components = [channelId, messageId, filename]
+  if (
+    components.some(
+      (component) =>
+        component === '' ||
+        component === '.' ||
+        component === '..' ||
+        /[/\\\0]/.test(component)
+    )
+  ) {
+    return null
+  }
+
+  const root = path.resolve(uploadPath)
+  const target = path.resolve(root, ...components)
+  const relative = path.relative(root, target)
+  return relative === '' ||
+    relative.startsWith('..') ||
+    path.isAbsolute(relative)
+    ? null
+    : target
+}
+
+/**
  * Reads an attachment file.
  * @param uploadPath - Upload base directory
  * @param channelId - Channel ID
  * @param messageId - Message ID
  * @param filename - File name
- * @returns File data, or null if it does not exist
+ * @returns File data, or null if it does not exist or a parameter is not a
+ * safe single path segment
  */
 export async function getAttachment(
   uploadPath: string,
@@ -91,7 +130,15 @@ export async function getAttachment(
   messageId: string,
   filename: string
 ): Promise<Buffer | null> {
-  const filePath = path.join(uploadPath, channelId, messageId, filename)
+  const filePath = resolveAttachmentPath(
+    uploadPath,
+    channelId,
+    messageId,
+    filename
+  )
+  if (filePath === null) {
+    return null
+  }
   try {
     await access(filePath, constants.R_OK)
     return await readFile(filePath)
