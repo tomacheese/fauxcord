@@ -14,21 +14,20 @@ describe('Guild Members API', () => {
   /**
    * Inserts a test Role into the database.
    * @param roleId - Role ID
-   * @param name - Role name
    */
-  function seedRole(roleId: string, name = 'Test Role'): string {
+  function seedRole(roleId: string): string {
     db.prepare(
       'INSERT INTO roles (id, guild_id, name, position) VALUES (?, ?, ?, 1)'
-    ).run(roleId, guildId, name)
+    ).run(roleId, guildId, 'Test Role')
     return roleId
   }
 
   /**
    * Inserts a test Guild member into the database.
-   * @param userId - User ID
    * @param nick - Nickname
    */
-  function seedMember(userId: string, nick: string | null = null): string {
+  function seedMember(nick: string | null = null): string {
+    const userId = '555555555555555555'
     db.prepare(
       "INSERT OR IGNORE INTO users (id, username) VALUES (?, 'TestUser')"
     ).run(userId)
@@ -53,7 +52,7 @@ describe('Guild Members API', () => {
 
   describe('PATCH /guilds/:guildId/members/:userId', () => {
     it('updates the nickname', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -72,7 +71,7 @@ describe('Guild Members API', () => {
     })
 
     it('clears the nickname when nick is set to null', async () => {
-      const userId = seedMember('555555555555555555', 'OldNick')
+      const userId = seedMember('OldNick')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -87,7 +86,7 @@ describe('Guild Members API', () => {
     })
 
     it('assigns roles to a member', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
@@ -105,7 +104,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns 404 (10011) when a non-existent role is specified', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -137,7 +136,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns 400 when nick exceeds the 32-character limit', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -150,7 +149,7 @@ describe('Guild Members API', () => {
     })
 
     it('does not fail when duplicate role IDs are sent', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
@@ -166,7 +165,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns role IDs in a stable, sorted order', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleA = seedRole('444444444444444444')
       const roleB = seedRole('333333333333333333')
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
@@ -187,7 +186,7 @@ describe('Guild Members API', () => {
 
   describe('PUT /guilds/:guildId/members/:userId/roles/:roleId', () => {
     it('adds a role to a member', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
@@ -206,7 +205,7 @@ describe('Guild Members API', () => {
     })
 
     it('is idempotent when the role is already assigned', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
@@ -233,7 +232,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns 404 (10011) for a non-existent role', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/999999999999999999`,
         { method: 'PUT', headers: { Authorization: token } }
@@ -255,7 +254,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns 400 when targeting the @everyone role', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${guildId}`,
         { method: 'PUT', headers: { Authorization: token } }
@@ -268,7 +267,7 @@ describe('Guild Members API', () => {
 
   describe('DELETE /guilds/:guildId/members/:userId/roles/:roleId', () => {
     it('removes a role from a member', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'PATCH',
@@ -293,7 +292,7 @@ describe('Guild Members API', () => {
     })
 
     it('is idempotent when the role is not assigned', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${roleId}`,
@@ -313,7 +312,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns 404 (10011) for a non-existent role', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/999999999999999999`,
         { method: 'DELETE', headers: { Authorization: token } }
@@ -335,7 +334,7 @@ describe('Guild Members API', () => {
     })
 
     it('returns 400 when targeting the @everyone role', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(
         `/guilds/${guildId}/members/${userId}/roles/${guildId}`,
         { method: 'DELETE', headers: { Authorization: token } }
@@ -348,7 +347,7 @@ describe('Guild Members API', () => {
 
   describe('DELETE /guilds/:guildId/members/:userId', () => {
     it('kicks a member', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const res = await app.request(`/guilds/${guildId}/members/${userId}`, {
         method: 'DELETE',
         headers: { Authorization: token },
@@ -376,7 +375,7 @@ describe('Guild Members API', () => {
     })
 
     it('deletes the member role assignments so they do not orphan', async () => {
-      const userId = seedMember('555555555555555555')
+      const userId = seedMember()
       const roleId = seedRole('444444444444444444')
       db.prepare(
         'INSERT INTO member_roles (guild_id, user_id, role_id) VALUES (?, ?, ?)'
