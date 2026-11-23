@@ -5,6 +5,8 @@
  */
 
 import { Hono } from 'hono'
+import { mkdir, writeFile, rm } from 'node:fs/promises'
+import path from 'node:path'
 import type { Database } from '../db'
 import { DiscordErrorCode, discordError, validationError } from '../errors'
 import { generateSnowflake } from '../snowflake'
@@ -199,54 +201,52 @@ export function createChannelMessageRoutes(
 
     const messageId = generateSnowflake()
 
-    const msg = createMessage(
-      db,
-      {
-        messageId,
-        channelId,
-        authorId,
-        authorToken,
-        content: payload.content as string | undefined,
-        tts: payload.tts as boolean | undefined,
-        embeds: payload.embeds as unknown[] | undefined,
-        messageReference: payload.message_reference as
-          { message_id?: string } | undefined,
-        flags: payload.flags as number | undefined,
-        poll: hasPoll
-          ? toPollCreateParams(payload.poll as PollCreatePayloadField)
-          : undefined,
-      },
-      baseUrl
-    )
-
-    if (attachmentFiles.length > 0) {
-      try {
-        const { saveAttachment } = await import('../services/attachments')
-        for (const f of attachmentFiles) {
-          // Each attachment gets its own Snowflake so concurrent uploads to
-          // the same message don't collide on a shared PRIMARY KEY.
-          await saveAttachment(
-            db,
-            uploadPath,
-            baseUrl,
-            channelId,
-            messageId,
-            generateSnowflake(),
-            f.name,
-            f.type,
-            f.data
-          )
-        }
-      } catch (err) {
-        // Ignore a missing upload directory (e.g. in-memory test env), but
-        // surface any other failure instead of silently discarding it.
-        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw err
-        }
+    const directory = path.join(uploadPath, channelId, messageId)
+    const attachments = []
+    try {
+      if (attachmentFiles.length > 0)
+        await mkdir(directory, { recursive: true })
+      for (const file of attachmentFiles) {
+        await writeFile(path.join(directory, file.name), Buffer.from(file.data))
+        attachments.push({
+          id: generateSnowflake(),
+          filename: file.name,
+          size: file.data.byteLength,
+          contentType: file.type,
+          filePath: path.join(channelId, messageId, file.name),
+        })
       }
-    }
 
-    return c.json(getMessage(db, messageId, baseUrl) ?? msg)
+      const msg = createMessage(
+        db,
+        {
+          messageId,
+          channelId,
+          authorId,
+          authorToken,
+          content: payload.content as string | undefined,
+          tts: payload.tts as boolean | undefined,
+          embeds: payload.embeds as unknown[] | undefined,
+          messageReference: payload.message_reference as
+            { message_id?: string } | undefined,
+          flags: payload.flags as number | undefined,
+          poll: hasPoll
+            ? toPollCreateParams(payload.poll as PollCreatePayloadField)
+            : undefined,
+          attachments,
+        },
+        baseUrl
+      )
+      return c.json(msg)
+    } catch (error) {
+      if (
+        attachmentFiles.length > 0 &&
+        !db.prepare('SELECT 1 FROM messages WHERE id = ?').get(messageId)
+      ) {
+        await rm(directory, { recursive: true, force: true })
+      }
+      throw error
+    }
   })
 
   // PATCH /channels/:channelId/messages/:messageId — Edit a message

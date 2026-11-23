@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { Hono } from 'hono'
+import { mkdtemp, rm, readFile, symlink, readdir } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { gatewayBus } from '../gateway/bus'
 import { createChannelMessageRoutes } from './channel-messages'
 import { initializeDatabase, closeDatabase } from '../db'
 import {
@@ -48,6 +52,142 @@ describe('Channel Messages API', () => {
       const body = (await res.json()) as Record<string, unknown>
       expect(body.content).toBe('Hello, World!')
       expect(body.channel_id).toBe(channelId)
+    })
+
+    it('returns and dispatches the persisted multipart attachments', async () => {
+      const uploadPath = await mkdtemp(
+        path.join(os.tmpdir(), 'fauxcord-upload-')
+      )
+      const events: Record<string, unknown>[] = []
+      const onCreate = (event: { message: Record<string, unknown> }) => {
+        events.push(event.message)
+      }
+      gatewayBus.on('message.create', onCreate)
+      try {
+        const uploadApp = new Hono<AppEnv>()
+        uploadApp.route(
+          '/',
+          createChannelMessageRoutes(db, BASE_URL, uploadPath)
+        )
+        const form = new FormData()
+        form.set('payload_json', JSON.stringify({ content: 'files' }))
+        form.set(
+          'files[0]',
+          new File(['first'], 'first.txt', { type: 'text/plain' })
+        )
+        form.set(
+          'files[1]',
+          new File(['second'], 'second.txt', { type: 'text/plain' })
+        )
+        const response = await uploadApp.request(
+          `/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            headers: { Authorization: token },
+            body: form,
+          }
+        )
+        expect(response.status).toBe(200)
+        const message = (await response.json()) as {
+          id: string
+          attachments: { id: string; filename: string }[]
+        }
+        expect(message.attachments).toHaveLength(2)
+        expect(
+          new Set(message.attachments.map((attachment) => attachment.id)).size
+        ).toBe(2)
+        const read = await uploadApp.request(
+          `/channels/${channelId}/messages/${message.id}`
+        )
+        expect(read.status).toBe(200)
+        expect(await read.json()).toEqual(message)
+        expect(events).toEqual([message])
+        expect(
+          await readFile(
+            path.join(uploadPath, channelId, message.id, 'first.txt'),
+            'utf8'
+          )
+        ).toBe('first')
+      } finally {
+        gatewayBus.off('message.create', onCreate)
+        await rm(uploadPath, { recursive: true, force: true })
+      }
+    })
+
+    it('fails without creating or dispatching a message when upload storage is missing', async () => {
+      const root = await mkdtemp(path.join(os.tmpdir(), 'fauxcord-upload-'))
+      const events: unknown[] = []
+      const onCreate = (event: unknown) => {
+        events.push(event)
+      }
+      gatewayBus.on('message.create', onCreate)
+      try {
+        const uploadPath = path.join(root, 'missing-link')
+        await symlink(path.join(root, 'missing', 'target'), uploadPath)
+        const uploadApp = new Hono<AppEnv>()
+        uploadApp.onError(() => new Response('Upload failed', { status: 500 }))
+        uploadApp.route(
+          '/',
+          createChannelMessageRoutes(db, BASE_URL, uploadPath)
+        )
+        const form = new FormData()
+        form.set('files[0]', new File(['test'], 'test.txt'))
+        const response = await uploadApp.request(
+          `/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            headers: { Authorization: token },
+            body: form,
+          }
+        )
+        expect(response.status).toBe(500)
+        expect(events).toEqual([])
+        expect(db.prepare('SELECT * FROM messages').all()).toEqual([])
+        expect(db.prepare('SELECT * FROM attachments').all()).toEqual([])
+      } finally {
+        gatewayBus.off('message.create', onCreate)
+        await rm(root, { recursive: true, force: true })
+      }
+    })
+
+    it('rolls back the message and removes files when attachment persistence fails', async () => {
+      const uploadPath = await mkdtemp(
+        path.join(os.tmpdir(), 'fauxcord-upload-')
+      )
+      const events: unknown[] = []
+      const onCreate = (event: unknown) => {
+        events.push(event)
+      }
+      gatewayBus.on('message.create', onCreate)
+      try {
+        db.exec(
+          "CREATE TRIGGER reject_attachment BEFORE INSERT ON attachments BEGIN SELECT RAISE(ABORT, 'attachment failed'); END"
+        )
+        const uploadApp = new Hono<AppEnv>()
+        uploadApp.onError(() => new Response('Upload failed', { status: 500 }))
+        uploadApp.route(
+          '/',
+          createChannelMessageRoutes(db, BASE_URL, uploadPath)
+        )
+        const form = new FormData()
+        form.set('files[0]', new File(['test'], 'test.txt'))
+        const response = await uploadApp.request(
+          `/channels/${channelId}/messages`,
+          {
+            method: 'POST',
+            headers: { Authorization: token },
+            body: form,
+          }
+        )
+        expect(response.status).toBe(500)
+        expect(events).toEqual([])
+        expect(db.prepare('SELECT * FROM messages').all()).toEqual([])
+        expect(db.prepare('SELECT * FROM attachments').all()).toEqual([])
+        expect(await readdir(path.join(uploadPath, channelId))).toEqual([])
+      } finally {
+        gatewayBus.off('message.create', onCreate)
+        await rm(uploadPath, { recursive: true, force: true })
+      }
     })
 
     it('returns 400 for an empty message', async () => {
