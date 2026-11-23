@@ -433,6 +433,13 @@ export interface MessageCreateParams {
   content?: string
   tts?: boolean
   embeds?: unknown[]
+  attachments?: {
+    id: string
+    filename: string
+    size: number
+    contentType: string
+    filePath: string
+  }[]
   messageReference?: { message_id?: string }
   flags?: number
   /** Poll to attach; persisted before the message is hydrated and dispatched */
@@ -486,38 +493,54 @@ export function createMessage(
   params: MessageCreateParams,
   baseUrl: string
 ): MessageObject {
-  db.prepare(
-    `INSERT INTO messages (id, channel_id, author_id, author_token, content, tts, flags, referenced_message_id)
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO messages (id, channel_id, author_id, author_token, content, tts, flags, referenced_message_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    params.messageId,
-    params.channelId,
-    params.authorId,
-    params.authorToken,
-    params.content ?? '',
-    params.tts ? 1 : 0,
-    params.flags ?? 0,
-    params.messageReference?.message_id ?? null
-  )
+    ).run(
+      params.messageId,
+      params.channelId,
+      params.authorId,
+      params.authorToken,
+      params.content ?? '',
+      params.tts ? 1 : 0,
+      params.flags ?? 0,
+      params.messageReference?.message_id ?? null
+    )
 
-  // Save embeds
-  if (params.embeds) {
-    for (let i = 0; i < params.embeds.length; i++) {
+    const attachments = params.attachments ?? []
+    for (const attachment of attachments) {
       db.prepare(
-        'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
-      ).run(params.messageId, JSON.stringify(params.embeds[i]), i)
+        'INSERT INTO attachments (id, message_id, filename, size, content_type, file_path) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(
+        attachment.id,
+        params.messageId,
+        attachment.filename,
+        attachment.size,
+        attachment.contentType,
+        attachment.filePath
+      )
     }
-  }
 
-  if (params.poll) {
-    createPoll(db, params.messageId, params.poll)
-  }
+    // Save embeds
+    if (params.embeds) {
+      for (let i = 0; i < params.embeds.length; i++) {
+        db.prepare(
+          'INSERT INTO embeds (message_id, data, position) VALUES (?, ?, ?)'
+        ).run(params.messageId, JSON.stringify(params.embeds[i]), i)
+      }
+    }
 
-  // Update the channel's last_message_id
-  db.prepare('UPDATE channels SET last_message_id = ? WHERE id = ?').run(
-    params.messageId,
-    params.channelId
-  )
+    if (params.poll) {
+      createPoll(db, params.messageId, params.poll)
+    }
+
+    // Update the channel's last_message_id
+    db.prepare('UPDATE channels SET last_message_id = ? WHERE id = ?').run(
+      params.messageId,
+      params.channelId
+    )
+  })()
 
   const msg = getMessage(db, params.messageId, baseUrl)
   if (!msg) throw new Error('Failed to create message')
